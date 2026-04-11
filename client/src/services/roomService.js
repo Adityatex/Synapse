@@ -1,11 +1,12 @@
 import { getToken, logout } from './authService';
+import { API_BASE } from '../config/apiConfig';
 
-const API_BASE = 'http://localhost:5000/api/rooms';
+const ROOMS_API_BASE = `${API_BASE}/rooms`;
 
 async function request(path = '', options = {}) {
   const token = getToken();
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${ROOMS_API_BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

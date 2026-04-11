@@ -4,8 +4,8 @@ import {
   getToken,
   getUserFromToken,
 } from '../utils/auth';
-
-const API_BASE = 'http://localhost:5000/api/auth';
+import { API_BASE } from '../config/apiConfig';
+const AUTH_API_BASE = `${API_BASE}/auth`;
 
 /**
  * Sign up a new user
@@ -15,7 +15,7 @@ const API_BASE = 'http://localhost:5000/api/auth';
  * @returns {Promise<{token: string, user: object}>}
  */
 export async function signup(name, email, password) {
-  const res = await fetch(`${API_BASE}/signup`, {
+  const res = await fetch(`${AUTH_API_BASE}/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password }),
@@ -38,7 +38,7 @@ export async function signup(name, email, password) {
  * @returns {Promise<{token: string, user: object}>}
  */
 export async function login(email, password) {
-  const res = await fetch(`${API_BASE}/login`, {
+  const res = await fetch(`${AUTH_API_BASE}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -81,7 +81,7 @@ export async function fetchProfile() {
   const token = getToken();
   if (!token) throw new Error('Not authenticated');
 
-  const res = await fetch(`${API_BASE}/me`, {
+  const res = await fetch(`${AUTH_API_BASE}/me`, {
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',

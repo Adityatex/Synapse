@@ -1,7 +1,6 @@
 import { io } from 'socket.io-client';
 import { getToken } from './authService';
-
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+import { SOCKET_URL } from '../config/apiConfig';
 
 export function createCollaborationSocket() {
   return io(SOCKET_URL, {

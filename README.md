@@ -24,6 +24,17 @@ JUDGE0_API_KEY=your_rapidapi_key
 
 You can copy the template from `server/.env.example`.
 
+If port `5000` is already in use on a machine, change the backend port in `server/.env` and set matching client values in `client/.env`:
+
+```env
+VITE_BACKEND_PORT=5001
+VITE_DEV_BACKEND_URL=http://localhost:5001
+VITE_API_URL=http://localhost:5001/api
+VITE_SOCKET_URL=http://localhost:5001
+```
+
+You can copy the template from `client/.env.example`.
+
 ## Install dependencies
 
 From the project root, run:

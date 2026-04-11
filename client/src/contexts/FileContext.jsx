@@ -90,6 +90,25 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
     setOpenTabs(safeOpenTabs.length ? safeOpenTabs : [safeActiveFileId]);
   }, []);
 
+  const replaceSharedFiles = useCallback((nextState) => {
+    const normalizedFiles = (nextState.files || []).map(normalizeFile);
+    const safeFiles = normalizedFiles.length ? normalizedFiles : getDefaultState().files;
+    const hasFile = (fileId) => safeFiles.some((file) => file.id === fileId);
+
+    setFiles(safeFiles);
+    setActiveFileId((previousActiveFileId) => {
+      if (hasFile(previousActiveFileId)) {
+        return previousActiveFileId;
+      }
+
+      return safeFiles[0].id;
+    });
+    setOpenTabs((previousOpenTabs) => {
+      const safeOpenTabs = previousOpenTabs.filter(hasFile);
+      return safeOpenTabs.length ? safeOpenTabs : [safeFiles[0].id];
+    });
+  }, []);
+
   const createFile = useCallback((name) => {
     const id = `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const language = getLanguageByExtension(name);
@@ -191,6 +210,7 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
         openTab,
         closeTab,
         replaceState,
+        replaceSharedFiles,
         setActiveFileId,
       }}
     >

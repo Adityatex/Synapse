@@ -17,11 +17,12 @@ function decodeUpdate(encoded) {
 }
 
 export class RoomYjsManager {
-  constructor({ socket, roomId, userId, onFileContent }) {
+  constructor({ socket, roomId, userId, onFileContent, onDocReplaced }) {
     this.socket = socket;
     this.roomId = roomId;
     this.userId = userId;
     this.onFileContent = onFileContent;
+    this.onDocReplaced = onDocReplaced;
     this.docs = new Map();
     this.remoteOrigin = Symbol('remote');
     this.localSeedOrigin = Symbol('local-seed');
@@ -48,7 +49,7 @@ export class RoomYjsManager {
       });
     });
 
-    const entry = { doc, text, textObserver, seeded: false };
+    const entry = { doc, text, textObserver, seeded: false, locallySeeded: false };
     this.docs.set(fileId, entry);
     return entry;
   }
@@ -60,16 +61,31 @@ export class RoomYjsManager {
    */
   applySharedStates(sharedDocs = {}, files = []) {
     files.forEach((file) => {
-      const entry = this.ensureDoc(file.id);
       const encodedState = sharedDocs[file.id];
+      if (!encodedState) return;
 
-      if (encodedState) {
-        // Apply server state unconditionally — this is the source of truth.
-        // remoteOrigin prevents it being echoed back to the server.
-        Y.applyUpdate(entry.doc, decodeUpdate(encodedState), this.remoteOrigin);
-        entry.seeded = true;
-        this.onFileContent?.(file.id, entry.text.toString());
+      let entry = this.docs.get(file.id);
+
+      // If this doc was locally seeded (e.g. user just created this file),
+      // the local Y.Doc and the server's Y.Doc are independent CRDTs with
+      // different client-IDs. Merging them via Y.applyUpdate would cause
+      // double-inserted text. Destroy the local doc and rebuild from scratch
+      // so the server state is the single source of truth.
+      if (entry && entry.locallySeeded) {
+        entry.text.unobserve(entry.textObserver);
+        entry.doc.destroy();
+        this.docs.delete(file.id);
+        entry = null;
+        this.onDocReplaced?.(file.id);
       }
+
+      entry = this.ensureDoc(file.id);
+
+      // Apply server state — remoteOrigin prevents it being echoed back.
+      Y.applyUpdate(entry.doc, decodeUpdate(encodedState), this.remoteOrigin);
+      entry.seeded = true;
+      entry.locallySeeded = false;
+      this.onFileContent?.(file.id, entry.text.toString());
     });
   }
 
@@ -91,10 +107,18 @@ export class RoomYjsManager {
   seedNewFile(fileId, content) {
     const entry = this.ensureDoc(fileId);
     if (entry.seeded || !content) return;
+    if (entry.text.length > 0) {
+      entry.seeded = true;
+      entry.locallySeeded = true;
+      this.onFileContent?.(fileId, entry.text.toString());
+      return;
+    }
+
     entry.doc.transact(() => {
       entry.text.insert(0, content);
     }, this.localSeedOrigin);
     entry.seeded = true;
+    entry.locallySeeded = true;
     this.onFileContent?.(fileId, entry.text.toString());
   }
 
@@ -103,6 +127,7 @@ export class RoomYjsManager {
     const entry = this.ensureDoc(fileId);
     Y.applyUpdate(entry.doc, decodeUpdate(encodedUpdate), this.remoteOrigin);
     entry.seeded = true;
+    entry.locallySeeded = false;
     this.onFileContent?.(fileId, entry.text.toString());
   }
 

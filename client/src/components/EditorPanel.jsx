@@ -5,9 +5,7 @@ import { useFiles } from '../contexts/FileContext';
 import { getMonacoLanguage } from '../utils/languageMap';
 import { Loader2 } from 'lucide-react';
 
-function escapeCssContent(value = '') {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
+
 
 function hexToRgba(color, alpha) {
   const normalized = color.replace('#', '');
@@ -25,7 +23,7 @@ function hexToRgba(color, alpha) {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
-function ensurePresenceStyle(userId, username, cursorColor) {
+function ensurePresenceStyle(userId, cursorColor) {
   if (typeof document === 'undefined') return;
 
   const safeId = String(userId).replace(/[^a-zA-Z0-9_-]/g, '-');
@@ -45,24 +43,19 @@ function ensurePresenceStyle(userId, username, cursorColor) {
       pointer-events: none;
       position: relative;
     }
-    /* Floating name label above cursor */
-    .presence-label-${safeId}::after {
-      content: "${escapeCssContent(username)}";
+    /* Small colored dot at the top of the cursor line */
+    .presence-cursor-${safeId}::before {
+      content: "";
       position: absolute;
-      top: -22px;
-      left: -2px;
-      padding: 2px 7px;
-      border-radius: 4px;
+      top: 0;
+      left: -5px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
       background: ${cursorColor};
-      color: #fff;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-      white-space: nowrap;
+      box-shadow: 0 0 5px 1px ${hexToRgba(cursorColor, 0.7)};
       pointer-events: none;
       z-index: 100;
-      box-shadow: 0 2px 8px ${hexToRgba(cursorColor, 0.5)};
-      border-bottom: 2px solid ${hexToRgba(cursorColor, 0.7)};
     }
     /* Selection highlight */
     .presence-selection-${safeId} {
@@ -209,7 +202,7 @@ export default function EditorPanel({
     const nextDecorations = remotePeers.flatMap((peer) => {
       if (!peer?.userId || !peer?.cursorColor) return [];
 
-      ensurePresenceStyle(peer.userId, peer.username || 'Anonymous', peer.cursorColor);
+      ensurePresenceStyle(peer.userId, peer.cursorColor);
       const safeId = String(peer.userId).replace(/[^a-zA-Z0-9_-]/g, '-');
       const decorations = [];
 
@@ -240,7 +233,6 @@ export default function EditorPanel({
           ),
           options: {
             className: `presence-cursor-${safeId}`,
-            afterContentClassName: `presence-label-${safeId}`,
             hoverMessage: { value: `${peer.username || 'Anonymous'} is editing here` },
           },
         });
@@ -289,7 +281,7 @@ export default function EditorPanel({
           height="100%"
           language={language}
           theme={monacoTheme}
-          defaultValue={activeFile.content}
+          defaultValue={sharedText ? '' : activeFile.content}
           onMount={(editor, monaco) => {
             editorRef.current = editor;
             monacoRef.current = monaco;

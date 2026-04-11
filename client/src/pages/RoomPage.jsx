@@ -162,6 +162,8 @@ function RoomSession({ roomId }) {
 
     const handleConnectError = (connectError) => {
       setConnectionState('disconnected');
+      setLoadingRoom(false);
+      setRoomReady(false);
       setError(connectError.message || 'Failed to connect to the collaboration server.');
       if (/expired|invalid|auth/i.test(connectError.message || '')) {
         logout();
@@ -293,6 +295,7 @@ function RoomSession({ roomId }) {
 
     const handleRoomError = ({ message }) => {
       setLoadingRoom(false);
+      setRoomReady(false);
       setError(message);
     };
 

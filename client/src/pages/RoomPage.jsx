@@ -15,10 +15,19 @@ import { createCollaborationSocket } from '../services/socket';
 import { getRoom } from '../services/roomService';
 import { RoomYjsManager } from '../services/yjsRoom';
 
+function getStructureSignature({ files = [] }) {
+  return JSON.stringify({
+    files: files.map((file) => ({
+      id: file.id,
+      name: file.name,
+    })),
+  });
+}
+
 function RoomSession({ roomId }) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { files, activeFile, activeFileId, openTabs, updateContent, replaceState } = useFiles();
+  const { files, activeFileId, openTabs, updateContent, replaceState, replaceSharedFiles } = useFiles();
   const prevFilesRef = useRef([]);
   const [theme, setTheme] = useState(() => localStorage.getItem('synapse-theme') || 'dark');
   const [output, setOutput] = useState({
@@ -38,9 +47,10 @@ function RoomSession({ roomId }) {
   const [presence, setPresence] = useState({});
   const [activityFeed, setActivityFeed] = useState([]);
   const [yjsManager, setYjsManager] = useState(null);
+  const [, setYjsDocVersion] = useState(0);
   const [editingUsers, setEditingUsers] = useState({});
   const socketRef = useRef(null);
-  const suppressStructureSyncRef = useRef(false);
+  const suppressStructureSyncRef = useRef(null);
   const copyTimerRef = useRef(null);
   const activityTimerRef = useRef(null);
   const structureEmitterRef = useRef(null);
@@ -61,15 +71,10 @@ function RoomSession({ roomId }) {
 
   const structureSignature = useMemo(
     () =>
-      JSON.stringify({
-        files: files.map((file) => ({
-          id: file.id,
-          name: file.name,
-        })),
-        activeFileId,
-        openTabs,
+      getStructureSignature({
+        files,
       }),
-    [files, activeFileId, openTabs]
+    [files]
   );
 
   useEffect(() => {
@@ -99,6 +104,9 @@ function RoomSession({ roomId }) {
       userId: user.userId,
       onFileContent: (fileId, content) => {
         updateContent(fileId, content, { updatedAt: Date.now() });
+      },
+      onDocReplaced: () => {
+        setYjsDocVersion((version) => version + 1);
       },
     });
     setYjsManager(manager);
@@ -166,7 +174,7 @@ function RoomSession({ roomId }) {
     };
 
     const handleRoomJoined = ({ room, sharedDocs, participant }) => {
-      suppressStructureSyncRef.current = true;
+      suppressStructureSyncRef.current = getStructureSignature(room);
       replaceState(room);
       applySharedDocs(sharedDocs, room.files);
       setLoadingRoom(false);
@@ -201,12 +209,12 @@ function RoomSession({ roomId }) {
     };
 
     const handleRoomStateUpdated = (nextState) => {
-      suppressStructureSyncRef.current = true;
-      replaceState(nextState);
+      suppressStructureSyncRef.current = getStructureSignature(nextState);
+      replaceSharedFiles(nextState);
       applySharedDocs(nextState.sharedDocs, nextState.files);
     };
 
-    const handleRemoteCodeChange = ({ fileId, changes, userId: peerId, username: peerName, cursorColor: peerColor }) => {
+    const handleRemoteCodeChange = ({ fileId, changes }) => {
       manager.applyRemoteUpdate(fileId, changes);
     };
 
@@ -319,7 +327,7 @@ function RoomSession({ roomId }) {
       manager.destroy();
       setYjsManager(null);
     };
-  }, [logout, navigate, replaceState, roomId, updateContent, user]);
+  }, [logout, navigate, replaceSharedFiles, replaceState, roomId, updateContent, user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -349,10 +357,11 @@ function RoomSession({ roomId }) {
       return;
     }
 
-    if (suppressStructureSyncRef.current) {
-      suppressStructureSyncRef.current = false;
+    if (suppressStructureSyncRef.current === structureSignature) {
+      suppressStructureSyncRef.current = null;
       return;
     }
+    suppressStructureSyncRef.current = null;
 
     structureEmitterRef.current?.(latestRoomStateRef.current);
   }, [structureSignature, connectionState, loadingRoom, roomReady]);
@@ -360,10 +369,7 @@ function RoomSession({ roomId }) {
   // getText() returns a STABLE Y.Text reference — no fallback content is
   // provided here so we never pre-seed locally. Content comes exclusively
   // from the server (applySharedStates) to avoid CRDT double-inserts.
-  const sharedText = useMemo(
-    () => (activeFileId && yjsManager ? yjsManager.getText(activeFileId) : null),
-    [activeFileId, yjsManager]
-  );
+  const sharedText = activeFileId && yjsManager ? yjsManager.getText(activeFileId) : null;
 
   // Detect newly created files (present in current files but not previous)
   // and seed their Y.Doc locally so the editor isn't blank before the
@@ -403,7 +409,11 @@ function RoomSession({ roomId }) {
   };
 
   const handleCopyInvite = async () => {
-    const inviteLink = `${window.location.origin}/room/${roomId}`;
+    const publicAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin).replace(
+      /\/+$/,
+      ''
+    );
+    const inviteLink = `${publicAppUrl}/room/${roomId}`;
 
     try {
       await navigator.clipboard.writeText(inviteLink);

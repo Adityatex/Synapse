@@ -181,23 +181,31 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
         }
       }
 
-      let updated = prev.map(f => f.id === id ? { ...f, parentId: newParentId } : f);
+      // Also prevent dropping a folder into itself
+      if (newParentId === id) return prev;
+
+      const updated = prev.map(f => f.id === id ? { ...f, parentId: newParentId } : f);
       
       // Sort children to re-apply order sequentially
       const siblings = updated.filter(f => f.parentId === newParentId && f.id !== id).sort((a, b) => a.order - b.order);
       const movingItem = updated.find(f => f.id === id);
       
-      siblings.splice(newOrder, 0, movingItem);
+      const clampedOrder = Math.max(0, Math.min(newOrder, siblings.length));
+      siblings.splice(clampedOrder, 0, movingItem);
       
-      // Update orders
+      // Build a map of id -> new order (immutable)
+      const orderMap = new Map();
       siblings.forEach((sib, index) => {
-        const itemIndex = updated.findIndex(f => f.id === sib.id);
-        if (itemIndex > -1) {
-          updated[itemIndex].order = index;
-        }
+        orderMap.set(sib.id, index);
       });
       
-      return updated;
+      // Return new array with updated orders (immutable)
+      return updated.map(f => {
+        if (orderMap.has(f.id)) {
+          return { ...f, order: orderMap.get(f.id) };
+        }
+        return f;
+      });
     });
   }, []);
 
@@ -226,31 +234,31 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
   };
 
   const deleteFile = useCallback((id) => {
-    let deletedIds = [];
-    setFiles((prev) => {
-      deletedIds = getSubTreeIds(prev, id);
-      const remaining = prev.filter((file) => !deletedIds.includes(file.id));
-      return remaining.length ? remaining : getDefaultState().files;
-    });
+    // We need to compute deletedIds synchronously from the latest state,
+    // then update all three pieces of state consistently.
+    setFiles((prevFiles) => {
+      const deletedIds = new Set(getSubTreeIds(prevFiles, id));
+      const remaining = prevFiles.filter((file) => !deletedIds.has(file.id));
+      const safeFiles = remaining.length ? remaining : getDefaultState().files;
 
-    setOpenTabs((prev) => {
-      const remaining = prev.filter((tabId) => !deletedIds.includes(tabId));
-      return remaining.length ? remaining : [getDefaultState().files[0].id];
-    });
-
-    setActiveFileId((prevActiveFileId) => {
-      if (!deletedIds.includes(prevActiveFileId)) {
-        return prevActiveFileId;
-      }
-
-      setFiles(currentFiles => {
-        const nextFile = currentFiles.find(file => !deletedIds.includes(file.id) && file.type === 'file');
-        return nextFile?.id || getDefaultState().files[0].id; // this just triggers re-render, safe because setFiles gives latest state but hacky
+      // Update tabs — remove any deleted file tabs
+      setOpenTabs((prevTabs) => {
+        const remainingTabs = prevTabs.filter((tabId) => !deletedIds.has(tabId));
+        return remainingTabs.length ? remainingTabs : [safeFiles.find(f => f.type === 'file')?.id || safeFiles[0].id];
       });
-      // safe fallback
-      return getDefaultState().files[0].id; 
+
+      // Update active file — if the active file was deleted, pick the next available file
+      setActiveFileId((prevActiveId) => {
+        if (!deletedIds.has(prevActiveId)) {
+          return prevActiveId;
+        }
+        const nextFile = safeFiles.find((f) => f.type === 'file') || safeFiles[0];
+        return nextFile.id;
+      });
+
+      return safeFiles;
     });
-  }, [files]);
+  }, []);
 
   const updateContent = useCallback((id, content, options = {}) => {
     setFiles((prev) =>

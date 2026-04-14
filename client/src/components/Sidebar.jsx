@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useFiles } from '../contexts/FileContext';
 import { getThemeClasses } from '../utils/theme';
 import {
@@ -12,7 +12,10 @@ import {
   Trash2,
   FolderPlus,
   X,
-  ChevronDown
+  ChevronDown,
+  Pencil,
+  FilePlus,
+  Copy,
 } from 'lucide-react';
 import { 
   DndContext, 
@@ -20,7 +23,8 @@ import {
   KeyboardSensor, 
   PointerSensor, 
   useSensor, 
-  useSensors 
+  useSensors,
+  DragOverlay,
 } from '@dnd-kit/core';
 import { 
   SortableContext, 
@@ -30,42 +34,246 @@ import {
 import FileTreeItem from './FileTreeItem';
 import ChatPanel from './ChatPanel';
 
+// ─── Context Menu Component ─────────────────────────────────────────────────
+function ContextMenu({ x, y, items, onClose, theme }) {
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [onClose]);
+
+  // Adjust position if menu would overflow viewport
+  useEffect(() => {
+    if (menuRef.current) {
+      const rect = menuRef.current.getBoundingClientRect();
+      if (rect.right > window.innerWidth) {
+        menuRef.current.style.left = `${x - rect.width}px`;
+      }
+      if (rect.bottom > window.innerHeight) {
+        menuRef.current.style.top = `${y - rect.height}px`;
+      }
+    }
+  }, [x, y]);
+
+  return (
+    <div
+      ref={menuRef}
+      className={`fixed z-[9999] py-1 min-w-[180px] rounded-lg shadow-xl border backdrop-blur-sm ${
+        theme === 'dark'
+          ? 'bg-[#1e2030]/95 border-white/10 shadow-black/60'
+          : 'bg-white/95 border-slate-200 shadow-slate-300/60'
+      }`}
+      style={{ left: x, top: y }}
+    >
+      {items.map((item, i) => {
+        if (item.type === 'separator') {
+          return <div key={i} className={`my-1 border-t ${theme === 'dark' ? 'border-white/8' : 'border-slate-200'}`} />;
+        }
+        return (
+          <button
+            key={i}
+            className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs text-left transition-colors ${
+              theme === 'dark'
+                ? 'text-slate-300 hover:bg-indigo-500/15 hover:text-indigo-300'
+                : 'text-slate-700 hover:bg-indigo-50 hover:text-indigo-600'
+            }`}
+            onClick={() => {
+              item.action();
+              onClose();
+            }}
+          >
+            {item.icon && <item.icon size={13} className={item.iconColor || ''} />}
+            <span className="flex-1">{item.label}</span>
+            {item.shortcut && (
+              <span className={`text-[10px] ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                {item.shortcut}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Main Sidebar ───────────────────────────────────────────────────────────
 export default function Sidebar({ theme, collaborators = [], chatMessages, typingUsers, getSocket, roomId, currentUser, fileLocks = {} }) {
-  const { files, activeFileId, openTab, createFile, createFolder, moveItem, deleteFile, toggleFolder, jumpToFileLine } = useFiles();
+  const { files, activeFileId, openTab, createFile, createFolder, moveItem, renameFile, deleteFile, toggleFolder, jumpToFileLine } = useFiles();
   const [activeSidebar, setActiveSidebar] = useState('explorer');
-  const [isCreatingFile, setIsCreatingFile] = useState(false);
-  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
-  const [newFileName, setNewFileName] = useState('');
+  const [selectedItemId, setSelectedItemId] = useState(null);
+  const [creatingType, setCreatingType] = useState(null);
+  const [createParentId, setCreateParentId] = useState(null);
+  const [newItemName, setNewItemName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeDragId, setActiveDragId] = useState(null);
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, item }
+  const [renameTargetId, setRenameTargetId] = useState(null);
   const t = getThemeClasses(theme);
 
+  const createCommittedRef = useRef(false);
+  const createInputRef = useRef(null);
+
+  // Keep selectedItemId in sync with activeFileId
+  useEffect(() => {
+    if (activeFileId && !selectedItemId) {
+      setSelectedItemId(activeFileId);
+    }
+  }, [activeFileId]);
+
+  // ─── Target folder logic ────────────────────────────────────────────
+  const getTargetParentId = (itemOrId) => {
+    const refId = itemOrId || selectedItemId || activeFileId;
+    if (!refId) return null;
+    const item = files.find(f => f.id === refId);
+    if (!item) return null;
+    if (item.type === 'folder') return item.id;
+    return item.parentId || null;
+  };
+
+  const startCreate = (type, contextItemId) => {
+    createCommittedRef.current = false;
+    const parentId = getTargetParentId(contextItemId);
+    setCreateParentId(parentId);
+    setCreatingType(type);
+    setNewItemName('');
+    if (parentId) {
+      const parentFolder = files.find(f => f.id === parentId);
+      if (parentFolder && !parentFolder.isOpen) {
+        toggleFolder(parentId);
+      }
+    }
+  };
+
   const handleCreateFile = () => {
-    if (activeSidebar === 'explorer') {
-      setIsCreatingFile(true);
-      setIsCreatingFolder(false);
-      setNewFileName('');
-    }
+    if (activeSidebar !== 'explorer') return;
+    startCreate('file');
   };
-
   const handleCreateFolder = () => {
-    if (activeSidebar === 'explorer') {
-      setIsCreatingFolder(true);
-      setIsCreatingFile(false);
-      setNewFileName('');
-    }
+    if (activeSidebar !== 'explorer') return;
+    startCreate('folder');
   };
 
-  // Flatten tree for list rendering based on isOpen state
+  const commitCreate = useCallback(() => {
+    if (createCommittedRef.current) return;
+    createCommittedRef.current = true;
+    const trimmed = newItemName.trim();
+    if (trimmed && creatingType === 'folder') {
+      createFolder(trimmed, createParentId);
+    } else if (trimmed && creatingType === 'file') {
+      createFile(trimmed, createParentId);
+    }
+    setCreatingType(null);
+    setCreateParentId(null);
+    setNewItemName('');
+  }, [newItemName, creatingType, createParentId, createFile, createFolder]);
+
+  const cancelCreate = useCallback(() => {
+    createCommittedRef.current = true;
+    setCreatingType(null);
+    setCreateParentId(null);
+    setNewItemName('');
+  }, []);
+
+  // ─── Context menu handler ──────────────────────────────────────────
+  const handleItemContextMenu = useCallback((e, item) => {
+    const isFolder = item.type === 'folder';
+    const menuItems = [];
+
+    if (isFolder) {
+      menuItems.push({
+        label: 'New File',
+        icon: FilePlus,
+        iconColor: 'text-indigo-400',
+        action: () => startCreate('file', item.id),
+      });
+      menuItems.push({
+        label: 'New Folder',
+        icon: FolderPlus,
+        iconColor: 'text-amber-400',
+        action: () => startCreate('folder', item.id),
+      });
+      menuItems.push({ type: 'separator' });
+    }
+
+    menuItems.push({
+      label: 'Rename',
+      icon: Pencil,
+      iconColor: 'text-indigo-400',
+      shortcut: 'F2',
+      action: () => setRenameTargetId(item.id),
+    });
+    menuItems.push({
+      label: 'Delete',
+      icon: Trash2,
+      iconColor: 'text-red-400',
+      shortcut: 'Del',
+      action: () => deleteFile(item.id),
+    });
+
+    menuItems.push({ type: 'separator' });
+
+    if (!isFolder) {
+      menuItems.push({
+        label: 'New File Here',
+        icon: FilePlus,
+        iconColor: 'text-indigo-400',
+        action: () => startCreate('file', item.id),
+      });
+      menuItems.push({
+        label: 'New Folder Here',
+        icon: FolderPlus,
+        iconColor: 'text-amber-400',
+        action: () => startCreate('folder', item.id),
+      });
+      menuItems.push({ type: 'separator' });
+    }
+
+    menuItems.push({
+      label: 'Copy Name',
+      icon: Copy,
+      action: () => navigator.clipboard?.writeText(item.name),
+    });
+
+    setContextMenu({ x: e.clientX, y: e.clientY, items: menuItems });
+  }, [files, deleteFile]);
+
+  // ─── Rename trigger handling ───────────────────────────────────────
+  // When renameTargetId is set by context menu, we pass it down to the matching FileTreeItem
+  // and then clear it after the render
+  useEffect(() => {
+    if (renameTargetId) {
+      const timer = setTimeout(() => setRenameTargetId(null), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [renameTargetId]);
+
+  // ─── Flatten tree ──────────────────────────────────────────────────
   const getVisibleFiles = () => {
     const visible = [];
     const pushChildren = (parentId, depth) => {
       const children = files
         .filter(f => f.parentId === parentId)
         .sort((a, b) => {
-          // Folders top, then sort by order
           if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
           return a.order - b.order;
         });
+
+      if (creatingType && createParentId === parentId) {
+        visible.push({ id: '__creating__', type: '__creating__', depth, parentId });
+      }
 
       for (const child of children) {
         visible.push({ ...child, depth });
@@ -80,77 +288,89 @@ export default function Sidebar({ theme, collaborators = [], chatMessages, typin
 
   const visibleFiles = getVisibleFiles();
 
+  // ─── DnD ──────────────────────────────────────────────────────────
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const handleDragStart = (event) => setActiveDragId(event.active.id);
+  const handleDragCancel = () => setActiveDragId(null);
+
   const handleDragEnd = (event) => {
+    setActiveDragId(null);
     const { active, over } = event;
-    
     if (!over || active.id === over.id) return;
 
     const activeItem = files.find(f => f.id === active.id);
     const overItem = files.find(f => f.id === over.id);
-
     if (!activeItem || !overItem) return;
 
-    // Determine target parent and order
     let newParentId = overItem.parentId;
     let newOrder = overItem.order;
 
     if (overItem.type === 'folder') {
-      // Dropping ON a folder puts it INSIDE that folder at position 0
       newParentId = overItem.id;
       newOrder = 0;
+      if (!overItem.isOpen) toggleFolder(overItem.id);
     } else {
-      // Dropping on a file slots it next to the file
+      newParentId = overItem.parentId;
       if (activeItem.parentId === overItem.parentId) {
-        // Reordering in current directory level
-        if (activeItem.order < overItem.order) {
-          // moving down, take its exact spot minus shift
-          newOrder = overItem.order; 
-        }
+        if (activeItem.order < overItem.order) newOrder = overItem.order;
+      } else {
+        newOrder = overItem.order + 1;
       }
     }
-
     moveItem(active.id, newParentId, newOrder);
   };
 
-  // Process search results across all files locally
+  const draggedItem = activeDragId ? visibleFiles.find(f => f.id === activeDragId) : null;
+
+  // ─── Search ───────────────────────────────────────────────────────
   const searchResults = (() => {
     if (!searchQuery.trim()) return [];
-    
     const query = searchQuery.toLowerCase();
     const results = [];
-    
     files.forEach(file => {
       if (file.type === 'folder' || !file.content) return;
-      
       const lines = file.content.split('\n');
       const matches = [];
-      
       lines.forEach((line, index) => {
         if (line.toLowerCase().includes(query)) {
-          matches.push({
-            lineNumber: index + 1,
-            content: line.trim()
-          });
+          matches.push({ lineNumber: index + 1, content: line.trim() });
         }
       });
-      
       if (matches.length > 0) {
-        results.push({
-          file: file,
-          matches: matches
-        });
+        results.push({ file, matches });
       }
     });
-    
     return results;
   })();
+
+  // ─── Right-click on empty area of explorer ────────────────────────
+  const handleExplorerContextMenu = (e) => {
+    e.preventDefault();
+    const menuItems = [
+      {
+        label: 'New File',
+        icon: FilePlus,
+        iconColor: 'text-indigo-400',
+        action: () => startCreate('file', null),
+      },
+      {
+        label: 'New Folder',
+        icon: FolderPlus,
+        iconColor: 'text-amber-400',
+        action: () => startCreate('folder', null),
+      },
+    ];
+    setContextMenu({ x: e.clientX, y: e.clientY, items: menuItems });
+  };
+
+  // Click on empty space deselects
+  const handleExplorerBgClick = () => {
+    setSelectedItemId(null);
+  };
 
   return (
     <>
@@ -181,7 +401,7 @@ export default function Sidebar({ theme, collaborators = [], chatMessages, typin
           {activeSidebar === 'chat' && "Room Chat"}
           {activeSidebar === 'explorer' && (
             <div className="flex gap-3">
-              <Plus size={14} className="cursor-pointer hover:text-indigo-500 transition-colors" title="New File" onClick={handleCreateFile} />
+              <FilePlus size={14} className="cursor-pointer hover:text-indigo-500 transition-colors" title="New File" onClick={handleCreateFile} />
               <FolderPlus size={14} className="cursor-pointer hover:text-indigo-500 transition-colors" title="New Folder" onClick={handleCreateFolder} />
             </div>
           )}
@@ -189,65 +409,99 @@ export default function Sidebar({ theme, collaborators = [], chatMessages, typin
         
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {activeSidebar === 'explorer' && (
-            <div className="flex flex-col">
+            <div 
+              className="flex flex-col min-h-full"
+              onClick={handleExplorerBgClick}
+              onContextMenu={handleExplorerContextMenu}
+            >
               <div className={`flex items-center gap-1 px-3 py-1 text-xs ${theme === 'dark' ? 'text-white bg-white/5' : 'text-slate-800 bg-slate-200'} border-l-2 border-indigo-500 cursor-default select-none`}>
                 <ChevronRight size={14} className="rotate-90" />
                 <span className={`font-semibold uppercase tracking-tight text-[10px] ${t.textMuted}`}>Project Files</span>
               </div>
-              {(isCreatingFile || isCreatingFolder) && (
-                <div className={`flex items-center gap-2 px-4 py-1.5 text-xs ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-200'}`}>
-                  {isCreatingFolder ? <FolderPlus size={14} className={t.textMuted} /> : <FileCode size={14} className={t.textMuted} />}
-                  <input
-                    autoFocus
-                    type="text"
-                    value={newFileName}
-                    onChange={(e) => setNewFileName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newFileName.trim()) {
-                        if (isCreatingFolder) {
-                          createFolder(newFileName.trim(), null);
-                        } else {
-                          createFile(newFileName.trim(), null);
-                        }
-                        setIsCreatingFile(false);
-                        setIsCreatingFolder(false);
-                      }
-                      if (e.key === 'Escape') {
-                        setIsCreatingFile(false);
-                        setIsCreatingFolder(false);
-                      }
-                    }}
-                    onBlur={() => { setIsCreatingFile(false); setIsCreatingFolder(false); }}
-                    placeholder={isCreatingFolder ? "folderName" : "filename.ext"}
-                    className="w-full bg-transparent text-xs outline-none text-indigo-500 placeholder:text-slate-500"
-                  />
-                </div>
-              )}
-              
+
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
+                onDragCancel={handleDragCancel}
               >
-                <SortableContext items={visibleFiles.map(f => f.id)} strategy={verticalListSortingStrategy}>
+                <SortableContext items={visibleFiles.filter(f => f.id !== '__creating__').map(f => f.id)} strategy={verticalListSortingStrategy}>
                   <div className="flex flex-col">
-                    {visibleFiles.map(file => (
-                      <FileTreeItem
-                        key={file.id}
-                        item={file}
-                        depth={file.depth}
-                        activeFileId={activeFileId}
-                        fileLock={fileLocks[file.id]}
-                        currentUserId={currentUser?.userId}
-                        onOpenTempFile={openTab}
-                        onDeleteFile={deleteFile}
-                        onToggleFolder={toggleFolder}
-                        themeClasses={t}
-                      />
-                    ))}
+                    {visibleFiles.map(file => {
+                      if (file.id === '__creating__') {
+                        const inputDepth = file.depth;
+                        return (
+                          <div
+                            key="__creating__"
+                            className={`relative flex items-center gap-1.5 py-[3px] text-xs ${theme === 'dark' ? 'bg-indigo-500/10' : 'bg-indigo-50'}`}
+                            style={{ paddingLeft: `${inputDepth * 16 + 12}px` }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span className="w-3 shrink-0" />
+                            {creatingType === 'folder'
+                              ? <FolderPlus size={14} className="text-amber-400/80 shrink-0" />
+                              : <FileCode size={14} className="text-indigo-400 shrink-0" />
+                            }
+                            <input
+                              ref={createInputRef}
+                              autoFocus
+                              type="text"
+                              value={newItemName}
+                              onChange={(e) => setNewItemName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') { e.preventDefault(); commitCreate(); }
+                                if (e.key === 'Escape') { e.preventDefault(); cancelCreate(); }
+                              }}
+                              onBlur={() => setTimeout(() => commitCreate(), 50)}
+                              placeholder={creatingType === 'folder' ? "folder name..." : "filename.ext"}
+                              className={`flex-1 min-w-0 text-xs outline-none py-0.5 px-1 rounded ${theme === 'dark' ? 'bg-[#1a1f2e] text-indigo-400 border border-indigo-500/50' : 'bg-white text-indigo-600 border border-indigo-500/50'}`}
+                            />
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <FileTreeItem
+                          key={file.id}
+                          item={{ ...file, _triggerRename: renameTargetId === file.id }}
+                          depth={file.depth}
+                          activeFileId={activeFileId}
+                          selectedItemId={selectedItemId}
+                          fileLock={fileLocks[file.id]}
+                          currentUserId={currentUser?.userId}
+                          onOpenTempFile={openTab}
+                          onDeleteFile={deleteFile}
+                          onToggleFolder={toggleFolder}
+                          onRenameFile={renameFile}
+                          onSelect={setSelectedItemId}
+                          onContextMenu={handleItemContextMenu}
+                          themeClasses={t}
+                          theme={theme}
+                        />
+                      );
+                    })}
                   </div>
                 </SortableContext>
+                <DragOverlay dropAnimation={null}>
+                  {draggedItem ? (
+                    <div className={`text-xs flex items-center gap-2 px-4 py-1.5 rounded-md shadow-lg border ${
+                      theme === 'dark' 
+                        ? 'bg-[#1a1f2e] border-indigo-500/40 text-slate-200' 
+                        : 'bg-white border-indigo-500/40 text-slate-700'
+                    }`}>
+                      {draggedItem.type === 'folder' 
+                        ? <FolderPlus size={14} className="text-amber-400" />
+                        : <FileCode size={14} className="text-indigo-400" />
+                      }
+                      <span>{draggedItem.name}</span>
+                    </div>
+                  ) : null}
+                </DragOverlay>
               </DndContext>
+
+              {/* Empty space fill for right-click */}
+              <div className="flex-1 min-h-[40px]" />
             </div>
           )}
 
@@ -365,6 +619,17 @@ export default function Sidebar({ theme, collaborators = [], chatMessages, typin
           )}
         </div>
       </aside>
+
+      {/* Context Menu Portal */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
+          theme={theme}
+        />
+      )}
     </>
   );
 }

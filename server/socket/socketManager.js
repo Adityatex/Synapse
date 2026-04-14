@@ -452,6 +452,9 @@ function createSocketServer(httpServer) {
           ? payload.files.map((file) => ({
               id: file.id,
               name: file.name,
+              type: file.type || 'file',
+              parentId: file.parentId || null,
+              order: typeof file.order === 'number' ? file.order : 0,
               content: file.content ?? '',
               updatedAt: file.updatedAt ?? Date.now(),
             }))
@@ -482,7 +485,7 @@ function createSocketServer(httpServer) {
           { roomId },
           {
             $set: { 
-              files: snapshot.files.map(f => ({ id: f.id, name: f.name, content: f.content, updatedAt: f.updatedAt })),
+              files: snapshot.files.map(f => ({ id: f.id, name: f.name, type: f.type || 'file', parentId: f.parentId || null, order: typeof f.order === 'number' ? f.order : 0, content: f.content, updatedAt: f.updatedAt })),
               lastUpdated: Date.now()
             }
           }

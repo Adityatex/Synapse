@@ -38,7 +38,6 @@ function EditorPage() {
         <Toolbar
           theme={theme}
           onToggleTheme={toggleTheme}
-          output={output}
           setOutput={setOutput}
         />
 
@@ -60,7 +59,7 @@ function EditorPage() {
           </div>
 
           {/* Neura AI Sidebar */}
-          <NeuraPanel theme={theme} currentUser={null} />
+          <NeuraPanel theme={theme} />
         </div>
 
         {/* Status Bar */}

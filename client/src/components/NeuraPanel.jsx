@@ -1,40 +1,46 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { getThemeClasses } from '../utils/theme';
-import {
-  Send,
-  ChevronRight,
-  LoaderCircle,
+import { 
+  MessageSquarePlus, 
+  History, 
+  Send, 
+  Sparkles, 
+  Code2, 
+  Bug, 
+  Zap,
+  ChevronDown,
+  Terminal,
+  Eraser,
   Copy,
   Check,
-  BrainCircuit,
-  ShieldCheck,
-  Code2,
-  Lightbulb,
+  Trash2,
+  ChevronRight,
+  LoaderCircle
 } from 'lucide-react';
 import { useFiles } from '../contexts/FileContext';
-import { chatWithNeura } from '../services/aiService';
+import {
+  chatWithNeura,
+  createNeuraConversation,
+  getNeuraConversation,
+  getNeuraConversationHistory,
+  deleteNeuraConversation
+} from '../services/aiService';
 
 const PANEL_WIDTH_KEY = 'synapse-neura-width';
-const MIN_PANEL_WIDTH = 320;
-const MAX_PANEL_WIDTH = 560;
+const MIN_PANEL_WIDTH = 300;
+const MAX_PANEL_WIDTH = 720;
 
-function getInitials(name) {
-  return name ? String(name).charAt(0).toUpperCase() : 'A';
+function formatConversationTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  return date.toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
-function UserAvatar({ name, size = 'w-7 h-7', textSize = 'text-[10px]' }) {
-  return (
-    <div
-      className={`${size} rounded-full bg-blue-500 flex items-center justify-center ${textSize} font-bold text-white border-2 border-white/20 select-none shrink-0`}
-    >
-      {getInitials(name)}
-    </div>
-  );
-}
-
-function CodeBlock({ inline, className, children, theme }) {
+function CodeBlock({ inline, className, children }) {
   const [copied, setCopied] = useState(false);
   const match = /language-([\w-]+)/.exec(className || '');
   const language = match?.[1] || 'code';
@@ -42,13 +48,7 @@ function CodeBlock({ inline, className, children, theme }) {
 
   if (inline) {
     return (
-      <code
-        className={`px-1.5 py-0.5 rounded-md font-mono text-[11px] ${
-          theme === 'dark'
-            ? 'bg-white/10 text-fuchsia-200'
-            : 'bg-slate-100 text-fuchsia-700'
-        }`}
-      >
+      <code className="px-1.5 py-0.5 rounded-md font-mono text-[11px] bg-white/10 text-indigo-200">
         {children}
       </code>
     );
@@ -65,41 +65,21 @@ function CodeBlock({ inline, className, children, theme }) {
   };
 
   return (
-    <div
-      className={`my-3 overflow-hidden rounded-xl border ${
-        theme === 'dark'
-          ? 'border-white/10 bg-[#08111d]'
-          : 'border-slate-200 bg-[#f7f9fc]'
-      }`}
-    >
-      <div
-        className={`flex items-center justify-between px-3 py-2 text-[10px] uppercase tracking-[0.18em] ${
-          theme === 'dark'
-            ? 'border-b border-white/10 bg-white/5 text-slate-400'
-            : 'border-b border-slate-200 bg-slate-100 text-slate-500'
-        }`}
-      >
+    <div className="my-3 overflow-hidden rounded-xl border border-white/10 bg-[#0d0d17]">
+      <div className="flex items-center justify-between px-3 py-2 text-[10px] uppercase tracking-[0.18em] border-b border-white/10 bg-white/5 text-slate-400">
         <span>{language}</span>
         <button
           type="button"
           onClick={handleCopy}
-          className={`inline-flex items-center gap-1 rounded-md px-2 py-1 normal-case tracking-normal transition-colors ${
-            theme === 'dark'
-              ? 'text-slate-300 hover:bg-white/10'
-              : 'text-slate-600 hover:bg-white'
-          }`}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 normal-case tracking-normal transition-colors text-slate-300 hover:bg-white/10"
           title="Copy code"
         >
           {copied ? <Check size={12} /> : <Copy size={12} />}
           <span>{copied ? 'Copied' : 'Copy'}</span>
         </button>
       </div>
-      <pre className="overflow-x-auto p-3">
-        <code
-          className={`font-mono text-[11px] leading-5 ${
-            theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
-          }`}
-        >
+      <pre className="overflow-x-auto p-3 custom-scrollbar">
+        <code className="font-mono text-[11px] leading-5 text-slate-200">
           {code}
         </code>
       </pre>
@@ -107,74 +87,58 @@ function CodeBlock({ inline, className, children, theme }) {
   );
 }
 
-function AssistantMessage({ content, theme }) {
+function AssistantMessage({ content }) {
   return (
-    <div
-      className={`rounded-2xl border px-4 py-3 shadow-sm ${
-        theme === 'dark'
-          ? 'border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))]'
-          : 'border-slate-200 bg-white'
-      }`}
-    >
-      <div className="prose prose-sm max-w-none break-words prose-p:my-2 prose-headings:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-strong:text-inherit">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            p({ children }) {
-              return <p className="break-words whitespace-pre-wrap">{children}</p>;
-            },
-            li({ children }) {
-              return <li className="break-words">{children}</li>;
-            },
-            code({ inline, className, children }) {
-              return (
-                <CodeBlock inline={inline} className={className} theme={theme}>
-                  {children}
-                </CodeBlock>
-              );
-            },
-          }}
-        >
-          {content}
-        </ReactMarkdown>
-      </div>
+    <div className="prose prose-sm prose-invert max-w-none break-words prose-p:my-2 prose-headings:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-strong:text-inherit">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          p({ children }) {
+            return <p className="break-words whitespace-pre-wrap m-0">{children}</p>;
+          },
+          li({ children }) {
+            return <li className="break-words">{children}</li>;
+          },
+          code({ inline, className, children }) {
+            return (
+              <CodeBlock inline={inline} className={className}>
+                {children}
+              </CodeBlock>
+            );
+          },
+        }}
+      >
+        {content}
+      </ReactMarkdown>
     </div>
   );
 }
 
-export default function NeuraPanel({ theme, currentUser }) {
+export default function NeuraPanel({ theme }) {
   const { files, activeFile } = useFiles();
   const panelRef = useRef(null);
   const resizeStateRef = useRef(null);
+  const hasLoadedRef = useRef(false);
+  const messagesEndRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(() => {
     const savedWidth = Number(localStorage.getItem(PANEL_WIDTH_KEY));
     if (Number.isFinite(savedWidth) && savedWidth >= MIN_PANEL_WIDTH && savedWidth <= MAX_PANEL_WIDTH) {
       return savedWidth;
     }
-    return 360;
+    return 400;
   });
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState([
-    {
-      id: 'intro',
-      role: 'assistant',
-      content:
-        "Hi! I'm Neura. I can help you understand code, write tests, find bugs, or suggest improvements. What are we working on today?",
-    },
-  ]);
+
+  const [inputValue, setInputValue] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [conversations, setConversations] = useState([]);
+  const [activeConversationId, setActiveConversationId] = useState(null);
   const [isSending, setIsSending] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [error, setError] = useState('');
-  const t = getThemeClasses(theme);
-  const suggestionChips = useMemo(
-    () => [
-      { label: 'Explain architecture', icon: BrainCircuit },
-      { label: 'Find risky code paths', icon: ShieldCheck },
-      { label: 'Draft tests', icon: Code2 },
-      { label: 'Suggest improvements', icon: Lightbulb },
-    ],
-    []
-  );
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'history'
 
   useEffect(() => {
     localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth));
@@ -183,9 +147,7 @@ export default function NeuraPanel({ theme, currentUser }) {
   useEffect(() => {
     const handlePointerMove = (event) => {
       const resizeState = resizeStateRef.current;
-      if (!resizeState) {
-        return;
-      }
+      if (!resizeState) return;
 
       const nextWidth = resizeState.startWidth + (resizeState.startX - event.clientX);
       const boundedWidth = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, nextWidth));
@@ -206,6 +168,16 @@ export default function NeuraPanel({ theme, currentUser }) {
       window.removeEventListener('pointerup', stopResizing);
     };
   }, []);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (activeTab === 'chat') {
+      scrollToBottom();
+    }
+  }, [messages, isSending, activeConversationId, activeTab]);
 
   const startResizing = (event) => {
     resizeStateRef.current = {
@@ -233,62 +205,187 @@ export default function NeuraPanel({ theme, currentUser }) {
     [activeFile, files]
   );
 
-  const sendMessage = async (rawMessage) => {
-    const trimmedMessage = String(rawMessage || '').trim();
-    if (!trimmedMessage || isSending) {
-      return;
-    }
+  const upsertConversation = (conversation, options = {}) => {
+    if (!conversation?._id) return;
 
-    const nextUserMessage = {
-      id: `user-${Date.now()}`,
+    setConversations((current) => {
+      const filtered = current.filter((entry) => entry._id !== conversation._id);
+      const next = [conversation, ...filtered];
+      if (options.keepOrder) {
+        return next;
+      }
+      return next.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+    });
+  };
+
+  const loadConversationList = async () => {
+    setIsLoadingHistory(true);
+    setError('');
+
+    try {
+      const history = await getNeuraConversationHistory();
+      setConversations(history);
+
+      if (history.length > 0) {
+        setActiveConversationId(history[0]._id);
+        setIsLoadingConversation(true);
+        const conversationData = await getNeuraConversation(history[0]._id);
+        setMessages(conversationData.messages || []);
+      } else {
+        setActiveConversationId(null);
+        setMessages([
+          {
+            _id: 'welcome',
+            role: 'assistant',
+            content: "Hello! I'm Neura AI. I've indexed your current workspace. How can I help you today?",
+            createdAt: new Date().toISOString()
+          }
+        ]);
+      }
+    } catch (requestError) {
+      setError(requestError.message || 'Unable to load conversation history.');
+    } finally {
+      setIsLoadingHistory(false);
+      setIsLoadingConversation(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen || hasLoadedRef.current) return;
+    
+    hasLoadedRef.current = true;
+    loadConversationList();
+  }, [isOpen]);
+
+  const handleLoadConversation = async (conversationId) => {
+    if (!conversationId || conversationId === activeConversationId) return;
+
+    setIsLoadingConversation(true);
+    setError('');
+
+    try {
+      const data = await getNeuraConversation(conversationId);
+      setActiveConversationId(conversationId);
+      setMessages(data.messages || []);
+      if (data.conversation) {
+        upsertConversation(data.conversation, { keepOrder: true });
+      }
+      setActiveTab('chat');
+    } catch (requestError) {
+      setError(requestError.message || 'Unable to load that conversation.');
+    } finally {
+      setIsLoadingConversation(false);
+    }
+  };
+
+  const handleNewChat = async () => {
+    setIsCreatingConversation(true);
+    setError('');
+
+    try {
+      const conversation = await createNeuraConversation();
+      setActiveConversationId(conversation._id);
+      setMessages([
+          {
+            _id: 'welcome',
+            role: 'assistant',
+            content: "Hello! I'm Neura AI. I've indexed your current workspace. How can I help you today?",
+            createdAt: new Date().toISOString()
+          }
+      ]);
+      setInputValue('');
+      upsertConversation(conversation);
+      setActiveTab('chat');
+    } catch (requestError) {
+      setError(requestError.message || 'Unable to start a new chat.');
+    } finally {
+      setIsCreatingConversation(false);
+    }
+  };
+
+  const deleteHistoryItem = async (e, conversationId) => {
+    e.stopPropagation();
+    try {
+      await deleteNeuraConversation(conversationId);
+      setConversations(prev => prev.filter(c => c._id !== conversationId));
+      if (activeConversationId === conversationId) {
+        setActiveConversationId(null);
+        setMessages([
+          {
+            _id: 'welcome',
+            role: 'assistant',
+            content: "Hello! I'm Neura AI. I've indexed your current workspace. How can I help you today?",
+            createdAt: new Date().toISOString()
+          }
+        ]);
+        setActiveTab('chat');
+      }
+    } catch {
+      setError('Failed to delete conversation');
+    }
+  };
+
+  const handleSend = async (messageOverride = null) => {
+    const messageToSend = messageOverride !== null && typeof messageOverride === 'string' ? messageOverride : inputValue;
+    const trimmedMessage = String(messageToSend || '').trim();
+    if (!trimmedMessage || isSending) return;
+
+    const optimisticUserMessage = {
+      _id: `temp-user-${Date.now()}`,
       role: 'user',
       content: trimmedMessage,
+      createdAt: new Date().toISOString(),
     };
 
-    const nextHistory = messages
-      .filter((entry) => entry.role === 'user' || entry.role === 'assistant')
-      .map(({ role, content }) => ({ role, content }))
-      .concat({ role: 'user', content: trimmedMessage });
-
-    setMessages((current) => [...current, nextUserMessage]);
-    setMessage('');
+    setMessages((current) => [...current.filter(m => m._id !== 'welcome'), optimisticUserMessage]);
+    setInputValue('');
     setIsSending(true);
     setError('');
 
     try {
       const response = await chatWithNeura({
         message: trimmedMessage,
-        history: nextHistory,
+        conversationId: activeConversationId,
         context: fileContext,
       });
 
-      setMessages((current) => [
-        ...current,
-        {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: response.reply,
-        },
-      ]);
+      setActiveConversationId(response.conversationId);
+      if (response.conversation) {
+        upsertConversation(response.conversation);
+      }
+
+      setMessages((current) => {
+        const withoutOptimistic = current.filter((entry) => entry._id !== optimisticUserMessage._id);
+        return [
+          ...withoutOptimistic,
+          response.userMessage || optimisticUserMessage,
+          response.assistantMessage || {
+            _id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: response.reply,
+            createdAt: new Date().toISOString(),
+          },
+        ];
+      });
     } catch (requestError) {
+      setMessages((current) => current.filter((entry) => entry._id !== optimisticUserMessage._id));
       setError(requestError.message || 'Neura could not respond right now.');
     } finally {
       setIsSending(false);
     }
   };
 
+  // UI mapping
   if (!isOpen) {
     return (
-      <div 
-        className={`w-12 border ${theme === 'dark' ? 'bg-[#0d1117] border-white/10 shadow-black/50' : 'bg-slate-200/80 border-slate-300 shadow-slate-200/50'} rounded-xl shadow-lg flex flex-col items-center py-4 shrink-0 transition-all duration-300 overflow-hidden`}
-      >
+      <div className={`w-12 border ${theme === 'dark' ? 'bg-[#0d1117] border-white/10 shadow-black/50' : 'bg-slate-200/80 border-slate-300 shadow-slate-200/50'} rounded-xl shadow-lg flex flex-col items-center py-4 shrink-0 transition-all duration-300 overflow-hidden`}>
         <button
           onClick={() => setIsOpen(true)}
           className={`relative flex items-center justify-center w-8 h-8 rounded-lg outline-none overflow-hidden group border border-transparent hover:border-fuchsia-500/50 transition-all shadow-lg ${theme === 'dark' ? 'shadow-fuchsia-900/20' : 'shadow-fuchsia-200/50 cursor-pointer'}`}
           title="Open Neura AI Assistant"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-500 to-indigo-600 opacity-80 group-hover:opacity-100 transition-opacity" />
-          <BrainCircuit size={16} className="text-white relative z-10" />
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 to-indigo-600 opacity-80 group-hover:opacity-100 transition-opacity" />
+          <Sparkles className="w-4 h-4 text-white relative z-10" />
         </button>
       </div>
     );
@@ -298,214 +395,282 @@ export default function NeuraPanel({ theme, currentUser }) {
     <aside
       ref={panelRef}
       style={{ width: `${panelWidth}px` }}
-      className={`relative border flex flex-col transition-[width] duration-200 shrink-0 rounded-2xl overflow-hidden shadow-xl min-w-0 ${
-        theme === 'dark'
-          ? 'bg-[radial-gradient(circle_at_top,#142033_0%,#0b1119_42%,#090d14_100%)] border-white/10 shadow-black/50'
-          : 'bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] border-slate-300 shadow-slate-200/70'
-      }`}
+      className="relative flex flex-col transition-[width] duration-200 shrink-0 rounded-2xl overflow-hidden shadow-xl min-w-0 bg-[#0d0d17] border-white/10 shadow-black/50 text-slate-300 border"
     >
       <button
         type="button"
         aria-label="Resize Neura panel"
         onPointerDown={startResizing}
-        className={`absolute left-0 top-0 z-20 h-full w-3 -translate-x-1/2 cursor-col-resize ${
-          theme === 'dark' ? 'hover:bg-fuchsia-400/20' : 'hover:bg-fuchsia-500/15'
-        }`}
+        className="absolute left-0 top-0 z-20 h-full w-3 -translate-x-1/2 cursor-col-resize hover:bg-white/5"
       >
         <span className="sr-only">Resize</span>
       </button>
-      {/* Header */}
-      <div className={`shrink-0 relative overflow-hidden border-b ${t.border}`}>
-        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.18),transparent_38%),radial-gradient(circle_at_top_right,rgba(236,72,153,0.16),transparent_30%)]" />
-        <div className="relative z-10 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex gap-3 min-w-0">
-              <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-700 to-cyan-500 shadow-lg shadow-cyan-500/10 shrink-0">
-                <BrainCircuit size={20} className="text-white" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h2 className={`font-semibold text-sm tracking-tight ${t.text}`}>Neura AI</h2>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      theme === 'dark'
-                        ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-400/20'
-                        : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
-                    }`}
-                  >
-                    Ready
-                  </span>
-                </div>
-                <p className={`text-[11px] leading-tight mt-1 ${t.textMuted}`}>
-                  Context-aware engineering copilot for the active workspace.
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button 
-                onClick={() => setIsOpen(false)}
-                className={`p-1.5 rounded-lg hover:bg-black/5 ${theme === 'dark' ? 'hover:bg-white/10 text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800'} transition-colors cursor-pointer relative z-10`}
-              >
-                <ChevronRight size={18} />
-              </button>
+      {/* Main Container */}
+      <div className="flex flex-col w-full h-full relative font-sans">
+        {/* Header Section */}
+        <header className="px-4 py-3 border-b border-white/5 bg-[#12121f] flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <Sparkles className="w-4 h-4 text-white" />
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-[#12121f] rounded-full"></div>
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-white tracking-tight">Neura AI</h2>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Chat Area */}
-      <div className="flex-1 overflow-x-hidden overflow-y-auto custom-scrollbar p-4 flex flex-col gap-5 min-w-0">
-        {messages.map((entry) => (
-          <div
-            key={entry.id}
-            className={`flex min-w-0 gap-3 ${entry.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            {entry.role === 'assistant' && (
-              <div className="flex flex-col items-center gap-1 pt-1 shrink-0">
-                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-slate-900 via-indigo-700 to-cyan-500 flex items-center justify-center shadow-md shadow-cyan-500/10">
-                  <BrainCircuit size={14} className="text-white" />
-                </div>
-                <span className={`text-[9px] uppercase tracking-[0.2em] ${t.textMuted}`}>AI</span>
-              </div>
-            )}
-            <div
-              className={`min-w-0 overflow-hidden text-xs leading-relaxed whitespace-pre-wrap break-words ${
-                entry.role === 'assistant' ? 'flex-1' : 'max-w-[88%]'
-              }`}
+          
+          <div className="flex items-center gap-1">
+            <button 
+              className="p-1.5 hover:bg-white/5 rounded-md transition-colors text-slate-400" 
+              title="New Chat"
+              onClick={handleNewChat}
+              disabled={isCreatingConversation || isSending}
             >
-              {entry.role === 'assistant' ? (
-                <AssistantMessage content={entry.content} theme={theme} />
+               {isCreatingConversation ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <MessageSquarePlus className="w-4 h-4" />}
+            </button>
+            <button
+               onClick={() => setIsOpen(false)}
+               className="p-1.5 hover:bg-white/5 rounded-md transition-colors text-slate-400"
+               title="Close Panel"
+            >
+               <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </header>
+
+        {/* Action Quick-Tabs */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 bg-[#0d0d17]/50 overflow-x-auto no-scrollbar shrink-0">
+          <button onClick={() => handleSend("Explain the current code")} disabled={isSending} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-md text-xs whitespace-nowrap hover:bg-indigo-500/20 transition-all">
+            <Zap className="w-3 h-3" />
+            Explain Code
+          </button>
+          <button onClick={() => handleSend("Find bugs in the current code")} disabled={isSending} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 text-slate-400 border border-white/10 rounded-md text-xs whitespace-nowrap hover:bg-white/10 transition-all">
+            <Bug className="w-3 h-3" />
+            Find Bugs
+          </button>
+          <button onClick={() => handleSend("Refactor the current code")} disabled={isSending} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 text-slate-400 border border-white/10 rounded-md text-xs whitespace-nowrap hover:bg-white/10 transition-all">
+            <Code2 className="w-3 h-3" />
+            Refactor
+          </button>
+        </div>
+
+        {/* History / Chat Toggle */}
+        <div className="flex px-4 py-2 text-[11px] font-medium text-slate-500 uppercase tracking-wider border-b border-white/5 shrink-0">
+          <button 
+            onClick={() => setActiveTab('chat')}
+            className={`mr-4 pb-1 border-b-2 transition-all ${activeTab === 'chat' ? 'border-indigo-500 text-white' : 'border-transparent hover:text-slate-300'}`}
+          >
+            Chat
+          </button>
+          <button 
+            onClick={() => setActiveTab('history')}
+            className={`pb-1 border-b-2 transition-all ${activeTab === 'history' ? 'border-indigo-500 text-white' : 'border-transparent hover:text-slate-300'}`}
+          >
+            History
+          </button>
+        </div>
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 space-y-6 custom-scrollbar min-w-0 flex flex-col pb-6">
+          {activeTab === 'chat' ? (
+            <>
+              {isLoadingConversation ? (
+                <div className="flex items-center gap-2 rounded-xl border border-white/5 px-4 py-3 text-[11px] text-slate-400 mx-auto mt-4">
+                  <LoaderCircle size={13} className="animate-spin" />
+                  <span>Loading conversation...</span>
+                </div>
+              ) : messages.map((msg, idx) => {
+                const timeStr = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return (
+                 <div key={msg._id || idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300 w-full`}>
+                   <div className="flex items-center gap-2 mb-1.5 px-1">
+                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
+                       {msg.role === 'user' ? 'You' : 'Neura AI'}
+                     </span>
+                     <span className="text-[10px] text-slate-600">{timeStr}</span>
+                   </div>
+                   
+                   <div className={`max-w-[90%] px-3.5 py-2.5 rounded-xl text-sm leading-relaxed shadow-sm break-words overflow-hidden ${
+                     msg.role === 'user' 
+                       ? 'bg-indigo-600/90 text-white rounded-tr-none' 
+                       : 'bg-[#1a1a2e] text-slate-200 border border-white/5 rounded-tl-none'
+                   }`}>
+                     {msg.role === 'user' ? (
+                       <div className="whitespace-pre-wrap">{msg.content}</div>
+                     ) : (
+                       <AssistantMessage content={msg.content} />
+                     )}
+                     
+                     {msg.role === 'assistant' && msg._id === 'welcome' && (activeFile || files.length > 0) && (
+                       <div className="mt-3 p-2 bg-black/30 rounded border border-white/5 font-mono text-[11px] text-indigo-300">
+                         <div className="flex items-center justify-between opacity-60">
+                           <span>Context: {activeFile ? activeFile.name : 'Workspace'}</span>
+                           <Terminal className="w-3 h-3" />
+                         </div>
+                       </div>
+                     )}
+                   </div>
+                   
+                   {msg.role === 'assistant' && (
+                     <div className="flex gap-2 mt-2 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                       <button onClick={() => { navigator.clipboard.writeText(msg.content) }} className="p-1 hover:bg-white/5 rounded text-slate-500 hover:text-slate-300" title="Copy to clipboard">
+                         <Copy className="w-3 h-3" />
+                       </button>
+                     </div>
+                   )}
+                 </div>
+              )})}
+
+              {isSending && (
+                <div className="flex flex-col items-start group animate-in fade-in slide-in-from-bottom-2 duration-300 w-full">
+                  <div className="flex items-center gap-2 mb-1.5 px-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
+                      Neura AI
+                    </span>
+                  </div>
+                  <div className="max-w-[90%] px-4 py-3 rounded-xl border border-white/5 bg-[#1a1a2e] text-slate-200 rounded-tl-none text-[11px]">
+                    <div className="flex items-center gap-2">
+                       <LoaderCircle size={13} className="animate-spin text-indigo-400" />
+                       <span>Neura is thinking...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <div className="text-[11px] rounded-lg border px-3 py-2 border-rose-500/30 text-rose-300 bg-rose-500/10 mx-auto my-2">
+                  {error}
+                </div>
+              )}
+
+              <div ref={messagesEndRef} className="h-4 w-full" />
+            </>
+          ) : (
+            <div className="space-y-1">
+              {isLoadingHistory ? (
+                <div className="flex items-center justify-center gap-2 py-6 text-[11px] text-slate-500">
+                  <LoaderCircle size={13} className="animate-spin" />
+                  <span>Loading chats...</span>
+                </div>
+              ) : conversations.length > 0 ? (
+                conversations.map((item) => {
+                  const isActive = item._id === activeConversationId;
+                  return (
+                    <div key={item._id} className="relative group/item">
+                      <button 
+                         onClick={() => handleLoadConversation(item._id)}
+                         className={`w-full flex items-center justify-between p-2.5 pr-10 rounded-lg text-left transition-colors ${
+                           isActive ? 'bg-indigo-500/10 border border-indigo-500/20' : 'hover:bg-white/5 border border-transparent'
+                         }`}
+                      >
+                        <div className="flex items-center gap-3 truncate">
+                          <History className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-400' : 'text-slate-600 group-hover/item:text-indigo-400'}`} />
+                          <span className={`text-sm truncate ${isActive ? 'text-indigo-200' : 'text-slate-400 group-hover/item:text-slate-200'}`}>{item.title}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-600 whitespace-nowrap group-hover/item:hidden transition-all shrink-0 ml-2">
+                           {formatConversationTime(item.updatedAt)}
+                        </span>
+                      </button>
+                      
+                      <button 
+                        onClick={(e) => deleteHistoryItem(e, item._id)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 opacity-0 group-hover/item:opacity-100 hover:bg-red-500/10 text-slate-600 hover:text-red-400 rounded-md transition-all z-10"
+                        title="Delete chat"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )
+                })
               ) : (
-                <div
-                  className={`rounded-2xl px-4 py-3 shadow-sm ${
-                    theme === 'dark'
-                      ? 'bg-gradient-to-br from-indigo-600 to-fuchsia-600 text-white'
-                      : 'bg-gradient-to-br from-slate-900 to-indigo-700 text-white'
-                  }`}
-                >
-                  <div className="min-w-0 whitespace-pre-wrap break-words">{entry.content}</div>
+                <div className="flex flex-col items-center justify-center py-10 opacity-40">
+                  <History className="w-8 h-8 mb-2" />
+                  <p className="text-xs">No chat history</p>
                 </div>
               )}
             </div>
-            {entry.role === 'user' && (
-              <div className="flex flex-col items-center gap-1 pt-1 shrink-0">
-                <UserAvatar name={currentUser?.name} />
-                <span className={`text-[9px] uppercase tracking-[0.2em] ${t.textMuted}`}>You</span>
+          )}
+        </main>
+
+        {/* Footer Input Section */}
+        {activeTab === 'chat' && (
+          <footer className="p-4 bg-[#12121f] border-t border-white/5 shrink-0 z-10 relative">
+            <div className="relative group">
+              <textarea
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                maxLength={4000}
+                placeholder="Ask for fixes, architecture advice..."
+                className="w-full min-h-[100px] bg-[#0d0d17] border border-white/10 rounded-xl p-3 pt-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all resize-none shadow-inner"
+              />
+              
+              <div className="absolute bottom-3 left-3 flex items-center gap-3">
+                <button className="text-slate-600 hover:text-slate-400 transition-colors">
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                <div className="h-4 w-px bg-white/10"></div>
+                <span className="text-[10px] font-medium text-slate-600">{inputValue.trim().length}/4000</span>
               </div>
-            )}
-          </div>
-        ))}
+
+              <div className="absolute bottom-3 right-3 flex items-center gap-1">
+                <button 
+                  onClick={() => setInputValue('')}
+                  className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-all"
+                  title="Clear input"
+                >
+                  <Eraser className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => handleSend()}
+                  disabled={!inputValue.trim() || isSending}
+                  className={`flex items-center justify-center p-2 rounded-lg transition-all ${
+                    inputValue.trim() && !isSending
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 scale-100 hover:scale-105 active:scale-95' 
+                      : 'bg-white/5 text-slate-700 cursor-not-allowed'
+                  }`}
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <p className="text-[10px] text-slate-600 flex items-center gap-1 overflow-hidden max-w-full">
+                <Check className="w-3 h-3 text-green-500/50 shrink-0" />
+                <span className="truncate">Context: {activeFile ? activeFile.name : 'Current workspace'}</span>
+              </p>
+            </div>
+          </footer>
+        )}
+      </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        {/* Example suggestion chips */}
-        <div
-          className={`rounded-2xl border p-3 ${
-            theme === 'dark'
-              ? 'border-white/10 bg-white/5'
-              : 'border-slate-200 bg-white/80'
-          }`}
-        >
-          <div className={`mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] ${t.textMuted}`}>
-            Suggested Prompts
-          </div>
-          <div className="grid grid-cols-1 gap-2">
-          {suggestionChips.map((chip) => {
-            const Icon = chip.icon;
-            return (
-            <button
-              key={chip.label}
-              onClick={() => sendMessage(chip.label)}
-              disabled={isSending}
-              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-[11px] transition-colors disabled:opacity-50 ${
-                theme === 'dark'
-                  ? 'border-white/10 bg-white/0 text-slate-200 hover:bg-white/5'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <span
-                className={`flex h-7 w-7 items-center justify-center rounded-lg ${
-                  theme === 'dark'
-                    ? 'bg-indigo-500/10 text-indigo-300'
-                    : 'bg-indigo-50 text-indigo-700'
-                }`}
-              >
-                <Icon size={14} />
-              </span>
-              <span className="truncate">{chip.label}</span>
-            </button>
-            );
-          })}
-          </div>
-        </div>
-
-        {activeFile && (
-          <div
-            className={`rounded-xl px-3 py-2 text-[10px] ${
-              theme === 'dark'
-                ? 'bg-white/5 text-slate-400 ring-1 ring-white/10'
-                : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
-            }`}
-          >
-            Working with <span className={theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}>{activeFile.name}</span>
-          </div>
-        )}
-
-        {error && (
-          <div className={`text-[11px] rounded-lg border px-3 py-2 ${theme === 'dark' ? 'border-rose-500/30 text-rose-300 bg-rose-500/10' : 'border-rose-200 text-rose-700 bg-rose-50'}`}>
-            {error}
-          </div>
-        )}
-      </div>
-
-      {/* Input Area */}
-      <div
-        className={`p-3 border-t ${t.border} ${
-          theme === 'dark'
-            ? 'bg-[linear-gradient(180deg,rgba(8,11,18,0.3),rgba(8,11,18,0.92))]'
-            : 'bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(248,250,252,0.96))]'
-        }`}
-      >
-        <div
-          className={`mb-2 flex items-center justify-between px-1 text-[10px] uppercase tracking-[0.16em] ${t.textMuted}`}
-        >
-          <span>Prompt</span>
-          <span>{message.trim().length}/4000</span>
-        </div>
-        <div className={`relative flex items-end gap-2 bg-transparent border ${theme === 'dark' ? 'border-white/10 focus-within:border-cyan-400/40 bg-white/5' : 'border-slate-300 focus-within:border-indigo-400 bg-white'} rounded-2xl px-3 py-3 overflow-hidden transition-colors`}>
-          <input 
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            maxLength={4000}
-            placeholder="Ask for fixes, architecture guidance, bugs, tests, or implementation help..."
-            className={`w-full min-w-0 bg-transparent text-xs outline-none ${t.text} ${theme === 'dark' ? 'placeholder:text-slate-500' : 'placeholder:text-slate-400'}`}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && message.trim() && !isSending) {
-                sendMessage(message);
-              }
-            }}
-          />
-          <button 
-            onClick={() => sendMessage(message)}
-            disabled={!message.trim() || isSending}
-            className={`shrink-0 p-2 rounded-xl ${
-              message.trim()
-                ? theme === 'dark'
-                  ? 'bg-gradient-to-br from-cyan-500 to-indigo-600 text-white'
-                  : 'bg-gradient-to-br from-slate-900 to-indigo-700 text-white'
-                : theme === 'dark'
-                  ? 'text-slate-600 bg-white/5'
-                  : 'text-slate-400 bg-slate-100'
-            } transition-colors cursor-pointer`}
-          >
-            {isSending ? <LoaderCircle size={14} className="animate-spin" /> : <Send size={14} />}
-          </button>
-        </div>
-        <div className={`flex items-center justify-between text-[9px] mt-2 px-1 ${theme === 'dark' ? 'text-slate-600' : 'text-slate-400'}`}>
-          <span>Neura can make mistakes. Verify important output.</span>
-          <span>Enter to send</span>
-        </div>
-      </div>
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.1);
+        }
+      `}} />
     </aside>
   );
 }

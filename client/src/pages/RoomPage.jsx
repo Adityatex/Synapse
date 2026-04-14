@@ -4,7 +4,7 @@ import throttle from 'lodash.throttle';
 import debounce from 'lodash.debounce';
 import { useCallback } from 'react';
 import { FileProvider, useFiles } from '../contexts/FileContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import Sidebar from '../components/Sidebar';
 import TabBar from '../components/TabBar';
 import EditorPanel from '../components/EditorPanel';
@@ -613,7 +613,6 @@ function RoomSession({ roomId }) {
       <Toolbar
         theme={theme}
         onToggleTheme={toggleTheme}
-        output={output}
         setOutput={setOutput}
         onSaveVersion={handleSaveVersion}
         roomId={roomId}
@@ -654,7 +653,7 @@ function RoomSession({ roomId }) {
           <OutputPanel theme={theme} output={output} />
         </main>
 
-        <NeuraPanel theme={theme} currentUser={user} />
+        <NeuraPanel theme={theme} />
       </div>
 
       <StatusBar

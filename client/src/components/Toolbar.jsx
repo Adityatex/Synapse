@@ -22,7 +22,6 @@ import {
 export default function Toolbar({ 
   theme, 
   onToggleTheme, 
-  output, 
   setOutput, 
   onSaveVersion,
   roomId,

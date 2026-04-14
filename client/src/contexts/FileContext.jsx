@@ -41,6 +41,16 @@ function getDefaultState() {
   };
 }
 
+function getSubTreeIds(filesList, rootId) {
+  let ids = [rootId];
+  for (const file of filesList) {
+    if (file.parentId === rootId) {
+      ids = ids.concat(getSubTreeIds(filesList, file.id));
+    }
+  }
+  return ids;
+}
+
 export function FileProvider({ children, storageKey = STORAGE_KEY }) {
   const [files, setFiles] = useState(() => {
     if (!storageKey) {
@@ -215,16 +225,6 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
     );
   }, []);
 
-  const getSubTreeIds = (filesList, rootId) => {
-    let ids = [rootId];
-    for (const file of filesList) {
-      if (file.parentId === rootId) {
-        ids = ids.concat(getSubTreeIds(filesList, file.id));
-      }
-    }
-    return ids;
-  };
-
   const deleteFile = useCallback((id) => {
     let deletedIds = [];
     setFiles((prev) => {
@@ -243,14 +243,14 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
         return prevActiveFileId;
       }
 
-      setFiles(currentFiles => {
+      setFiles((currentFiles) => {
         const nextFile = currentFiles.find(file => !deletedIds.includes(file.id) && file.type === 'file');
         return nextFile?.id || getDefaultState().files[0].id; // this just triggers re-render, safe because setFiles gives latest state but hacky
       });
       // safe fallback
       return getDefaultState().files[0].id; 
     });
-  }, [files]);
+  }, []);
 
   const updateContent = useCallback((id, content, options = {}) => {
     setFiles((prev) =>

@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Terminal, Users } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 
 export default function HeroSection() {
   const { isAuthenticated } = useAuth();

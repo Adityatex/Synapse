@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import {
   Plus,
   Users,
@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [recentRooms, setRecentRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [roomToDelete, setRoomToDelete] = useState(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'Developer';
   const avatarInitial = (user?.name || user?.email || 'U')[0].toUpperCase();
@@ -41,6 +42,14 @@ export default function Dashboard() {
         .finally(() => setLoadingRooms(false));
     }
   }, [user?.userId]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 60000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   function handleDeleteClick(e, room) {
     e.preventDefault();
@@ -61,8 +70,8 @@ export default function Dashboard() {
   }
 
   /* ---------- helpers ---------- */
-  function timeAgo(dateStr) {
-    const diff = Date.now() - new Date(dateStr).getTime();
+  function timeAgo(dateStr, currentTime) {
+    const diff = currentTime - new Date(dateStr).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return 'Just now';
     if (mins < 60) return `${mins} min${mins > 1 ? 's' : ''} ago`;
@@ -275,7 +284,7 @@ export default function Dashboard() {
                     {/* Footer */}
                     <div className="db-room-footer">
                       <span className="db-room-edited">
-                        Edited {timeAgo(room.lastUpdated)}
+                        Edited {timeAgo(room.lastUpdated, now)}
                       </span>
                       <div className="db-room-avatars">
                         <div className="db-room-avatar-circle">

@@ -1,7 +1,8 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import throttle from 'lodash.throttle';
+import debounce from 'lodash.debounce';
+import { useCallback } from 'react';
 import { FileProvider, useFiles } from '../contexts/FileContext';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
@@ -9,11 +10,14 @@ import TabBar from '../components/TabBar';
 import EditorPanel from '../components/EditorPanel';
 import Toolbar from '../components/Toolbar';
 import OutputPanel from '../components/OutputPanel';
-import UsersSidebar from '../components/UsersSidebar';
-import RoomBanner from '../components/RoomBanner';
+import StatusBar from '../components/StatusBar';
+import NeuraPanel from '../components/NeuraPanel';
+import { getThemeClasses } from '../utils/theme';
 import { createCollaborationSocket } from '../services/socket';
 import { getRoom } from '../services/roomService';
 import { RoomYjsManager } from '../services/yjsRoom';
+
+const FILE_LOCK_RENEW_INTERVAL_MS = 15000;
 
 function getStructureSignature({ files = [] }) {
   return JSON.stringify({
@@ -38,30 +42,64 @@ function RoomSession({ roomId }) {
     error: null,
     running: false,
   });
-  const [participants, setParticipants] = useState([]);
   const [connectionState, setConnectionState] = useState('connecting');
   const [loadingRoom, setLoadingRoom] = useState(true);
   const [roomReady, setRoomReady] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [presence, setPresence] = useState({});
-  const [activityFeed, setActivityFeed] = useState([]);
   const [yjsManager, setYjsManager] = useState(null);
   const [, setYjsDocVersion] = useState(0);
   const [editingUsers, setEditingUsers] = useState({});
+  const [chatMessages, setChatMessages] = useState([]);
+  const [typingUsers, setTypingUsers] = useState({});
+  const [fileLocks, setFileLocks] = useState({});
+  const [lockNotice, setLockNotice] = useState('');
   const socketRef = useRef(null);
   const suppressStructureSyncRef = useRef(null);
   const copyTimerRef = useRef(null);
-  const activityTimerRef = useRef(null);
+  const lockNoticeTimerRef = useRef(null);
   const structureEmitterRef = useRef(null);
   const cursorEmitterRef = useRef(null);
   const selectionEmitterRef = useRef(null);
   const editingTimersRef = useRef({});
+  const ownedLockRef = useRef(null);
+  const canEditFileRef = useRef(() => true);
+  const localChangeEmitterRef = useRef(() => {});
   const latestRoomStateRef = useRef({
     files: [],
     activeFileId: null,
     openTabs: [],
   });
+
+  const activeFileLock = activeFileId ? fileLocks[activeFileId] || null : null;
+  const isActiveFileLockedByOther = Boolean(
+    activeFileLock && activeFileLock.userId && activeFileLock.userId !== user?.userId
+  );
+
+  const canEditFile = useCallback(
+    (fileId) => {
+      if (!fileId) {
+        return false;
+      }
+
+      const lock = fileLocks[fileId];
+      return !lock || lock.userId === user?.userId;
+    },
+    [fileLocks, user?.userId]
+  );
+
+  const showLockNotice = useCallback((message) => {
+    setLockNotice(message);
+    clearTimeout(lockNoticeTimerRef.current);
+    lockNoticeTimerRef.current = setTimeout(() => {
+      setLockNotice('');
+    }, 3500);
+  }, []);
+
+  useEffect(() => {
+    canEditFileRef.current = canEditFile;
+  }, [canEditFile]);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -77,6 +115,17 @@ function RoomSession({ roomId }) {
     [files]
   );
 
+  const handleLocalChange = useCallback((fileId, content) => {
+    localChangeEmitterRef.current(fileId, content);
+  }, []);
+
+  const handleSaveVersion = useCallback(() => {
+    if (socketRef.current && activeFileId && yjsManager) {
+      const content = yjsManager.getText(activeFileId).toString();
+      socketRef.current.emit('save-version', { roomId, fileId: activeFileId, content });
+    }
+  }, [activeFileId, yjsManager, roomId]);
+
   useEffect(() => {
     latestRoomStateRef.current = {
       files: files.map(({ id, name, content, updatedAt }) => ({
@@ -91,6 +140,19 @@ function RoomSession({ roomId }) {
   }, [files, activeFileId, openTabs]);
 
   useEffect(() => {
+    const debouncedEmitter = debounce((fileId, content) => {
+      socketRef.current?.emit('autosave', { roomId, fileId, content });
+    }, 1500);
+
+    localChangeEmitterRef.current = debouncedEmitter;
+
+    return () => {
+      debouncedEmitter.cancel();
+      localChangeEmitterRef.current = () => {};
+    };
+  }, [roomId]);
+
+  useEffect(() => {
     if (!user?.userId || !user?.name) {
       return undefined;
     }
@@ -102,6 +164,7 @@ function RoomSession({ roomId }) {
       socket,
       roomId,
       userId: user.userId,
+      canEditFile: (fileId) => canEditFileRef.current(fileId),
       onFileContent: (fileId, content) => {
         updateContent(fileId, content, { updatedAt: Date.now() });
       },
@@ -137,15 +200,6 @@ function RoomSession({ roomId }) {
     cursorEmitterRef.current = throttledCursorSync;
     selectionEmitterRef.current = throttledSelectionSync;
 
-    const pushActivity = (message) => {
-      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      setActivityFeed((previous) => [...previous.slice(-3), { id, message }]);
-      clearTimeout(activityTimerRef.current);
-      activityTimerRef.current = setTimeout(() => {
-        setActivityFeed((previous) => previous.filter((event) => event.id !== id));
-      }, 3500);
-    };
-
     const handleConnect = () => {
       setConnectionState('connected');
       setError('');
@@ -175,10 +229,11 @@ function RoomSession({ roomId }) {
       manager.applySharedStates(sharedDocs, nextFiles);
     };
 
-    const handleRoomJoined = ({ room, sharedDocs, participant }) => {
+    const handleRoomJoined = ({ room, sharedDocs, fileLocks: initialFileLocks, participant }) => {
       suppressStructureSyncRef.current = getStructureSignature(room);
       replaceState(room);
       applySharedDocs(sharedDocs, room.files);
+      setFileLocks(initialFileLocks || {});
       setLoadingRoom(false);
       setRoomReady(true);
       setError('');
@@ -189,13 +244,14 @@ function RoomSession({ roomId }) {
             userId: participant.userId,
             username: participant.username,
             cursorColor: participant.cursorColor,
+            avatarGlyph: participant.avatarGlyph,
           },
         }));
       }
+      socket.emit('request-chat-history', { roomId, limit: 50 });
     };
 
     const handleRoomUsers = (nextParticipants) => {
-      setParticipants(nextParticipants);
       setPresence((previous) => {
         const nextPresence = {};
         nextParticipants.forEach((participant) => {
@@ -204,6 +260,7 @@ function RoomSession({ roomId }) {
             userId: participant.userId,
             username: participant.username,
             cursorColor: participant.cursorColor,
+            avatarGlyph: participant.avatarGlyph,
           };
         });
         return nextPresence;
@@ -223,7 +280,13 @@ function RoomSession({ roomId }) {
     const handleUserEditing = ({ userId: peerId, username: peerName, cursorColor: peerColor, fileId }) => {
       setEditingUsers((prev) => ({
         ...prev,
-        [peerId]: { userId: peerId, username: peerName, cursorColor: peerColor, fileId, lastEdit: Date.now() },
+        [peerId]: {
+          userId: peerId,
+          username: peerName,
+          cursorColor: peerColor,
+          fileId,
+          lastEdit: Date.now(),
+        },
       }));
       // Clear the "editing" indicator after 2 seconds of inactivity
       clearTimeout(editingTimersRef.current[peerId]);
@@ -244,6 +307,7 @@ function RoomSession({ roomId }) {
           userId: payload.userId,
           username: payload.username,
           cursorColor: payload.cursorColor,
+          avatarGlyph: payload.avatarGlyph,
           position: payload.position,
           socketId: payload.socketId,
         },
@@ -258,14 +322,14 @@ function RoomSession({ roomId }) {
           userId: payload.userId,
           username: payload.username,
           cursorColor: payload.cursorColor,
+          avatarGlyph: payload.avatarGlyph,
           selectionRange: payload.selectionRange,
           socketId: payload.socketId,
         },
       }));
     };
 
-    const handleUserJoined = ({ username, cursorColor, userId }) => {
-      pushActivity(`${username} joined the room`);
+    const handleUserJoined = ({ username, cursorColor, avatarGlyph, userId }) => {
       setPresence((previous) => ({
         ...previous,
         [userId]: {
@@ -273,15 +337,12 @@ function RoomSession({ roomId }) {
           userId,
           username,
           cursorColor,
+          avatarGlyph,
         },
       }));
     };
 
-    const handleUserLeft = ({ userId, username }) => {
-      if (username) {
-        pushActivity(`${username} left the room`);
-      }
-
+    const handleUserLeft = ({ userId }) => {
       if (!userId) {
         return;
       }
@@ -299,6 +360,19 @@ function RoomSession({ roomId }) {
       setError(message);
     };
 
+    const handleFileLocksUpdated = ({ locks = {} }) => {
+      setFileLocks(locks);
+    };
+
+    const handleLockDenied = ({ fileId, lockedBy }) => {
+      const lockedFile = latestRoomStateRef.current.files.find((file) => file.id === fileId);
+      const label = lockedFile?.name || 'This file';
+      showLockNotice(`${label} is locked by ${lockedBy?.username || 'another user'}`);
+      if (ownedLockRef.current === fileId) {
+        ownedLockRef.current = null;
+      }
+    };
+
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('connect_error', handleConnectError);
@@ -312,6 +386,23 @@ function RoomSession({ roomId }) {
     socket.on('user-joined', handleUserJoined);
     socket.on('user-left', handleUserLeft);
     socket.on('room-error', handleRoomError);
+    socket.on('file-locks-updated', handleFileLocksUpdated);
+    socket.on('lock-denied', handleLockDenied);
+    socket.on('chat-message', (msg) => setChatMessages((prev) => [...prev, msg]));
+    socket.on('chat-history', (history) => setChatMessages(history));
+    socket.on('chat-message-updated', (updated) => {
+      setChatMessages((prev) => prev.map(m => (m._id === updated._id ? updated : m)));
+    });
+    socket.on('chat-search-results', (results) => {
+      // Store search results in a separate state via a custom event
+      window.dispatchEvent(new CustomEvent('chat-search-results', { detail: results }));
+    });
+    socket.on('user-typing', ({ userId: tid, username: tname, isTyping }) => {
+      setTypingUsers((prev) => {
+        if (!isTyping) { const n = { ...prev }; delete n[tid]; return n; }
+        return { ...prev, [tid]: tname };
+      });
+    });
     socket.connect();
 
     return () => {
@@ -322,15 +413,22 @@ function RoomSession({ roomId }) {
       cursorEmitterRef.current = null;
       selectionEmitterRef.current = null;
       clearTimeout(copyTimerRef.current);
-      clearTimeout(activityTimerRef.current);
+      clearTimeout(lockNoticeTimerRef.current);
       Object.values(editingTimersRef.current).forEach(clearTimeout);
       editingTimersRef.current = {};
+      socket.off('file-locks-updated', handleFileLocksUpdated);
+      socket.off('lock-denied', handleLockDenied);
+      socket.off('chat-message');
+      socket.off('chat-history');
+      socket.off('chat-message-updated');
+      socket.off('chat-search-results');
+      socket.off('user-typing');
       socket.emit('leave-room');
       socket.disconnect();
       manager.destroy();
       setYjsManager(null);
     };
-  }, [logout, navigate, replaceSharedFiles, replaceState, roomId, updateContent, user]);
+  }, [logout, navigate, replaceSharedFiles, replaceState, roomId, showLockNotice, updateContent, user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -368,6 +466,48 @@ function RoomSession({ roomId }) {
 
     structureEmitterRef.current?.(latestRoomStateRef.current);
   }, [structureSignature, connectionState, loadingRoom, roomReady]);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || connectionState !== 'connected' || !roomReady) {
+      return undefined;
+    }
+
+    const previousFileId = ownedLockRef.current;
+    if (previousFileId && previousFileId !== activeFileId) {
+      socket.emit('release-file-lock', { roomId, fileId: previousFileId });
+      ownedLockRef.current = null;
+    }
+
+    if (!activeFileId) {
+      return undefined;
+    }
+
+    socket.emit('request-file-lock', { roomId, fileId: activeFileId });
+    ownedLockRef.current = activeFileId;
+
+    const renewTimer = window.setInterval(() => {
+      socket.emit('renew-file-lock', { roomId, fileId: activeFileId });
+    }, FILE_LOCK_RENEW_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(renewTimer);
+    };
+  }, [activeFileId, connectionState, roomId, roomReady]);
+
+  useEffect(() => {
+    if (!ownedLockRef.current) {
+      return;
+    }
+
+    const stillExists = files.some((file) => file.id === ownedLockRef.current);
+    if (stillExists) {
+      return;
+    }
+
+    socketRef.current?.emit('release-file-lock', { roomId, fileId: ownedLockRef.current });
+    ownedLockRef.current = null;
+  }, [files, roomId]);
 
   // getText() returns a STABLE Y.Text reference — no fallback content is
   // provided here so we never pre-seed locally. Content comes exclusively
@@ -466,48 +606,63 @@ function RoomSession({ roomId }) {
     );
   }
 
+  const t = getThemeClasses(theme);
+
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden" data-theme={theme}>
+    <div className={`flex flex-col h-screen ${t.bg} ${t.text} font-sans select-none overflow-hidden transition-colors duration-300`} data-theme={theme}>
       <Toolbar
         theme={theme}
         onToggleTheme={toggleTheme}
         output={output}
         setOutput={setOutput}
-      />
-
-      <RoomBanner
+        onSaveVersion={handleSaveVersion}
         roomId={roomId}
-        connectionState={connectionState}
-        lastError={error}
         copied={copied}
-        onCopy={handleCopyInvite}
-        activityFeed={activityFeed}
+        onCopyInvite={handleCopyInvite}
+        currentUser={user}
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+      <div className={`flex flex-1 overflow-hidden p-2 gap-2 ${theme === 'dark' ? 'bg-[#030509]' : 'bg-slate-200/60'}`}>
+        <Sidebar 
+          theme={theme} 
+          collaborators={Object.values(presence)} 
+          chatMessages={chatMessages}
+          typingUsers={Object.values(typingUsers)}
+          getSocket={() => socketRef.current}
+          roomId={roomId}
+          currentUser={user}
+          fileLocks={fileLocks}
+        />
 
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <TabBar />
+        <main className={`flex-1 min-w-0 flex flex-col ${t.editorBg} overflow-hidden rounded-xl border shadow-lg ${theme === 'dark' ? 'border-white/10 shadow-black/50' : 'border-slate-300 shadow-slate-200/50'} relative transition-colors duration-300`}>
+          <TabBar theme={theme} roomId={roomId} fileLocks={fileLocks} currentUserId={user?.userId} />
+          
           <EditorPanel
             theme={theme}
             onCursorMove={handleCursorMove}
             onSelectionChange={handleSelectionChange}
+            onLocalChange={handleLocalChange}
             sharedText={sharedText}
             remotePeers={activeRemotePeers}
             editingUsers={editingUsers}
             activeFileId={activeFileId}
+            activeFileLock={activeFileLock}
+            isReadOnly={isActiveFileLockedByOther}
+            lockNotice={lockNotice}
           />
-          <OutputPanel output={output} />
-        </div>
+          
+          <OutputPanel theme={theme} output={output} />
+        </main>
 
-        <UsersSidebar
-          roomId={roomId}
-          participants={participants}
-          currentUser={user}
-          connectionState={connectionState}
-        />
+        <NeuraPanel theme={theme} currentUser={user} />
       </div>
+
+      <StatusBar
+        theme={theme}
+        peersCount={Object.keys(presence).length}
+        activeFileLock={activeFileLock}
+        currentUserId={user?.userId}
+      />
     </div>
   );
 }

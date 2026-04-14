@@ -1,20 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react';
+import { requestLoginOtp } from '../services/authService';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, KeyRound, Code2 } from 'lucide-react';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { completeLogin } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
+  const [otp, setOtp] = useState('');
+  const [otpStep, setOtpStep] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  function validate() {
+  useEffect(() => {
+    document.body.style.backgroundColor = '#05070d';
+    return () => { document.body.style.backgroundColor = ''; };
+  }, []);
+
+  function validateCredentials() {
     const newErrors = {};
 
     if (!formData.email.trim()) {
@@ -31,17 +40,65 @@ export default function Login() {
     return Object.keys(newErrors).length === 0;
   }
 
-  async function handleSubmit(e) {
+  function validateOtp() {
+    const newErrors = {};
+
+    if (!otp.trim()) {
+      newErrors.otp = 'OTP is required';
+    } else if (!/^\d{6}$/.test(otp.trim())) {
+      newErrors.otp = 'OTP must be 6 digits';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }
+
+  async function handleRequestOtp(e) {
     e.preventDefault();
     setServerError('');
+    setStatusMessage('');
 
-    if (!validate()) return;
+    if (!validateCredentials()) return;
 
     setIsLoading(true);
     try {
-      await login(formData.email, formData.password);
+      const data = await requestLoginOtp(formData.email, formData.password);
+      setOtpStep(true);
+      setOtp('');
+      setStatusMessage(data.message || `OTP sent to ${data.email}`);
     } catch (err) {
       setServerError(err.message || 'Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleVerifyOtp(e) {
+    e.preventDefault();
+    setServerError('');
+    setStatusMessage('');
+
+    if (!validateOtp()) return;
+
+    setIsLoading(true);
+    try {
+      await completeLogin(formData.email, otp.trim());
+    } catch (err) {
+      setServerError(err.message || 'OTP verification failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleResendOtp() {
+    setServerError('');
+    setStatusMessage('');
+    setIsLoading(true);
+    try {
+      const data = await requestLoginOtp(formData.email, formData.password);
+      setStatusMessage(data.message || `OTP resent to ${data.email}`);
+    } catch (err) {
+      setServerError(err.message || 'Unable to resend OTP. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -54,6 +111,7 @@ export default function Login() {
         setErrors((prev) => ({ ...prev, [field]: '' }));
       }
       if (serverError) setServerError('');
+      if (statusMessage) setStatusMessage('');
     };
   }
 
@@ -69,18 +127,29 @@ export default function Login() {
       <div className="auth-container">
         {/* Logo */}
         <Link to="/" className="auth-logo-link">
-          <div className="auth-logo-icon" />
+          <div className="auth-logo-icon">
+            <Code2 size={24} className="text-white" />
+          </div>
           <span className="auth-logo-text">Synapse</span>
         </Link>
 
         {/* Card */}
         <div className="auth-card">
           <div className="auth-card-header">
-            <h1 className="auth-title">Welcome back</h1>
+            <h1 className="auth-title">{otpStep ? 'Enter your OTP' : 'Welcome back'}</h1>
             <p className="auth-subtitle">
-              Sign in to continue to your workspace
+              {otpStep
+                ? `Enter the 6-digit code sent to ${formData.email}`
+                : 'Sign in to continue to your workspace'}
             </p>
           </div>
+
+          {statusMessage && (
+            <div className="auth-info-banner">
+              <Mail size={16} />
+              <span>{statusMessage}</span>
+            </div>
+          )}
 
           {/* Server error */}
           {serverError && (
@@ -90,80 +159,145 @@ export default function Login() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="auth-form" noValidate>
-            {/* Email */}
-            <div className="auth-field">
-              <label htmlFor="login-email" className="auth-label">
-                Email address
-              </label>
-              <div className={`auth-input-wrapper ${errors.email ? 'auth-input-error' : ''}`}>
-                <Mail size={18} className="auth-input-icon" />
-                <input
-                  id="login-email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={formData.email}
-                  onChange={handleChange('email')}
-                  className="auth-input"
-                  autoComplete="email"
-                  autoFocus
-                />
-              </div>
-              {errors.email && (
-                <p className="auth-field-error">{errors.email}</p>
-              )}
-            </div>
+          <form
+            onSubmit={otpStep ? handleVerifyOtp : handleRequestOtp}
+            className="auth-form"
+            noValidate
+          >
+            {!otpStep ? (
+              <>
+                <div className="auth-field">
+                  <label htmlFor="login-email" className="auth-label">
+                    Email address
+                  </label>
+                  <div className={`auth-input-wrapper ${errors.email ? 'auth-input-error' : ''}`}>
+                    <Mail size={18} className="auth-input-icon" />
+                    <input
+                      id="login-email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={formData.email}
+                      onChange={handleChange('email')}
+                      className="auth-input"
+                      autoComplete="email"
+                      autoFocus
+                    />
+                  </div>
+                  {errors.email && <p className="auth-field-error">{errors.email}</p>}
+                </div>
 
-            {/* Password */}
-            <div className="auth-field">
-              <div className="auth-label-row">
-                <label htmlFor="login-password" className="auth-label">
-                  Password
-                </label>
-              </div>
-              <div className={`auth-input-wrapper ${errors.password ? 'auth-input-error' : ''}`}>
-                <Lock size={18} className="auth-input-icon" />
-                <input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={formData.password}
-                  onChange={handleChange('password')}
-                  className="auth-input"
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="auth-input-toggle"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                <div className="auth-field">
+                  <div className="auth-label-row">
+                    <label htmlFor="login-password" className="auth-label">
+                      Password
+                    </label>
+                  </div>
+                  <div className={`auth-input-wrapper ${errors.password ? 'auth-input-error' : ''}`}>
+                    <Lock size={18} className="auth-input-icon" />
+                    <input
+                      id="login-password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Enter your password"
+                      value={formData.password}
+                      onChange={handleChange('password')}
+                      className="auth-input"
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="auth-input-toggle"
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  {errors.password && <p className="auth-field-error">{errors.password}</p>}
+                </div>
+
+                <button type="submit" className="auth-btn" disabled={isLoading}>
+                  {isLoading ? (
+                    <span className="auth-btn-loading">
+                      <span className="auth-spinner" />
+                      Sending OTP...
+                    </span>
+                  ) : (
+                    <span className="auth-btn-content">
+                      Continue with OTP
+                      <ArrowRight size={18} />
+                    </span>
+                  )}
                 </button>
-              </div>
-              {errors.password && (
-                <p className="auth-field-error">{errors.password}</p>
-              )}
-            </div>
+              </>
+            ) : (
+              <>
+                <div className="auth-field">
+                  <label htmlFor="login-otp" className="auth-label">
+                    Email OTP
+                  </label>
+                  <div className={`auth-input-wrapper ${errors.otp ? 'auth-input-error' : ''}`}>
+                    <KeyRound size={18} className="auth-input-icon" />
+                    <input
+                      id="login-otp"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="Enter 6-digit OTP"
+                      value={otp}
+                      onChange={(e) => {
+                        setOtp(e.target.value.replace(/\D/g, ''));
+                        if (errors.otp) {
+                          setErrors((prev) => ({ ...prev, otp: '' }));
+                        }
+                        if (serverError) setServerError('');
+                        if (statusMessage) setStatusMessage('');
+                      }}
+                      className="auth-input"
+                      autoComplete="one-time-code"
+                      autoFocus
+                    />
+                  </div>
+                  {errors.otp && <p className="auth-field-error">{errors.otp}</p>}
+                  <p className="auth-field-help">
+                    Your password is checked first, then the OTP completes login.
+                  </p>
+                </div>
 
-            {/* Submit */}
-            <button
-              type="submit"
-              className="auth-btn"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <span className="auth-btn-loading">
-                  <span className="auth-spinner" />
-                  Signing in...
-                </span>
-              ) : (
-                <span className="auth-btn-content">
-                  Sign In
-                  <ArrowRight size={18} />
-                </span>
-              )}
-            </button>
+                <button type="submit" className="auth-btn" disabled={isLoading}>
+                  {isLoading ? (
+                    <span className="auth-btn-loading">
+                      <span className="auth-spinner" />
+                      Verifying OTP...
+                    </span>
+                  ) : (
+                    <span className="auth-btn-content">
+                      Verify and Sign In
+                      <ArrowRight size={18} />
+                    </span>
+                  )}
+                </button>
+
+                <div className="auth-inline-actions">
+                  <button type="button" className="auth-text-button" onClick={handleResendOtp} disabled={isLoading}>
+                    Resend OTP
+                  </button>
+                  <button
+                    type="button"
+                    className="auth-text-button"
+                    onClick={() => {
+                      setOtpStep(false);
+                      setOtp('');
+                      setErrors({});
+                      setServerError('');
+                      setStatusMessage('');
+                    }}
+                    disabled={isLoading}
+                  >
+                    Change login details
+                  </button>
+                </div>
+              </>
+            )}
           </form>
 
           {/* Footer link */}
@@ -179,7 +313,7 @@ export default function Login() {
 
         {/* Bottom text */}
         <p className="auth-bottom-text">
-          Secure login powered by JWT authentication
+          {otpStep ? 'JWT session starts only after OTP verification succeeds.' : 'Secure login powered by password + email OTP'}
         </p>
       </div>
     </div>

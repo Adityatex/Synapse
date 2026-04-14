@@ -1,53 +1,27 @@
 import { useState } from 'react';
+import { getThemeClasses } from '../utils/theme';
 import {
   Terminal,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Loader2,
-  ChevronUp,
-  ChevronDown,
-  Cpu,
-  Timer,
+  AlertCircle,
+  ChevronRight,
+  Check,
+  Loader2
 } from 'lucide-react';
 
-export default function OutputPanel({ output }) {
+export default function OutputPanel({ theme, output }) {
   const [activeTab, setActiveTab] = useState('output');
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isOutputExpanded, setIsOutputExpanded] = useState(true);
+  
+  const t = getThemeClasses(theme);
 
   const hasError = output?.stderr || output?.compile_output || output?.error;
-  const hasOutput = output?.stdout;
   const isRunning = output?.running;
 
-  const getStatusColor = () => {
-    if (isRunning) return 'var(--accent-blue)';
-    if (output?.error) return 'var(--accent-red)';
-    if (output?.status?.id === 3) return 'var(--accent-green)'; // Accepted
-    if (output?.status?.id >= 5) return 'var(--accent-red)'; // Runtime errors
-    if (output?.status?.id === 4) return 'var(--accent-red)'; // Wrong answer
-    return 'var(--text-muted)';
-  };
-
-  const getStatusIcon = () => {
-    if (isRunning) return <Loader2 size={14} className="animate-spin" />;
-    if (output?.status?.id === 3) return <CheckCircle2 size={14} />;
-    if (output?.status?.id >= 4) return <XCircle size={14} />;
-    if (output?.error) return <AlertTriangle size={14} />;
-    return <Terminal size={14} />;
-  };
-
-  const getStatusLabel = () => {
-    if (isRunning) return 'Running...';
-    if (output?.error) return 'Error';
-    if (output?.status) return output.status.description;
-    return 'Ready';
-  };
-
+  // The output terminal contents
   const displayContent = () => {
     if (isRunning) {
       return (
-        <div className="flex items-center gap-2 p-4" style={{ color: 'var(--accent-blue)' }}>
+        <div className="flex items-center gap-2 p-4 text-indigo-500">
           <Loader2 size={16} className="animate-spin" />
           <span className="text-sm">Executing code...</span>
         </div>
@@ -57,39 +31,27 @@ export default function OutputPanel({ output }) {
     if (activeTab === 'output') {
       if (output?.error) {
         return (
-          <pre className="p-5 text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--accent-red)' }}>
+          <pre className="text-orange-500 leading-relaxed whitespace-pre-wrap">
             {output.error}
           </pre>
         );
       }
       if (output?.status && output.status.id === 3) {
         return (
-          <pre
-            className="p-5 text-[13px] leading-relaxed whitespace-pre-wrap"
-            style={{
-              color: 'var(--text-primary)',
-              fontFamily: "'JetBrains Mono', monospace",
-            }}
-          >
-            {output.stdout || <span style={{ color: 'var(--text-muted)' }}>Execution finished. No output.</span>}
+          <pre className={`leading-relaxed whitespace-pre-wrap ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>
+            {output.stdout || <span className={t.textMuted}>Execution finished. No output.</span>}
           </pre>
         );
       }
       if (output?.stdout) {
          return (
-          <pre
-            className="p-5 text-[13px] leading-relaxed whitespace-pre-wrap"
-            style={{
-              color: 'var(--text-primary)',
-              fontFamily: "'JetBrains Mono', monospace",
-            }}
-          >
+          <pre className={`leading-relaxed whitespace-pre-wrap ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>
             {output.stdout}
           </pre>
         );
       }
       return (
-        <div className="p-6 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+        <div className={`${t.textMuted} italic`}>
           Run your code to see output here...
         </div>
       );
@@ -99,127 +61,59 @@ export default function OutputPanel({ output }) {
       const errorContent = output?.stderr || output?.compile_output;
       if (errorContent) {
         return (
-          <pre
-            className="p-5 text-[13px] leading-relaxed whitespace-pre-wrap"
-            style={{
-              color: 'var(--accent-red)',
-              fontFamily: "'JetBrains Mono', monospace",
-            }}
-          >
+          <pre className="text-orange-500 leading-relaxed whitespace-pre-wrap">
             {errorContent}
           </pre>
         );
       }
       return (
-        <div className="p-6 text-[13px]" style={{ color: 'var(--text-muted)' }}>
-          No errors — you're all clear! ✨
+        <div className="flex items-center gap-2 text-slate-400 italic">
+          <Check size={14} className="text-emerald-500" />
+          Clean build. Zero issues found.
         </div>
       );
     }
   };
 
   return (
-    <div
-      className="flex flex-col shrink-0 transition-all duration-200"
-      style={{
-        height: isCollapsed ? '40px' : 'var(--output-height)',
-        background: 'var(--bg-secondary)',
-        borderTop: '1px solid var(--border-primary)',
-      }}
-    >
-      {/* Panel Header */}
-      <div
-        className="flex items-center justify-between px-5 shrink-0 cursor-pointer"
-        style={{
-          height: '40px',
-          borderBottom: isCollapsed ? 'none' : '1px solid var(--border-primary)',
-        }}
-        onClick={() => setIsCollapsed(!isCollapsed)}
-      >
-        <div className="flex items-center gap-3">
-          {/* Output tab */}
-          <button
-            className="flex items-center gap-2 text-[13px] font-medium py-2 transition-all duration-300 cursor-pointer bg-transparent border-none shrink-0 whitespace-nowrap"
-            style={{
-              color: activeTab === 'output' ? 'var(--text-primary)' : 'var(--text-muted)',
-              borderBottom: activeTab === 'output' ? '2px solid var(--accent-blue)' : '2px solid transparent',
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveTab('output');
-              setIsCollapsed(false);
-            }}
-          >
-            <Terminal size={12} />
-            Output
-          </button>
-
-          {/* Errors tab */}
-          <button
-            className="flex items-center gap-2 text-[13px] font-medium py-2 transition-all duration-300 cursor-pointer bg-transparent border-none shrink-0 whitespace-nowrap"
-            style={{
-              color: activeTab === 'errors'
-                ? (hasError ? 'var(--accent-red)' : 'var(--text-primary)')
-                : (hasError ? 'var(--accent-red)' : 'var(--text-muted)'),
-              borderBottom: activeTab === 'errors' ? '2px solid var(--accent-red)' : '2px solid transparent',
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveTab('errors');
-              setIsCollapsed(false);
-            }}
-          >
-            <AlertTriangle size={12} />
-            Errors
-            {hasError && (
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{ background: 'var(--accent-red)' }}
-              />
-            )}
-          </button>
+    <div className={`border-t ${t.border} ${t.header} flex flex-col transition-all duration-300 ease-in-out shrink-0 ${isOutputExpanded ? 'h-64' : 'h-8'}`}>
+      <div className={`h-8 flex items-center justify-between px-4 ${t.consoleHeader} border-b ${t.border}`}>
+        <div className="flex gap-4 h-full">
+          {['output', 'errors'].map((tab) => (
+            <button 
+              key={tab}
+              onClick={() => { setActiveTab(tab); setIsOutputExpanded(true); }}
+              className={`text-[10px] font-bold uppercase tracking-widest h-full flex items-center gap-2 border-b-2 transition-all cursor-pointer ${activeTab === tab && isOutputExpanded ? 'border-indigo-500 text-indigo-500' : `border-transparent ${t.textMuted} hover:text-indigo-500`}`}
+            >
+              {tab === 'output' && <Terminal size={12} />}
+              {tab === 'errors' && <AlertCircle size={12} />}
+              {tab}
+              {tab === 'errors' && hasError && <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mb-2" />}
+            </button>
+          ))}
         </div>
-
-        <div className="flex items-center gap-3">
-          {/* Execution stats */}
+        <div className="flex items-center gap-4 text-xs font-mono">
+          {/* Execution Time */}
           {output?.time && (
-            <div className="flex items-center gap-1 text-xs shrink-0 whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
-              <Timer size={11} />
-              {output.time}s
-            </div>
+            <span className={t.textMuted}>{output.time}s</span>
           )}
+          {/* Memory Usage */}
           {output?.memory && (
-            <div className="flex items-center gap-1 text-xs shrink-0 whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
-              <Cpu size={11} />
-              {(output.memory / 1024).toFixed(1)}MB
-            </div>
+            <span className={t.textMuted}>{(output.memory / 1024).toFixed(1)}MB</span>
           )}
-
-          {/* Status badge */}
-          <div
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] shrink-0 whitespace-nowrap"
-            style={{
-              color: getStatusColor(),
-              background: `color-mix(in srgb, ${getStatusColor()} 15%, transparent)`,
-            }}
+          
+          {/* Collapse Toggle */}
+          <button 
+            onClick={() => setIsOutputExpanded(!isOutputExpanded)}
+            className={`${t.textMuted} hover:text-indigo-500 transition-colors cursor-pointer ml-2`}
           >
-            {getStatusIcon()}
-            {getStatusLabel()}
-          </div>
-
-          {/* Collapse toggle */}
-          <button
-            className="p-0.5 rounded transition-colors duration-300 cursor-pointer shrink-0"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            {isCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            <ChevronRight size={14} className={isOutputExpanded ? 'rotate-90' : '-rotate-90'} />
           </button>
         </div>
       </div>
-
-      {/* Content */}
-      {!isCollapsed && (
-        <div className="flex-1 overflow-auto">
+      
+      {isOutputExpanded && (
+        <div className={`flex-1 overflow-auto p-4 font-mono text-xs ${theme === 'dark' ? 'bg-[#0d1117]/50' : 'bg-slate-50'} custom-scrollbar`}>
           {displayContent()}
         </div>
       )}

@@ -1,24 +1,42 @@
 import { useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useFiles } from '../contexts/FileContext';
-import { LANGUAGES, getLanguageByExtension } from '../utils/languageMap';
 import { executeCode } from '../services/api';
+import { getThemeClasses } from '../utils/theme';
+import { LANGUAGES, getLanguageByExtension } from '../utils/languageMap';
 import {
+  Code2,
+  LayoutGrid,
   Play,
+  CloudUpload,
+  Check,
+  ChevronDown,
+  Keyboard,
+  X,
   Sun,
   Moon,
-  ChevronDown,
-  Loader2,
-  Terminal,
-  Zap,
+  Copy,
+  Share2
 } from 'lucide-react';
 
-export default function Toolbar({ theme, onToggleTheme, output, setOutput }) {
+export default function Toolbar({ 
+  theme, 
+  onToggleTheme, 
+  output, 
+  setOutput, 
+  onSaveVersion,
+  roomId,
+  copied,
+  onCopyInvite,
+  currentUser
+}) {
   const { activeFile, renameFile } = useFiles();
   const [isRunning, setIsRunning] = useState(false);
-  const [stdinOpen, setStdinOpen] = useState(false);
-  const [stdin, setStdin] = useState('');
-  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+  const [isStdinOpen, setIsStdinOpen] = useState(false);
+  const [stdinValue, setStdinValue] = useState('');
+  const [saveStatus, setSaveStatus] = useState('idle');
 
+  const t = getThemeClasses(theme);
   const currentLang = activeFile ? getLanguageByExtension(activeFile.name) : LANGUAGES[0];
 
   const handleRun = useCallback(async () => {
@@ -38,7 +56,7 @@ export default function Toolbar({ theme, onToggleTheme, output, setOutput }) {
       const result = await executeCode(
         activeFile.content,
         currentLang.id,
-        stdin
+        stdinValue
       );
       setOutput({
         ...result,
@@ -57,247 +75,166 @@ export default function Toolbar({ theme, onToggleTheme, output, setOutput }) {
     } finally {
       setIsRunning(false);
     }
-  }, [activeFile, currentLang, stdin, isRunning, setOutput]);
+  }, [activeFile, currentLang, stdinValue, isRunning, setOutput]);
+
+  const handleSave = () => {
+    if (onSaveVersion) {
+      setSaveStatus('saving');
+      onSaveVersion();
+      setTimeout(() => setSaveStatus('saved'), 1500);
+      setTimeout(() => setSaveStatus('idle'), 4000);
+    }
+  };
+
+  const getInitials = (name) => {
+    return name ? name.charAt(0).toUpperCase() : 'A';
+  };
 
   return (
-    <div
-      className="flex items-center justify-between px-8 shrink-0"
-      style={{
-        height: 'var(--toolbar-height)',
-        background: 'var(--bg-secondary)',
-        borderBottom: '1px solid var(--border-primary)',
-      }}
-    >
-      {/* Left section */}
-      <div className="flex items-center gap-3">
-        {/* Logo */}
-        <div className="flex items-center gap-2 mr-4">
-          <Zap size={20} style={{ color: 'var(--accent-blue)' }} />
-          <span
-            className="text-[15px] font-bold tracking-widest"
-            style={{
-              background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}
+    <header className={`h-12 border-b ${t.border} flex items-center justify-between pr-4 pl-2 ${t.header} relative z-50 shadow-sm shrink-0`}>
+      <div className="flex items-center flex-1">
+        <div className="w-[312px] flex items-center shrink-0">
+          <Link to="/" className="flex items-center hover:opacity-80 transition-opacity">
+            <div className="w-12 flex items-center justify-center shrink-0">
+              <div className="flex w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded drop-shadow-[0_0_12px_rgba(99,102,241,0.35)] items-center justify-center">
+                <Code2 size={14} className="text-white" />
+              </div>
+            </div>
+            <span className={`ml-1 font-black uppercase tracking-[-0.04em] ${theme === 'dark' ? 'text-white' : 'text-slate-800'} text-sm`} style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}>SYNAPSE</span>
+          </Link>
+          <Link 
+            to="/dashboard"
+            className={`hidden md:flex ml-6 items-center gap-1.5 px-2.5 py-1 ${theme === 'dark' ? 'bg-white/5 hover:bg-white/10 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} rounded border ${t.border} text-[11px] font-medium transition-colors`}
           >
-            SYNAPSE
-          </span>
+            <LayoutGrid size={12} />
+            Dashboard
+          </Link>
         </div>
-
-        {/* Separator */}
-        <div
-          className="w-px h-6 mx-2"
-          style={{ background: 'var(--border-primary)' }}
-        />
-
-        {/* Run button */}
-        <button
-          onClick={handleRun}
-          disabled={isRunning || !activeFile}
-          className="flex items-center gap-2 px-6 py-2.5 rounded-md text-[13px] font-semibold tracking-wide transition-all duration-300 cursor-pointer whitespace-nowrap shrink-0"
-          style={{
-            background: isRunning ? 'var(--bg-hover)' : 'var(--accent-green)',
-            color: isRunning ? 'var(--text-secondary)' : '#fff',
-            opacity: !activeFile ? 0.5 : 1,
-            boxShadow: !isRunning && activeFile ? 'var(--shadow-sm)' : 'none',
-          }}
-          onMouseEnter={(e) => {
-            if (!isRunning && activeFile) {
-              e.currentTarget.style.transform = 'scale(1.03)';
-              e.currentTarget.style.boxShadow = '0 0 12px rgba(63, 185, 80, 0.3)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        >
-          {isRunning ? (
-            <Loader2 size={16} className="animate-spin" />
-          ) : (
-            <Play size={16} fill="currentColor" />
-          )}
-          {isRunning ? 'Running...' : 'Run'}
-        </button>
-
-        {/* Language indicator */}
-        <div className="relative ml-2">
-          <button
-            className="flex items-center gap-2 px-4 py-2 rounded-md text-[13px] transition-all duration-300 cursor-pointer whitespace-nowrap shrink-0 font-medium"
-            style={{
-              background: 'var(--bg-tertiary)',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border-primary)',
-              boxShadow: 'var(--shadow-sm)',
-            }}
-            onClick={() => setLangDropdownOpen(!langDropdownOpen)}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-blue)')}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-primary)')}
+        
+        <div className="w-2 shrink-0" />
+        
+        <div className="hidden md:flex items-center gap-2">
+          {/* Run Button */}
+          <button 
+            onClick={handleRun}
+            disabled={isRunning || !activeFile}
+            className={`flex items-center gap-2 px-3 py-1 ${theme === 'dark' ? 'bg-white/5 hover:bg-white/10' : 'bg-slate-100 hover:bg-slate-200'} rounded-md cursor-pointer transition-colors border ${t.border} group disabled:opacity-50`}
           >
-            <span>{currentLang.icon}</span>
-            <span>{currentLang.name}</span>
-            <ChevronDown size={12} />
+            {isRunning ? (
+              <div className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Play size={14} className="text-emerald-500 fill-emerald-500 group-hover:scale-110 transition-transform" />
+            )}
+            <span className={`text-xs font-medium ${theme === 'dark' ? 'text-emerald-50' : 'text-emerald-700'}`}>
+              {isRunning ? 'Running...' : 'Run'}
+            </span>
           </button>
 
-          {langDropdownOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setLangDropdownOpen(false)}
-              />
-              <div
-                className="absolute top-full left-0 mt-1 py-1 rounded-md shadow-lg z-50 min-w-[140px] backdrop-blur-md"
-                style={{
-                  background: 'var(--bg-glass)',
-                  border: '1px solid var(--border-secondary)',
-                  boxShadow: 'var(--shadow-md)',
-                }}
-              >
-                {LANGUAGES.map((lang) => (
-                  <div
-                    key={lang.id}
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors duration-150"
-                    style={{
-                      color: lang.id === currentLang.id ? 'var(--accent-blue)' : 'var(--text-secondary)',
-                      background: lang.id === currentLang.id ? 'var(--bg-hover)' : 'transparent',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (lang.id !== currentLang.id) e.currentTarget.style.background = 'var(--bg-hover)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (lang.id !== currentLang.id) e.currentTarget.style.background = 'transparent';
-                    }}
-                    onClick={() => {
-                      setLangDropdownOpen(false);
-                      if (activeFile && lang.id !== currentLang.id) {
-                        const lastDotIndex = activeFile.name.lastIndexOf('.');
-                        const baseName = lastDotIndex > 0 ? activeFile.name.substring(0, lastDotIndex) : activeFile.name;
-                        const newName = baseName + lang.extension;
-                        renameFile(activeFile.id, newName);
-                      }
-                    }}
-                  >
-                    <span>{lang.icon}</span>
-                    <span>{lang.name}</span>
-                  </div>
-                ))}
-                <div
-                  className="px-3 py-1 mt-1 text-xs"
-                  style={{
-                    color: 'var(--text-muted)',
-                    borderTop: '1px solid var(--border-primary)',
-                  }}
-                >
-                  Language is auto-detected from file extension
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Stdin toggle */}
-        <button
-          onClick={() => setStdinOpen(!stdinOpen)}
-          className="flex items-center gap-2 px-4 py-2 ml-2 rounded-md text-[13px] transition-all duration-300 cursor-pointer whitespace-nowrap shrink-0 font-medium"
-          style={{
-            background: stdinOpen ? 'var(--accent-blue)' : 'var(--bg-tertiary)',
-            color: stdinOpen ? '#fff' : 'var(--text-secondary)',
-            border: stdinOpen ? '1px solid var(--accent-blue)' : '1px solid var(--border-primary)',
-            boxShadow: stdinOpen ? 'var(--shadow-glow)' : 'var(--shadow-sm)',
-          }}
-          onMouseEnter={(e) => {
-            if (!stdinOpen) {
-              e.currentTarget.style.borderColor = 'var(--accent-blue)';
-              e.currentTarget.style.color = 'var(--text-primary)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!stdinOpen) {
-              e.currentTarget.style.borderColor = 'var(--border-primary)';
-              e.currentTarget.style.color = 'var(--text-secondary)';
-            }
-          }}
-        >
-          <Terminal size={12} className="shrink-0" />
-          stdin
-        </button>
-      </div>
-
-      {/* Right section */}
-      <div className="flex items-center gap-2">
-        {/* Theme toggle */}
-        <button
-          onClick={onToggleTheme}
-          className="p-2 rounded-md transition-all duration-300 cursor-pointer shrink-0"
-          style={{ 
-            color: 'var(--text-secondary)',
-            border: '1px solid transparent',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--bg-hover)';
-            e.currentTarget.style.color = 'var(--accent-orange)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.color = 'var(--text-secondary)';
-          }}
-          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-        >
-          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-      </div>
-
-      {/* Stdin input overlay */}
-      {stdinOpen && (
-        <div
-          className="fixed left-1/2 top-14 -translate-x-1/2 z-50 rounded-lg shadow-xl p-3 w-[90vw] max-w-sm transform transition-all duration-300 ease-out backdrop-blur-md"
-          style={{
-            background: 'var(--bg-glass)',
-            border: '1px solid var(--border-secondary)',
-            boxShadow: 'var(--shadow-md)',
-          }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-primary)' }}>
-              Standard Input (stdin)
-            </span>
-            <button
-              onClick={() => setStdinOpen(false)}
-              className="text-xs px-4 py-1.5 rounded-md cursor-pointer transition-colors duration-200 font-medium shrink-0"
-              style={{
-                background: 'var(--bg-hover)',
-                color: 'var(--text-primary)',
-                border: '1px solid var(--border-primary)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--accent-blue)';
-                e.currentTarget.style.color = '#fff';
-                e.currentTarget.style.borderColor = 'var(--accent-blue)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--bg-hover)';
-                e.currentTarget.style.color = 'var(--text-primary)';
-                e.currentTarget.style.borderColor = 'var(--border-primary)';
-              }}
+          {/* Save Version Button */}
+          {onSaveVersion && (
+            <button 
+              onClick={handleSave}
+              className={`flex items-center gap-2 px-3 py-1 ${theme === 'dark' ? 'bg-white/5 hover:bg-white/10' : 'bg-slate-100 hover:bg-slate-200'} rounded-md cursor-pointer transition-colors border ${t.border} group`}
             >
-              Done
+              {saveStatus === 'saving' ? (
+                <div className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+              ) : saveStatus === 'saved' ? (
+                <Check size={14} className="text-indigo-500" />
+              ) : (
+                <CloudUpload size={14} className="text-indigo-500 group-hover:scale-110 transition-transform" />
+              )}
+              <span className={`text-xs font-medium ${saveStatus === 'saved' ? 'text-indigo-500' : theme === 'dark' ? 'text-indigo-50' : 'text-indigo-700'}`}>
+                {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Version Saved' : 'Save Version'}
+              </span>
             </button>
+          )}
+
+          <div className="relative group pb-2 -mb-2">
+            <button className={`flex items-center gap-2 px-3 py-1 ${theme === 'dark' ? 'bg-white/5 hover:bg-white/10' : 'bg-slate-100 hover:bg-slate-200'} rounded-md border ${t.border} text-xs ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'} cursor-pointer`}>
+              <span>{currentLang.name}</span>
+              <ChevronDown size={12} className={t.textMuted} />
+            </button>
+            <div className={`absolute top-[calc(100%-8px)] left-0 mt-2 w-32 ${theme === 'dark' ? 'bg-[#161b22]' : 'bg-white'} border ${t.border} rounded-md shadow-xl hidden group-hover:block overflow-hidden animate-in fade-in zoom-in-95 duration-100`}>
+              {LANGUAGES.map(lang => (
+                <div 
+                  key={lang.id}
+                  onClick={() => {
+                    if (activeFile && lang.id !== currentLang.id) {
+                      const lastDotIndex = activeFile.name.lastIndexOf('.');
+                      const baseName = lastDotIndex > 0 ? activeFile.name.substring(0, lastDotIndex) : activeFile.name;
+                      const newName = baseName + lang.extension;
+                      renameFile(activeFile.id, newName);
+                    }
+                  }}
+                  className="px-3 py-2 hover:bg-indigo-600 hover:text-white text-xs cursor-pointer transition-colors"
+                >
+                  {lang.name}
+                </div>
+              ))}
+            </div>
           </div>
-          <textarea
-            value={stdin}
-            onChange={(e) => setStdin(e.target.value)}
-            className="w-full h-32 p-3 rounded-md text-[13px] resize-none outline-none leading-relaxed"
-            style={{
-              background: 'var(--bg-primary)',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--border-primary)',
-              fontFamily: "'JetBrains Mono', monospace",
-            }}
-            placeholder="Enter input for your program..."
-          />
+
+          {/* Std In Button */}
+          <div className="relative">
+            <button 
+              onClick={() => setIsStdinOpen(!isStdinOpen)}
+              className={`flex items-center gap-2 px-3 py-1 rounded-md border transition-colors text-xs cursor-pointer ${isStdinOpen ? 'bg-indigo-600/20 border-indigo-500 text-indigo-500' : theme === 'dark' ? 'bg-white/5 border-white/5 hover:bg-white/10 text-slate-300' : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'}`}
+            >
+              <Keyboard size={14} />
+              <span>stdin</span>
+            </button>
+
+            {isStdinOpen && (
+              <div className={`absolute top-full left-0 mt-1 w-72 ${theme === 'dark' ? 'bg-[#161b22]' : 'bg-white'} border ${t.border} rounded-md shadow-2xl p-3 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-150`}>
+                <div className={`flex justify-between items-center text-[10px] font-bold ${t.textMuted} uppercase`}>
+                  Standard Input
+                  <X size={12} className="cursor-pointer hover:text-indigo-500" onClick={() => setIsStdinOpen(false)} />
+                </div>
+                <textarea 
+                  autoFocus
+                  value={stdinValue}
+                  onChange={(e) => setStdinValue(e.target.value)}
+                  placeholder="Enter inputs here..."
+                  className={`w-full h-32 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-slate-50'} border ${t.border} rounded p-2 text-xs font-mono focus:outline-none focus:border-indigo-500 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'} resize-none`}
+                />
+              </div>
+            )}
+          </div>
         </div>
-      )}
-    </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        {/* Theme Toggle Button */}
+        <button 
+          onClick={onToggleTheme}
+          className={`p-1.5 rounded-full cursor-pointer ${theme === 'dark' ? 'hover:bg-white/10 text-orange-300' : 'hover:bg-slate-100 text-slate-600'} transition-all`}
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+
+        <div className={`hidden lg:flex items-center gap-2 px-3 py-1 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-slate-100'} rounded border ${t.border}`}>
+          <span className={`text-[10px] ${t.textMuted} font-mono uppercase`}>Room:</span>
+          <span className="text-xs font-mono text-indigo-500 font-bold tracking-wide">{roomId}</span>
+          <button 
+            onClick={onCopyInvite}
+            className={`ml-2 p-1 hover:bg-white/5 rounded cursor-pointer transition-colors ${t.textMuted} hover:text-indigo-500`}
+            title="Copy invite link"
+          >
+            {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+          </button>
+        </div>
+        <button 
+          onClick={onCopyInvite}
+          className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded cursor-pointer text-xs font-medium transition-all shadow-lg shadow-indigo-900/20"
+        >
+          <Share2 size={14} />
+          Invite
+        </button>
+        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-[10px] font-bold text-white border-2 border-white/20 select-none">
+          {getInitials(currentUser?.name)}
+        </div>
+      </div>
+    </header>
   );
 }

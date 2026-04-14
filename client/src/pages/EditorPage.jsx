@@ -5,6 +5,8 @@ import TabBar from '../components/TabBar';
 import EditorPanel from '../components/EditorPanel';
 import Toolbar from '../components/Toolbar';
 import OutputPanel from '../components/OutputPanel';
+import StatusBar from '../components/StatusBar';
+import NeuraPanel from '../components/NeuraPanel';
 
 function EditorPage() {
   const [theme, setTheme] = useState(() => {
@@ -41,22 +43,28 @@ function EditorPage() {
         />
 
         {/* Main content area */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className={`flex flex-1 overflow-hidden p-2 gap-2 ${theme === 'dark' ? 'bg-[#030509]' : 'bg-slate-200/60'}`}>
           {/* Sidebar */}
-          <Sidebar />
+          <Sidebar theme={theme} />
 
           {/* Editor + Output */}
-          <div className="flex flex-col flex-1 overflow-hidden">
+          <div className={`flex flex-col flex-1 min-w-0 overflow-hidden rounded-xl border shadow-lg ${theme === 'dark' ? 'border-white/10 shadow-black/50' : 'border-slate-300 shadow-slate-200/50'}`}>
             {/* Tab bar */}
-            <TabBar />
+            <TabBar theme={theme} />
 
             {/* Editor */}
             <EditorPanel theme={theme} />
 
             {/* Output */}
-            <OutputPanel output={output} />
+            <OutputPanel theme={theme} output={output} />
           </div>
+
+          {/* Neura AI Sidebar */}
+          <NeuraPanel theme={theme} currentUser={null} />
         </div>
+
+        {/* Status Bar */}
+        <StatusBar theme={theme} peersCount={0} />
       </div>
     </FileProvider>
   );

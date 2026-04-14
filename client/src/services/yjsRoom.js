@@ -17,12 +17,13 @@ function decodeUpdate(encoded) {
 }
 
 export class RoomYjsManager {
-  constructor({ socket, roomId, userId, onFileContent, onDocReplaced }) {
+  constructor({ socket, roomId, userId, onFileContent, onDocReplaced, canEditFile }) {
     this.socket = socket;
     this.roomId = roomId;
     this.userId = userId;
     this.onFileContent = onFileContent;
     this.onDocReplaced = onDocReplaced;
+    this.canEditFile = canEditFile;
     this.docs = new Map();
     this.remoteOrigin = Symbol('remote');
     this.localSeedOrigin = Symbol('local-seed');
@@ -41,6 +42,7 @@ export class RoomYjsManager {
     // Only broadcast truly LOCAL user edits (not remote or seed operations)
     doc.on('update', (update, origin) => {
       if (origin === this.remoteOrigin || origin === this.localSeedOrigin) return;
+      if (this.canEditFile && !this.canEditFile(fileId)) return;
       this.socket.emit('code-change', {
         roomId: this.roomId,
         fileId,

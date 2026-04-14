@@ -1,185 +1,935 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  Activity,
+  ChevronRight,
+  Code2,
+  Cpu,
+  GitBranch,
+  LayoutDashboard,
+  Layers,
+  ShieldCheck,
+  Sparkles,
+  Terminal,
+  Users2,
+  Zap,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import HeroSection from '../components/landing/HeroSection';
-import FeatureHighlights from '../components/landing/FeatureHighlights';
-import CollabPreview from '../components/landing/CollabPreview';
-import HowItWorks from '../components/landing/HowItWorks';
-import AIAssistantShowcase from '../components/landing/AIAssistantShowcase';
-import TechStack from '../components/landing/TechStack';
-import CTAAndFooter from '../components/landing/CTAAndFooter';
 
-export default function LandingPage() {
-  const backgroundRef = useRef(null);
-  const { isAuthenticated, user, logout } = useAuth();
+class BackgroundParticle {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.reset();
+  }
+
+  reset() {
+    this.x = Math.random() * this.canvas.width;
+    this.y = Math.random() * this.canvas.height;
+    this.vx = (Math.random() - 0.5) * 0.5;
+    this.vy = (Math.random() - 0.5) * 0.5;
+    this.radius = Math.random() * 2 + 1;
+    this.color = Math.random() > 0.5 ? '#6366f1' : '#a855f7';
+    this.pulse = Math.random() * Math.PI;
+  }
+
+  update(mouseRef) {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.pulse += 0.01;
+
+    if (mouseRef.current.active) {
+      const dx = mouseRef.current.x - this.x;
+      const dy = mouseRef.current.y - this.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < 300) {
+        const force = (300 - distance) / 3000;
+        this.vx += dx * force * 0.05;
+        this.vy += dy * force * 0.05;
+      }
+    }
+
+    this.vx *= 0.98;
+    this.vy *= 0.98;
+
+    if (this.x < 0) this.x = this.canvas.width;
+    if (this.x > this.canvas.width) this.x = 0;
+    if (this.y < 0) this.y = this.canvas.height;
+    if (this.y > this.canvas.height) this.y = 0;
+  }
+
+  draw(context) {
+    const opacity = 0.4 + Math.sin(this.pulse) * 0.2;
+
+    context.beginPath();
+    context.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    context.fillStyle = this.color;
+    context.globalAlpha = opacity;
+    context.shadowBlur = 10;
+    context.shadowColor = this.color;
+    context.fill();
+    context.globalAlpha = 1;
+  }
+}
+
+function MedusaeBackground() {
+  const canvasRef = useRef(null);
+  const mouseRef = useRef({ x: -1000, y: -1000, active: false });
 
   useEffect(() => {
-    document.body.style.backgroundColor = '#080b12';
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return undefined;
+    }
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return undefined;
+    }
+
+    let animationFrameId;
+    let particles = [];
+    const particleCount = 80;
+    const connectionDistance = 200;
+    let disposed = false;
+
+    const initializeCanvas = () => {
+      if (disposed) {
+        return;
+      }
+
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      particles = Array.from({ length: particleCount }, () => new BackgroundParticle(canvas));
+    };
+
+    const drawConnections = () => {
+      context.shadowBlur = 0;
+
+      for (let i = 0; i < particles.length; i += 1) {
+        for (let j = i + 1; j < particles.length; j += 1) {
+          const particleA = particles[i];
+          const particleB = particles[j];
+          const dx = particleA.x - particleB.x;
+          const dy = particleA.y - particleB.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < connectionDistance) {
+            const opacity = (1 - distance / connectionDistance) * 0.3;
+            let mouseBonus = 0;
+
+            if (mouseRef.current.active) {
+              const midX = (particleA.x + particleB.x) / 2;
+              const midY = (particleA.y + particleB.y) / 2;
+              const mouseDx = midX - mouseRef.current.x;
+              const mouseDy = midY - mouseRef.current.y;
+              const mouseDistance = Math.sqrt(mouseDx * mouseDx + mouseDy * mouseDy);
+
+              if (mouseDistance < 250) {
+                mouseBonus = (1 - mouseDistance / 250) * 0.3;
+              }
+            }
+
+            context.beginPath();
+            context.moveTo(particleA.x, particleA.y);
+
+            const midX = (particleA.x + particleB.x) / 2;
+            const midY = (particleA.y + particleB.y) / 2;
+
+            context.quadraticCurveTo(midX + 10, midY + 10, particleB.x, particleB.y);
+            context.strokeStyle = particleA.color;
+            context.lineWidth = (1 - distance / connectionDistance) * 1.2 + mouseBonus;
+            context.globalAlpha = opacity + mouseBonus;
+            context.stroke();
+            context.globalAlpha = 1;
+          }
+        }
+      }
+    };
+
+    const animate = () => {
+      if (disposed) {
+        return;
+      }
+
+      context.fillStyle = '#05070d';
+      context.globalAlpha = 0.15;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.globalAlpha = 1;
+
+      particles.forEach((particle) => {
+        particle.update(mouseRef);
+        particle.draw(context);
+      });
+
+      drawConnections();
+      animationFrameId = window.requestAnimationFrame(animate);
+    };
+
+    const handleMouseMove = (event) => {
+      // The canvas is fixed to the viewport, so pointer tracking must stay in viewport coordinates too.
+      mouseRef.current = { x: event.clientX, y: event.clientY, active: true };
+    };
+
+    const handleMouseLeave = () => {
+      mouseRef.current.active = false;
+    };
+
+    const handleResize = () => {
+      initializeCanvas();
+    };
+
+    initializeCanvas();
+    animate();
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      disposed = true;
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseleave', handleMouseLeave);
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-0 bg-[#05070d]">
+      <canvas ref={canvasRef} className="h-full w-full" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.12),transparent_35%),radial-gradient(circle_at_bottom,rgba(168,85,247,0.1),transparent_30%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,transparent_0%,#05070d_85%)]" />
+    </div>
+  );
+}
+
+function NavItem({ href, children }) {
+  return (
+    <a
+      href={href}
+      className="group relative py-1 text-sm font-semibold text-slate-400 transition-colors duration-300 hover:text-white"
+    >
+      {children}
+      <span className="absolute bottom-0 left-0 h-px w-0 bg-indigo-500 transition-all duration-300 group-hover:w-full" />
+    </a>
+  );
+}
+
+function getDisplayName(user) {
+  if (!user) {
+    return 'Log in';
+  }
+
+  return user.name || user.username || user.fullName || user.email?.split('@')[0] || 'Account';
+}
+
+function getUserInitials(user) {
+  const displayName = getDisplayName(user);
+
+  if (!displayName || displayName === 'Log in') {
+    return 'LG';
+  }
+
+  const parts = displayName
+    .split(' ')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
+const featureCards = [
+  {
+    icon: Users2,
+    title: 'CRDT Engine',
+    description:
+      'Conflict-free replication keeps every collaborator in sync across rooms with near-instant updates.',
+  },
+  {
+    icon: Cpu,
+    title: 'Neural Assist',
+    description:
+      'Built-in AI support helps teams review changes, catch issues early, and move faster inside the workspace.',
+  },
+  {
+    icon: Layers,
+    title: 'Multi-Environment',
+    description:
+      'Switch between coding, pairing, and execution flows without losing context or breaking team momentum.',
+  },
+];
+
+const trustStats = [
+  { value: '<20ms', label: 'collaboration sync', detail: 'Fast room presence and shared edits.' },
+  { value: '12+', label: 'languages ready', detail: 'Run code across common interview and project stacks.' },
+  { value: '24/7', label: 'workspace access', detail: 'Join sessions instantly from the browser.' },
+  { value: 'AI-native', label: 'review workflow', detail: 'Get context-aware assistance without leaving the IDE.' },
+];
+
+const workflowSteps = [
+  {
+    title: 'Create a shared workspace',
+    description: 'Start a room, invite collaborators, and move from idea to code without local setup friction.',
+  },
+  {
+    title: 'Edit and review together',
+    description: 'See presence, cursor activity, and changes in real time with collaboration built into the editor.',
+  },
+  {
+    title: 'Ship with AI support',
+    description: 'Use built-in assistance to explain code, catch issues early, and keep momentum across the team.',
+  },
+];
+
+const useCases = [
+  {
+    icon: Terminal,
+    title: 'Interview Practice',
+    description: 'Share a ready-to-code environment for live interviews, pair sessions, and fast technical screens.',
+  },
+  {
+    icon: GitBranch,
+    title: 'Team Pairing',
+    description: 'Work through bugs, reviews, and architecture decisions together without juggling separate tools.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Classrooms And Labs',
+    description: 'Give students one browser-based workspace for coding, execution, and guided AI help.',
+  },
+];
+
+const testimonials = [
+  {
+    quote:
+      'Synapse removed the usual setup overhead. Our team went from sharing screens to actually collaborating in one space.',
+    name: 'Riya Sharma',
+    role: 'Engineering Lead, BuildLab',
+  },
+  {
+    quote:
+      'The AI layer feels integrated instead of bolted on. It helps us review faster without interrupting the session.',
+    name: 'Aditya Mehta',
+    role: 'Product Engineer, SprintForge',
+  },
+  {
+    quote:
+      'For mentoring and student demos, it is much easier to send a room link than to debug local environments for everyone.',
+    name: 'Neha Verma',
+    role: 'Instructor, CodeCircle',
+  },
+];
+
+const faqItems = [
+  {
+    question: 'Do users need to install anything before joining?',
+    answer: 'No. Synapse is designed for browser-first collaboration, so teams can join rooms and start coding without local setup.',
+  },
+  {
+    question: 'Is this useful only for teams?',
+    answer: 'Not at all. It also fits interviews, classrooms, mentoring sessions, and solo work when you want execution plus AI assistance in one place.',
+  },
+  {
+    question: 'What makes the AI experience different?',
+    answer: 'The assistant is placed inside the workspace flow, which makes it easier to ask about the code you are already editing instead of switching contexts.',
+  },
+];
+
+const footerGroups = [
+  {
+    title: 'Product',
+    links: [
+      { label: 'Features', href: '#features' },
+      { label: 'Preview', href: '#preview' },
+      { label: 'Use Cases', href: '#use-cases' },
+    ],
+  },
+  {
+    title: 'Resources',
+    links: [
+      { label: 'Docs', href: '#workflow' },
+      { label: 'FAQ', href: '#faq' },
+      { label: 'Status', href: '#status' },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { label: 'Privacy', href: '#footer' },
+      { label: 'Terms', href: '#footer' },
+      { label: 'Security', href: '#footer' },
+    ],
+  },
+];
+
+export default function LandingPage() {
+  const [isScrolled, setIsScrolled] = useState(false);
+  const { isAuthenticated, user, logout } = useAuth();
+  const displayName = getDisplayName(user);
+  const initials = getUserInitials(user);
+
+  useEffect(() => {
+    document.body.style.backgroundColor = '#05070d';
+
     return () => {
       document.body.style.backgroundColor = '';
     };
   }, []);
 
   useEffect(() => {
-    let effectInstance;
-    let cancelled = false;
+    const handleScroll = () => setIsScrolled(window.scrollY > 20);
 
-    const loadScript = (src) =>
-      new Promise((resolve, reject) => {
-        const existingScript = document.querySelector(`script[src="${src}"]`);
-
-        if (existingScript) {
-          if (existingScript.dataset.loaded === 'true') {
-            resolve();
-            return;
-          }
-
-          existingScript.addEventListener('load', resolve, { once: true });
-          existingScript.addEventListener('error', reject, { once: true });
-          return;
-        }
-
-        const script = document.createElement('script');
-        script.src = src;
-        script.async = true;
-        script.addEventListener(
-          'load',
-          () => {
-            script.dataset.loaded = 'true';
-            resolve();
-          },
-          { once: true }
-        );
-        script.addEventListener('error', reject, { once: true });
-        document.body.appendChild(script);
-      });
-
-    const initBackground = async () => {
-      try {
-        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js');
-        await loadScript('https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.dots.min.js');
-
-        if (cancelled || !backgroundRef.current || !window.VANTA?.DOTS) {
-          return;
-        }
-
-        effectInstance = window.VANTA.DOTS({
-          el: backgroundRef.current,
-          mouseControls: true,
-          touchControls: true,
-          gyroControls: false,
-          minHeight: 200,
-          minWidth: 200,
-          scale: 1,
-          scaleMobile: 1,
-          backgroundColor: 0x080b12,
-          color: 0x2563eb,
-          color2: 0x60a5fa,
-          showLines: false,
-          size: 3.2,
-          spacing: 30,
-        });
-      } catch (error) {
-        console.error('Failed to initialize landing background', error);
-      }
-    };
-
-    initBackground();
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
-      cancelled = true;
-      if (effectInstance?.destroy) {
-        effectInstance.destroy();
-      }
+      window.removeEventListener('scroll', handleScroll);
     };
   }, []);
 
   return (
-    <div
-      className="relative min-h-screen w-full overflow-x-hidden bg-[#080b12] text-gray-200 selection:bg-blue-500/30"
-      style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}
-    >
-      <div ref={backgroundRef} className="absolute inset-0 z-0 opacity-55" />
+    <div className="min-h-screen overflow-x-hidden bg-[#05070d] text-slate-200 selection:bg-indigo-500/30 selection:text-indigo-100">
+      <MedusaeBackground />
 
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-220px] left-[-180px] h-[720px] w-[720px] rounded-full bg-blue-700/10 blur-[150px]" />
-        <div className="absolute right-[-180px] bottom-[-240px] h-[720px] w-[720px] rounded-full bg-cyan-500/10 blur-[160px]" />
-        <div className="absolute top-24 left-1/2 h-[380px] w-[380px] -translate-x-1/2 rounded-full bg-white/5 blur-[150px]" />
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div className="absolute left-1/2 top-24 h-72 w-72 -translate-x-1/2 rounded-full bg-white/5 blur-[140px]" />
+        <div className="absolute -left-24 top-0 h-[32rem] w-[32rem] rounded-full bg-indigo-500/[0.08] blur-[160px]" />
+        <div className="absolute -right-24 bottom-0 h-[28rem] w-[28rem] rounded-full bg-purple-500/10 blur-[160px]" />
       </div>
 
-      <header className="sticky top-0 left-0 z-50 w-full border-b border-white/[0.06] bg-[#080b12]/70 backdrop-blur-xl">
-        <div className="mx-auto flex h-20 w-full items-center justify-between px-6 md:px-10 lg:px-16">
-          <div className="flex flex-shrink-0 items-center gap-3">
-            <div className="h-9 w-9 flex-shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 shadow-lg shadow-blue-900/40" />
+      <header
+        className={`fixed left-0 top-0 z-50 w-full transition-all duration-500 ${isScrolled
+          ? 'border-b border-white/[0.06] bg-[#05070d]/70 py-4 backdrop-blur-xl'
+          : 'bg-transparent py-6'
+          }`}
+      >
+        <div className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-4 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8 xl:px-10">
+          <Link to="/" className="flex shrink-0 items-center gap-3 justify-self-start">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-[0_0_24px_rgba(99,102,241,0.35)]">
+              <Code2 className="h-6 w-6 text-white" />
+            </div>
             <span
-              className="text-xl font-black text-white"
-              style={{ fontFamily: "'Sora', 'Inter', sans-serif", letterSpacing: '-0.04em' }}
+              className="text-2xl font-black uppercase tracking-[-0.06em] text-white"
+              style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}
             >
               Synapse
             </span>
-          </div>
+          </Link>
 
-          <div className="ml-auto flex items-center gap-2 md:gap-3">
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden rounded-xl px-4 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white md:inline-flex"
-            >
-              GitHub
-            </a>
-            <Link
-              to={isAuthenticated ? '/editor' : '/login'}
-              className="hidden rounded-xl px-4 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white md:inline-flex"
-            >
-              Editor
-            </Link>
-            <div className="mx-1 hidden h-5 w-px bg-white/10 md:block" />
+          <nav className="hidden items-center justify-center gap-8 lg:flex xl:gap-10">
+            <NavItem href="#features">Features</NavItem>
+            <NavItem href="#workflow">How It Works</NavItem>
+            <NavItem href="#preview">Preview</NavItem>
+            <NavItem href="#faq">FAQ</NavItem>
+          </nav>
+
+          <div className="flex items-center justify-self-end gap-2 sm:gap-3">
+            {isAuthenticated && (
+              <Link
+                to="/dashboard"
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-white/[0.08]"
+                aria-label="Open dashboard"
+                title="Dashboard"
+              >
+                <LayoutDashboard className="h-4 w-4 text-indigo-300" />
+                <span>Dashboard</span>
+              </Link>
+            )}
 
             {isAuthenticated ? (
-              <>
-                <Link
-                  to="/dashboard"
-                  className="rounded-xl border border-white/[0.08] px-5 py-2.5 text-sm font-semibold text-gray-200 transition-all hover:border-white/[0.15] hover:bg-white/[0.06] hover:text-white"
-                >
-                  Dashboard
-                </Link>
-                <button
-                  onClick={logout}
-                  className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-900/30 transition-all hover:-translate-y-[1px] hover:from-blue-500 hover:to-cyan-400"
-                >
-                  Log out
-                </button>
-              </>
+              <div className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 pr-4 text-sm font-semibold text-white">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 via-indigo-500 to-purple-600 text-xs font-black tracking-[0.14em] text-white shadow-[0_0_20px_rgba(99,102,241,0.35)]">
+                  {initials}
+                </span>
+                <span className="hidden text-left sm:flex sm:flex-col">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                    Signed In
+                  </span>
+                  <span className="max-w-[11rem] truncate text-sm text-white">{displayName}</span>
+                </span>
+              </div>
             ) : (
-              <>
-                <Link
-                  to="/login"
-                  className="rounded-xl border border-white/[0.08] px-5 py-2.5 text-sm font-semibold text-gray-200 transition-all hover:border-white/[0.15] hover:bg-white/[0.06] hover:text-white"
-                >
-                  Log in
-                </Link>
-                <Link
-                  to="/signup"
-                  className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-900/30 transition-all hover:-translate-y-[1px] hover:from-blue-500 hover:to-cyan-400"
-                >
-                  Sign up
-                </Link>
-              </>
+              <Link
+                to="/login"
+                className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 pr-4 text-sm font-semibold text-white transition-all hover:bg-white/[0.08]"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-slate-500 via-slate-400 to-slate-600 text-xs font-black tracking-[0.14em] text-white">
+                  {initials}
+                </span>
+                <span className="hidden text-left sm:flex sm:flex-col">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                    Account
+                  </span>
+                  <span className="text-sm text-white">Log in</span>
+                </span>
+              </Link>
+            )}
+
+            {isAuthenticated && (
+              <button
+                onClick={logout}
+                className="hidden rounded-full px-4 py-2.5 text-sm font-semibold text-slate-400 transition-colors hover:text-white xl:inline-flex"
+              >
+                Log out
+              </button>
             )}
           </div>
         </div>
       </header>
 
-      <main className="relative z-10 flex w-full flex-col gap-16 pb-20 sm:gap-24 md:gap-32 lg:gap-40">
-        <HeroSection />
-        <FeatureHighlights />
-        <CollabPreview />
-        <HowItWorks />
-        <AIAssistantShowcase />
-        <TechStack />
-        <CTAAndFooter />
+      <main className="relative z-10">
+        <section className="px-5 pb-24 pt-40 sm:px-6 sm:pb-28 sm:pt-48 lg:px-8">
+          <div className="mx-auto flex max-w-[92rem] flex-col items-center text-center">
+            <div className="mb-9 inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.06] px-5 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-blue-300 shadow-[0_12px_40px_-22px_rgba(59,130,246,0.8)]">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+              </span>
+              Now in Early Access
+            </div>
+
+            <h1
+              className="mb-8 max-w-6xl text-5xl font-black leading-[1.02] tracking-tighter text-white sm:text-6xl md:text-7xl lg:text-[88px]"
+              style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}
+            >
+              Code Together.
+              <br />
+              <span className="animate-gradient bg-gradient-to-r from-blue-300 via-cyan-300 to-blue-500 bg-[length:200%_auto] bg-clip-text text-transparent">
+                Build Faster.
+              </span>
+              <br />
+              Think Smarter with AI.
+            </h1>
+
+            <p className="mb-11 max-w-3xl text-base leading-8 text-gray-300 md:text-lg">
+              A browser-based collaborative IDE with real-time editing, multi-language execution,
+              and an AI assistant that actually understands your code.
+            </p>
+
+            <div className="flex w-full max-w-xl flex-col items-center justify-center gap-4 sm:flex-row">
+              <Link
+                to={isAuthenticated ? '/editor' : '/login'}
+                className="group inline-flex w-full items-center justify-center gap-3 rounded-[1.35rem] bg-indigo-600 px-8 py-5 text-base font-bold text-white shadow-[0_24px_60px_rgba(79,70,229,0.35)] transition-all hover:bg-indigo-500 active:scale-[0.98] sm:w-auto sm:min-w-[18rem]"
+              >
+                <Terminal size={20} />
+                Open the Editor
+              </Link>
+              <Link
+                to={isAuthenticated ? '/dashboard' : '/signup'}
+                className="group inline-flex w-full items-center justify-center gap-3 rounded-[1.35rem] border border-white/10 bg-white/[0.06] px-8 py-5 text-base font-bold text-white backdrop-blur-sm transition-all hover:bg-white/10 sm:w-auto sm:min-w-[18rem]"
+              >
+                <Zap size={20} className="text-slate-300 transition-colors group-hover:text-cyan-300" />
+                {isAuthenticated ? 'Open Dashboard' : 'Start Free'}
+                <ChevronRight size={18} className="transition-transform group-hover:translate-x-1" />
+              </Link>
+            </div>
+
+            {!isAuthenticated ? (
+              <p className="mt-8 text-xs tracking-[0.2em] text-gray-500">
+                No credit card required · No local setup · All languages supported
+              </p>
+            ) : (
+              <p className="mt-8 text-xs tracking-[0.2em] text-gray-500">
+                Workspace ready · Launch your editor · Start a room with your team
+              </p>
+            )}
+            <div className="mt-14 grid w-full max-w-5xl gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {trustStats.map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-[1.75rem] border border-white/[0.06] bg-white/[0.04] px-6 py-5 text-left backdrop-blur-xl"
+                >
+                  <p className="text-2xl font-black tracking-[-0.05em] text-white">{stat.value}</p>
+                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-indigo-300">
+                    {stat.label}
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">{stat.detail}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="px-5 pb-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[92rem] rounded-[2.25rem] border border-white/[0.06] bg-white/[0.03] px-6 py-8 backdrop-blur-xl sm:px-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">
+                  Trusted by fast-moving builders
+                </p>
+                <h2
+                  className="mt-3 text-2xl font-black tracking-[-0.05em] text-white sm:text-3xl"
+                  style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}
+                >
+                  One workspace for coding, collaboration, and AI reasoning.
+                </h2>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-center text-sm font-bold uppercase tracking-[0.2em] text-slate-400 sm:grid-cols-4">
+                {['BuildLab', 'SprintForge', 'CodeCircle', 'PairStack'].map((name) => (
+                  <div
+                    key={name}
+                    className="rounded-2xl border border-white/[0.06] bg-black/20 px-5 py-4"
+                  >
+                    {name}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="preview" className="px-5 pb-28 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[92rem]">
+            <div className="absolute left-1/2 mt-12 h-20 w-72 -translate-x-1/2 rounded-full bg-indigo-500/20 blur-[120px]" />
+            <div className="relative overflow-hidden rounded-[2.5rem] border border-white/[0.06] bg-[#0d1117]/80 shadow-2xl shadow-black/40 backdrop-blur-3xl">
+              <div className="flex flex-col gap-4 border-b border-white/[0.06] bg-[#161b22]/50 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+                <div className="flex items-center gap-5">
+                  <div className="flex gap-2.5">
+                    <div className="h-3.5 w-3.5 rounded-full bg-[#ff5f57]" />
+                    <div className="h-3.5 w-3.5 rounded-full bg-[#febc2e]" />
+                    <div className="h-3.5 w-3.5 rounded-full bg-[#28c840]" />
+                  </div>
+                  <div className="hidden h-6 w-px bg-white/10 sm:block" />
+                  <div className="flex items-center gap-2 font-mono text-xs text-slate-400">
+                    <Terminal size={14} className="text-indigo-400" />
+                    src/main.rs
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 sm:justify-end">
+                  <div className="flex -space-x-3">
+                    {['A', 'B', 'C'].map((label) => (
+                      <div
+                        key={label}
+                        className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#161b22] bg-slate-800 text-[10px] font-bold"
+                      >
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-emerald-400">
+                    Active
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 font-mono text-sm leading-8 text-slate-300 sm:p-10 sm:text-[15px]">
+                <div className="flex gap-6 sm:gap-8">
+                  <div className="select-none text-right text-slate-700/70">
+                    1
+                    <br />
+                    2
+                    <br />
+                    3
+                    <br />
+                    4
+                    <br />
+                    5
+                    <br />
+                    6
+                  </div>
+
+                  <div className="min-w-0">
+                    <p>
+                      <span className="text-purple-400">fn</span>{' '}
+                      <span className="text-emerald-400">main</span>() {'{'}
+                    </p>
+                    <p>
+                      &nbsp;&nbsp;<span className="text-purple-400">let</span> synapse =
+                      IDE::<span className="text-indigo-400">connect</span>();
+                    </p>
+                    <p>&nbsp;&nbsp;</p>
+                    <p>&nbsp;&nbsp;<span className="text-slate-500">{'// Collaborative sync protocol starting...'}</span></p>
+                    <div className="group flex items-center gap-2">
+                      <p className="min-w-0">
+                        &nbsp;&nbsp;synapse.<span className="text-indigo-400">start_sync</span>().
+                        <span className="text-indigo-400">await</span>;
+                      </p>
+                      <div className="h-6 w-[2px] bg-indigo-500 animate-pulse" />
+                      <span className="rounded bg-indigo-500 px-2 py-0.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+                        Sarah
+                      </span>
+                    </div>
+                    <p>{'}'}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                id="status"
+                className="flex flex-col gap-2 border-t border-white/[0.06] bg-indigo-500/5 px-6 py-3 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-8"
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:gap-8">
+                  <span className="flex items-center gap-2 text-indigo-400">
+                    <Activity size={14} /> 12ms Latency
+                  </span>
+                  <span>Edge Node: Lon-1</span>
+                </div>
+                <span>v2.4.1-Stable</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="features" className="px-5 pb-24 sm:px-6 lg:px-8">
+          <div id="workflow" className="mx-auto mb-16 max-w-[92rem]">
+            <div className="mb-12 max-w-3xl">
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-indigo-300">
+                How It Works
+              </p>
+              <h2
+                className="mt-4 text-3xl font-black tracking-[-0.05em] text-white sm:text-5xl"
+                style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}
+              >
+                A faster path from idea to shared output.
+              </h2>
+              <p className="mt-5 text-base leading-8 text-slate-400 sm:text-lg">
+                Synapse keeps setup, collaboration, execution, and AI support in one workflow so
+                teams can move with less friction and fewer context switches.
+              </p>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-3">
+              {workflowSteps.map((step, index) => (
+                <article
+                  key={step.title}
+                  className="relative overflow-hidden rounded-[2rem] border border-white/[0.06] bg-white/[0.04] p-8 backdrop-blur-xl"
+                >
+                  <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-indigo-500/10 blur-3xl" />
+                  <div className="relative">
+                    <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-400/20 bg-indigo-500/10 text-sm font-black text-indigo-300">
+                      0{index + 1}
+                    </div>
+                    <h3 className="text-2xl font-bold text-white">{step.title}</h3>
+                    <p className="mt-4 text-sm leading-7 text-slate-400">{step.description}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="mx-auto max-w-[92rem]">
+            <div className="grid gap-6 md:grid-cols-3 md:gap-8">
+              {featureCards.map((feature) => (
+                <article
+                  key={feature.title}
+                  className="rounded-[2rem] border border-white/[0.06] bg-white/5 p-8 backdrop-blur-sm transition-all hover:bg-white/[0.08] sm:p-10"
+                >
+                  <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-400">
+                    <feature.icon size={28} />
+                  </div>
+                  <h3 className="mb-4 text-2xl font-bold text-white">{feature.title}</h3>
+                  <p className="text-sm leading-relaxed text-slate-400">{feature.description}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="use-cases" className="px-5 pb-24 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[92rem]">
+            <div className="mb-12 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-indigo-300">
+                  Who It&apos;s For
+                </p>
+                <h2
+                  className="mt-4 text-3xl font-black tracking-[-0.05em] text-white sm:text-5xl"
+                  style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}
+                >
+                  Built for real collaboration, not just solo editing in the cloud.
+                </h2>
+              </div>
+              <p className="max-w-2xl text-base leading-8 text-slate-400">
+                Whether you are pairing with a teammate, running a live interview, or guiding a
+                classroom, the workflow stays lightweight and shared from the first click.
+              </p>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-3">
+              {useCases.map((useCase) => (
+                <article
+                  key={useCase.title}
+                  className="rounded-[2rem] border border-white/[0.06] bg-white/[0.04] p-8 backdrop-blur-xl"
+                >
+                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-300">
+                    <useCase.icon size={28} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white">{useCase.title}</h3>
+                  <p className="mt-4 text-sm leading-7 text-slate-400">{useCase.description}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="px-5 pb-24 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[92rem]">
+            <div className="mb-10 max-w-3xl">
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-indigo-300">
+                What Teams Say
+              </p>
+              <h2
+                className="mt-4 text-3xl font-black tracking-[-0.05em] text-white sm:text-5xl"
+                style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}
+              >
+                Social proof that makes the product feel real.
+              </h2>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-3">
+              {testimonials.map((testimonial) => (
+                <article
+                  key={testimonial.name}
+                  className="rounded-[2rem] border border-white/[0.06] bg-white/[0.04] p-8 backdrop-blur-xl"
+                >
+                  <p className="text-base leading-8 text-slate-300">&ldquo;{testimonial.quote}&rdquo;</p>
+                  <div className="mt-8 border-t border-white/[0.06] pt-6">
+                    <p className="text-sm font-bold text-white">{testimonial.name}</p>
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      {testimonial.role}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="faq" className="px-5 pb-24 sm:px-6 lg:px-8">
+          <div className="mx-auto grid max-w-[92rem] gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+            <div className="rounded-[2.25rem] border border-white/[0.06] bg-white/[0.03] p-8 backdrop-blur-xl sm:p-10">
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-indigo-300">
+                FAQ
+              </p>
+              <h2
+                className="mt-4 text-3xl font-black tracking-[-0.05em] text-white sm:text-5xl"
+                style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}
+              >
+                Clear answers for adoption questions.
+              </h2>
+              <p className="mt-5 text-base leading-8 text-slate-400">
+                Professional product pages reduce doubt early. These answers help visitors understand
+                how Synapse fits into their workflow before they sign up.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {faqItems.map((item) => (
+                <article
+                  key={item.question}
+                  className="rounded-[1.75rem] border border-white/[0.06] bg-white/[0.04] p-6 backdrop-blur-xl"
+                >
+                  <h3 className="text-lg font-bold text-white">{item.question}</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-400">{item.answer}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="px-5 pb-24 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[92rem] rounded-[2.25rem] border border-white/[0.06] bg-white/[0.04] px-6 py-10 text-center backdrop-blur-xl sm:px-10 sm:py-14">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-300">
+              <Sparkles size={14} className="text-indigo-300" />
+              Ready To Ship Faster
+            </div>
+            <h2
+              className="mb-4 text-3xl font-black tracking-[-0.05em] text-white sm:text-5xl"
+              style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}
+            >
+              Keep the workflow. Change the interface.
+            </h2>
+            <p className="mx-auto mb-8 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg">
+              The new landing experience mirrors your reference UI, but still keeps Synapse&apos;s
+              existing routes for authentication, dashboard access, and editor launch.
+            </p>
+            <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+              <Link
+                to={isAuthenticated ? '/dashboard' : '/signup'}
+                className="inline-flex min-w-[12rem] items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-white/10"
+              >
+                {isAuthenticated ? 'Open Dashboard' : 'Create Account'}
+              </Link>
+              <Link
+                to={isAuthenticated ? '/editor' : '/login'}
+                className="inline-flex min-w-[12rem] items-center justify-center rounded-full bg-indigo-600 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-indigo-500"
+              >
+                {isAuthenticated ? 'Go To Editor' : 'Launch Editor'}
+              </Link>
+            </div>
+          </div>
+        </section>
       </main>
+
+      <footer
+        id="footer"
+        className="relative z-10 border-t border-white/[0.06] bg-[#05070d]/80 px-5 py-12 backdrop-blur-sm sm:px-6 lg:px-8"
+      >
+        <div className="mx-auto grid max-w-[92rem] gap-10 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="max-w-xl">
+            <div className="flex items-center gap-3">
+              <Code2 className="h-6 w-6 text-indigo-400" />
+              <span
+                className="text-lg font-black uppercase tracking-[-0.05em] text-white"
+                style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}
+              >
+                Synapse
+              </span>
+            </div>
+            <p className="mt-5 text-sm leading-7 text-slate-400">
+              A collaborative IDE for teams that want shared editing, code execution, and AI support
+              in one browser-native workflow.
+            </p>
+            <p className="mt-6 font-mono text-xs text-slate-600">
+              {'\u00A9'} 2026 SYNAPSE TECHNOLOGIES. BUILT FOR THE FUTURE.
+            </p>
+          </div>
+
+          <div className="grid gap-8 sm:grid-cols-3">
+            {footerGroups.map((group) => (
+              <div key={group.title}>
+                <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                  {group.title}
+                </h3>
+                <div className="mt-4 space-y-3">
+                  {group.links.map((link) => (
+                    <a
+                      key={link.label}
+                      href={link.href}
+                      className="block text-sm text-slate-400 transition-colors hover:text-white"
+                    >
+                      {link.label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </footer>
+
+      <style>{`
+        @keyframes gradient {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+
+        .animate-gradient {
+          animation: gradient 8s ease infinite;
+        }
+
+        canvas {
+          display: block;
+          filter: contrast(110%) brightness(110%);
+        }
+      `}</style>
     </div>
   );
 }

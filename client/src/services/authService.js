@@ -8,14 +8,10 @@ import { API_BASE } from '../config/apiConfig';
 const AUTH_API_BASE = `${API_BASE}/auth`;
 
 /**
- * Sign up a new user
- * @param {string} name
- * @param {string} email
- * @param {string} password
- * @returns {Promise<{token: string, user: object}>}
+ * Request a signup OTP
  */
-export async function signup(name, email, password) {
-  const res = await fetch(`${AUTH_API_BASE}/signup`, {
+export async function requestSignupOtp(name, email, password) {
+  const res = await fetch(`${AUTH_API_BASE}/signup/request-otp`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password }),
@@ -24,7 +20,26 @@ export async function signup(name, email, password) {
   const data = await res.json();
 
   if (!res.ok) {
-    throw new Error(data.error || 'Signup failed. Please try again.');
+    throw new Error(data.error || 'Unable to send signup OTP. Please try again.');
+  }
+
+  return data;
+}
+
+/**
+ * Verify signup OTP and create the user account
+ */
+export async function verifySignupOtp(email, otp) {
+  const res = await fetch(`${AUTH_API_BASE}/signup/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, otp }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || 'Signup verification failed. Please try again.');
   }
 
   setAuthSession({ token: data.token, user: data.user });
@@ -32,13 +47,10 @@ export async function signup(name, email, password) {
 }
 
 /**
- * Log in an existing user
- * @param {string} email
- * @param {string} password
- * @returns {Promise<{token: string, user: object}>}
+ * Request a login OTP after validating email and password
  */
-export async function login(email, password) {
-  const res = await fetch(`${AUTH_API_BASE}/login`, {
+export async function requestLoginOtp(email, password) {
+  const res = await fetch(`${AUTH_API_BASE}/login/request-otp`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -47,7 +59,26 @@ export async function login(email, password) {
   const data = await res.json();
 
   if (!res.ok) {
-    throw new Error(data.error || 'Login failed. Please try again.');
+    throw new Error(data.error || 'Unable to send login OTP. Please try again.');
+  }
+
+  return data;
+}
+
+/**
+ * Verify login OTP and create the session
+ */
+export async function verifyLoginOtp(email, otp) {
+  const res = await fetch(`${AUTH_API_BASE}/login/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, otp }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || 'Login verification failed. Please try again.');
   }
 
   setAuthSession({ token: data.token, user: data.user });

@@ -25,9 +25,9 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const signup = useCallback(
-    async (name, email, password) => {
-      const data = await authService.signup(name, email, password);
+  const completeSignup = useCallback(
+    async (email, otp) => {
+      const data = await authService.verifySignupOtp(email, otp);
       setUser(data.user);
       navigate('/dashboard');
       return data;
@@ -35,9 +35,9 @@ export function AuthProvider({ children }) {
     [navigate]
   );
 
-  const login = useCallback(
-    async (email, password) => {
-      const data = await authService.login(email, password);
+  const completeLogin = useCallback(
+    async (email, otp) => {
+      const data = await authService.verifyLoginOtp(email, otp);
       setUser(data.user);
       navigate('/dashboard');
       return data;
@@ -56,8 +56,8 @@ export function AuthProvider({ children }) {
     setUser,
     loading,
     isAuthenticated: !!user,
-    signup,
-    login,
+    completeSignup,
+    completeLogin,
     logout,
   };
 

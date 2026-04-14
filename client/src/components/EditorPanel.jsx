@@ -3,6 +3,7 @@ import Editor from '@monaco-editor/react';
 import { MonacoBinding } from 'y-monaco';
 import { useFiles } from '../contexts/FileContext';
 import { getMonacoLanguage } from '../utils/languageMap';
+import { getThemeClasses } from '../utils/theme';
 import { Loader2 } from 'lucide-react';
 
 
@@ -104,8 +105,8 @@ function EditingIndicatorBar({ editingUsers = {}, activeFileId }) {
         >
           <span
             style={{
-              width: '7px',
-              height: '7px',
+              width: '8px',
+              height: '8px',
               borderRadius: '50%',
               background: u.cursorColor || '#888',
               display: 'inline-block',
@@ -129,16 +130,48 @@ function EditingIndicatorBar({ editingUsers = {}, activeFileId }) {
   );
 }
 
+function FileLockBanner({ activeFileLock, isReadOnly, lockNotice }) {
+  if (!activeFileLock && !lockNotice) return null;
+
+  const message = isReadOnly && activeFileLock
+    ? `${activeFileLock.username || 'Another user'} is editing this file. View-only mode is active.`
+    : activeFileLock
+      ? 'You hold the edit lock for this file.'
+      : lockNotice;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '6px 14px',
+        background: isReadOnly ? 'rgba(245, 158, 11, 0.12)' : 'rgba(99, 102, 241, 0.12)',
+        borderBottom: `1px solid ${isReadOnly ? 'rgba(245, 158, 11, 0.35)' : 'rgba(99, 102, 241, 0.28)'}`,
+        fontSize: '12px',
+        color: isReadOnly ? '#fbbf24' : '#a5b4fc',
+      }}
+    >
+      <span style={{ fontWeight: 700 }}>{isReadOnly ? 'Locked' : 'Lock'}</span>
+      <span>{message}</span>
+    </div>
+  );
+}
+
 export default function EditorPanel({
   theme,
   onCursorMove,
   onSelectionChange,
+  onLocalChange,
   sharedText,
   remotePeers = [],
   editingUsers = {},
   activeFileId: activeFileIdProp,
+  activeFileLock = null,
+  isReadOnly = false,
+  lockNotice = '',
 }) {
-  const { activeFile } = useFiles();
+  const { activeFile, updateContent, jumpTarget } = useFiles();
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const decorationsRef = useRef([]);
@@ -150,6 +183,7 @@ export default function EditorPanel({
   const [editorMountKey, setEditorMountKey] = useState(0);
 
   const activeFileId = activeFileIdProp || activeFile?.id;
+  const t = getThemeClasses(theme);
   const monacoTheme = theme === 'dark' ? 'vs-dark' : 'vs';
   const language = activeFile ? getMonacoLanguage(activeFile.name) : 'plaintext';
 
@@ -253,12 +287,18 @@ export default function EditorPanel({
     };
   }, [remotePeers, activeFileId]);
 
+  // ─── Scroll to line on jumpTarget change ────────────────────────────────────
+  useEffect(() => {
+    if (!editorRef.current || !jumpTarget || jumpTarget.fileId !== activeFileId) return;
+
+    editorRef.current.revealLineInCenter(jumpTarget.line);
+    editorRef.current.setPosition({ lineNumber: jumpTarget.line, column: 1 });
+    editorRef.current.focus();
+  }, [jumpTarget, activeFileId, editorMountKey]);
+
   if (!activeFile) {
     return (
-      <div
-        className="flex-1 flex items-center justify-center"
-        style={{ background: 'var(--bg-primary)' }}
-      >
+      <div className={`flex-1 flex items-center justify-center ${t.editorBg}`}>
         <div className="text-center" style={{ color: 'var(--text-muted)' }}>
           <p className="text-lg mb-2">No file open</p>
           <p className="text-sm">Create a new file or open one from the sidebar</p>
@@ -268,12 +308,10 @@ export default function EditorPanel({
   }
 
   return (
-    <div
-      className="flex-1 overflow-hidden flex flex-col"
-      style={{ background: 'var(--bg-primary)' }}
-    >
+    <div className={`flex-1 overflow-hidden flex flex-col ${t.editorBg}`}>
       {/* Real-time "who is editing" indicator */}
       <EditingIndicatorBar editingUsers={editingUsers} activeFileId={activeFileId} />
+      <FileLockBanner activeFileLock={activeFileLock} isReadOnly={isReadOnly} lockNotice={lockNotice} />
 
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <Editor
@@ -282,6 +320,14 @@ export default function EditorPanel({
           language={language}
           theme={monacoTheme}
           defaultValue={sharedText ? '' : activeFile.content}
+          onChange={(value) => {
+            if (!sharedText && activeFileId && updateContent) {
+              updateContent(activeFileId, value || '', { updatedAt: Date.now() });
+            }
+            if (onLocalChange && activeFileId) {
+              onLocalChange(activeFileId, value || '');
+            }
+          }}
           onMount={(editor, monaco) => {
             editorRef.current = editor;
             monacoRef.current = monaco;
@@ -329,6 +375,8 @@ export default function EditorPanel({
             </div>
           }
           options={{
+            readOnly: isReadOnly,
+            domReadOnly: isReadOnly,
             fontSize: 14,
             fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
             fontLigatures: true,

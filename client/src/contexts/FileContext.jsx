@@ -7,6 +7,10 @@ const FileContext = createContext();
 const DEFAULT_FILE = {
   id: 'welcome-py',
   name: 'main.py',
+  type: 'file',
+  parentId: null,
+  order: 0,
+  isOpen: false,
   content: LANGUAGES[0].template,
   language: LANGUAGES[0],
   updatedAt: Date.now(),
@@ -17,6 +21,10 @@ const STORAGE_KEY = 'synapse-files';
 function normalizeFile(file) {
   return {
     ...file,
+    type: file.type || 'file',
+    parentId: file.parentId || null,
+    order: typeof file.order === 'number' ? file.order : 0,
+    isOpen: Boolean(file.isOpen),
     content: file.content ?? '',
     language: getLanguageByExtension(file.name),
     updatedAt: file.updatedAt ?? Date.now(),
@@ -53,6 +61,7 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
 
   const [activeFileId, setActiveFileId] = useState(() => files[0]?.id || DEFAULT_FILE.id);
   const [openTabs, setOpenTabs] = useState(() => [files[0]?.id || DEFAULT_FILE.id]);
+  const [jumpTarget, setJumpTarget] = useState(null);
 
   useEffect(() => {
     if (!storageKey) {
@@ -60,9 +69,13 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
     }
 
     try {
-      const toSave = files.map(({ id, name, content, updatedAt }) => ({
+      const toSave = files.map(({ id, name, type, parentId, order, isOpen, content, updatedAt }) => ({
         id,
         name,
+        type,
+        parentId,
+        order,
+        isOpen,
         content,
         updatedAt,
       }));
@@ -109,20 +122,83 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
     });
   }, []);
 
-  const createFile = useCallback((name) => {
+  const createFile = useCallback((name, parentId = null) => {
     const id = `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const language = getLanguageByExtension(name);
-    const newFile = normalizeFile({
-      id,
-      name,
-      content: language.template,
-      updatedAt: Date.now(),
+    
+    setFiles((prev) => {
+      const order = prev.filter(f => f.parentId === parentId).length;
+      const newFile = normalizeFile({
+        id,
+        name,
+        type: 'file',
+        parentId,
+        order,
+        content: language.template,
+        updatedAt: Date.now(),
+      });
+      return [...prev, newFile];
     });
-
-    setFiles((prev) => [...prev, newFile]);
+    
     setOpenTabs((prev) => [...prev, id]);
     setActiveFileId(id);
-    return newFile;
+    return id; // Return ID instead of object since state update is async
+  }, []);
+
+  const createFolder = useCallback((name, parentId = null) => {
+    const id = `folder-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    
+    setFiles((prev) => {
+      const order = prev.filter(f => f.parentId === parentId).length;
+      const newFolder = normalizeFile({
+        id,
+        name,
+        type: 'folder',
+        parentId,
+        order,
+        isOpen: true,
+        updatedAt: Date.now(),
+      });
+      return [...prev, newFolder];
+    });
+    return id;
+  }, []);
+
+  const toggleFolder = useCallback((id) => {
+    setFiles((prev) => 
+      prev.map(f => f.id === id && f.type === 'folder' ? { ...f, isOpen: !f.isOpen } : f)
+    );
+  }, []);
+
+  const moveItem = useCallback((id, newParentId, newOrder) => {
+    setFiles((prev) => {
+      // Prevent nesting folder inside itself or its children
+      if (newParentId) {
+        let currentParent = prev.find(f => f.id === newParentId);
+        while (currentParent) {
+          if (currentParent.id === id) return prev; // Invalid move
+          currentParent = prev.find(f => f.id === currentParent.parentId);
+        }
+      }
+
+      let updated = prev.map(f => f.id === id ? { ...f, parentId: newParentId } : f);
+      
+      // Sort children to re-apply order sequentially
+      const siblings = updated.filter(f => f.parentId === newParentId && f.id !== id).sort((a, b) => a.order - b.order);
+      const movingItem = updated.find(f => f.id === id);
+      
+      siblings.splice(newOrder, 0, movingItem);
+      
+      // Update orders
+      siblings.forEach((sib, index) => {
+        const itemIndex = updated.findIndex(f => f.id === sib.id);
+        if (itemIndex > -1) {
+          updated[itemIndex].order = index;
+        }
+      });
+      
+      return updated;
+    });
   }, []);
 
   const renameFile = useCallback((id, newName) => {
@@ -139,24 +215,40 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
     );
   }, []);
 
+  const getSubTreeIds = (filesList, rootId) => {
+    let ids = [rootId];
+    for (const file of filesList) {
+      if (file.parentId === rootId) {
+        ids = ids.concat(getSubTreeIds(filesList, file.id));
+      }
+    }
+    return ids;
+  };
+
   const deleteFile = useCallback((id) => {
+    let deletedIds = [];
     setFiles((prev) => {
-      const remaining = prev.filter((file) => file.id !== id);
+      deletedIds = getSubTreeIds(prev, id);
+      const remaining = prev.filter((file) => !deletedIds.includes(file.id));
       return remaining.length ? remaining : getDefaultState().files;
     });
 
     setOpenTabs((prev) => {
-      const remaining = prev.filter((tabId) => tabId !== id);
+      const remaining = prev.filter((tabId) => !deletedIds.includes(tabId));
       return remaining.length ? remaining : [getDefaultState().files[0].id];
     });
 
     setActiveFileId((prevActiveFileId) => {
-      if (prevActiveFileId !== id) {
+      if (!deletedIds.includes(prevActiveFileId)) {
         return prevActiveFileId;
       }
 
-      const nextFile = files.find((file) => file.id !== id);
-      return nextFile?.id || getDefaultState().files[0].id;
+      setFiles(currentFiles => {
+        const nextFile = currentFiles.find(file => !deletedIds.includes(file.id) && file.type === 'file');
+        return nextFile?.id || getDefaultState().files[0].id; // this just triggers re-render, safe because setFiles gives latest state but hacky
+      });
+      // safe fallback
+      return getDefaultState().files[0].id; 
     });
   }, [files]);
 
@@ -196,6 +288,11 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
     });
   }, [activeFileId]);
 
+  const jumpToFileLine = useCallback((id, line) => {
+    setJumpTarget({ fileId: id, line, ts: Date.now() });
+    openTab(id);
+  }, [openTab]);
+
   return (
     <FileContext.Provider
       value={{
@@ -204,6 +301,9 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
         activeFileId,
         openTabs,
         createFile,
+        createFolder,
+        toggleFolder,
+        moveItem,
         renameFile,
         deleteFile,
         updateContent,
@@ -212,6 +312,8 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
         replaceState,
         replaceSharedFiles,
         setActiveFileId,
+        jumpTarget,
+        jumpToFileLine,
       }}
     >
       {children}

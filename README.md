@@ -20,6 +20,11 @@ MONGODB_URI=your_mongodb_connection_string
 JWT_SECRET=your_jwt_secret
 JUDGE0_API_HOST=your_judge0_host
 JUDGE0_API_KEY=your_rapidapi_key
+GMAIL_USER=your_gmail_address@gmail.com
+GMAIL_APP_PASSWORD=your_gmail_app_password
+EMAIL_FROM=Synapse <your_gmail_address@gmail.com>
+OTP_EXPIRY_MINUTES=10
+OTP_MAX_ATTEMPTS=5
 ```
 
 You can copy the template from `server/.env.example`.
@@ -94,3 +99,5 @@ start.bat
 - The backend can start even if MongoDB is unavailable, but authentication and room persistence will not work correctly.
 - Code execution depends on valid Judge0 API credentials in `server/.env`.
 - Shared rooms are stored in server memory right now, so everyone must use the same running backend process to collaborate in one room.
+- Gmail OTP auth is enabled for both signup and login. Signup creates the account only after OTP verification, and login issues the JWT only after both password and OTP are verified.
+- For Gmail, use an App Password rather than your normal inbox password. The backend sends OTPs with Nodemailer and stores temporary OTP records in MongoDB with automatic expiry.

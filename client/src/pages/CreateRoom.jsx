@@ -1,18 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Loader2, PlusCircle } from 'lucide-react';
+import { ArrowRight, Loader2, PlusCircle, Code2 } from 'lucide-react';
 import { createRoom } from '../services/roomService';
 
 export default function CreateRoom() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [roomName, setRoomName] = useState('');
+
+  useEffect(() => {
+    document.body.style.backgroundColor = '#05070d';
+    return () => { document.body.style.backgroundColor = ''; };
+  }, []);
 
   const handleCreateRoom = async () => {
     try {
       setLoading(true);
       setError('');
-      const { room } = await createRoom();
+      const { room } = await createRoom(roomName || 'System Design Practice');
       navigate(`/room/${room.roomId}`);
     } catch (requestError) {
       setError(requestError.message);
@@ -31,7 +37,9 @@ export default function CreateRoom() {
 
       <div className="auth-container">
         <Link to="/dashboard" className="auth-logo-link">
-          <div className="auth-logo-icon" />
+          <div className="auth-logo-icon">
+            <Code2 size={24} className="text-white" />
+          </div>
           <span className="auth-logo-text">Synapse</span>
         </Link>
 
@@ -47,6 +55,21 @@ export default function CreateRoom() {
           </div>
 
           {error ? <div className="auth-error-banner">{error}</div> : null}
+
+          <div className="auth-form" style={{ marginBottom: '1.5rem', width: '100%', textAlign: 'left' }}>
+            <label className="auth-label" htmlFor="roomName">Room Name</label>
+            <input
+              id="roomName"
+              type="text"
+              className="auth-input"
+              placeholder="e.g. System Design Practice"
+              value={roomName}
+              onChange={(e) => setRoomName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateRoom();
+              }}
+            />
+          </div>
 
           <button onClick={handleCreateRoom} className="auth-btn" disabled={loading}>
             {loading ? (

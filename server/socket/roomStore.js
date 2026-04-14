@@ -1,12 +1,42 @@
 const Y = require('yjs');
+const RoomModel = require('../models/Room');
 
 const ROOM_ID_LENGTH = 6;
 const CURSOR_COLORS = [
-  '#FF5733',
-  '#33C1FF',
-  '#75FF33',
-  '#FF33A8',
-  '#FFC733',
+  '#FF6B6B',
+  '#4ECDC4',
+  '#45B7D1',
+  '#F7B32B',
+  '#7C3AED',
+  '#10B981',
+  '#F97316',
+  '#EC4899',
+  '#3B82F6',
+  '#84CC16',
+  '#EF4444',
+  '#14B8A6',
+];
+const COLLABORATOR_GLYPHS = [
+  'A',
+  'B',
+  'C',
+  'D',
+  'E',
+  'F',
+  'G',
+  'H',
+  'J',
+  'K',
+  'L',
+  'M',
+  'N',
+  'P',
+  'R',
+  'S',
+  'T',
+  'V',
+  'W',
+  'Y',
 ];
 
 const DEFAULT_ROOM_FILE = {
@@ -63,15 +93,19 @@ function decodeUpdate(encodedUpdate) {
 
 function hashUserId(userId = '') {
   return Array.from(String(userId)).reduce(
-    (accumulator, character) => accumulator + character.charCodeAt(0),
+    (accumulator, character, index) => accumulator + character.charCodeAt(0) * (index + 1),
     0
   );
 }
 
-function pickCursorColor(room, userId) {
-  const existingColor = room.userColors.get(userId);
-  if (existingColor) {
-    return existingColor;
+function findFirstAvailable(items, usedItems) {
+  return items.find((item) => !usedItems.has(item)) || null;
+}
+
+function buildParticipantAppearance(room, userId, username = '') {
+  const existingAppearance = room.userAppearance.get(userId);
+  if (existingAppearance) {
+    return existingAppearance;
   }
 
   const activeColors = new Set(
@@ -79,12 +113,21 @@ function pickCursorColor(room, userId) {
       .map((participant) => participant.cursorColor)
       .filter(Boolean)
   );
-  const availableColor = CURSOR_COLORS.find((color) => !activeColors.has(color));
-  const nextColor =
-    availableColor || CURSOR_COLORS[hashUserId(userId) % CURSOR_COLORS.length];
+  const activeGlyphs = new Set(
+    Array.from(room.participants.values())
+      .map((participant) => participant.avatarGlyph)
+      .filter(Boolean)
+  );
+  const hash = hashUserId(`${userId}:${username}`);
+  const fallbackColor = CURSOR_COLORS[hash % CURSOR_COLORS.length];
+  const fallbackGlyph = COLLABORATOR_GLYPHS[hash % COLLABORATOR_GLYPHS.length];
+  const nextAppearance = {
+    cursorColor: findFirstAvailable(CURSOR_COLORS, activeColors) || fallbackColor,
+    avatarGlyph: findFirstAvailable(COLLABORATOR_GLYPHS, activeGlyphs) || fallbackGlyph,
+  };
 
-  room.userColors.set(userId, nextColor);
-  return nextColor;
+  room.userAppearance.set(userId, nextAppearance);
+  return nextAppearance;
 }
 
 function createDefaultRoomState() {
@@ -132,6 +175,7 @@ function getSharedDocsSnapshot(room) {
 function sanitizeRoom(room) {
   return {
     roomId: room.roomId,
+    roomName: room.roomName || 'Untitled Room',
     createdBy: room.createdBy,
     createdAt: room.createdAt,
     files: cloneFiles(room.files),
@@ -142,7 +186,7 @@ function sanitizeRoom(room) {
   };
 }
 
-function createRoom(owner) {
+async function createRoom(owner, roomName = 'Untitled Room') {
   let roomId = generateRoomId();
 
   while (rooms.has(roomId)) {
@@ -152,19 +196,34 @@ function createRoom(owner) {
   const baseState = createDefaultRoomState();
   const room = {
     roomId,
+    roomName,
     createdBy: owner.userId,
     createdAt: Date.now(),
     files: baseState.files,
     activeFileId: baseState.activeFileId,
     openTabs: baseState.openTabs,
     participants: new Map(),
-    userColors: new Map(),
+    userAppearance: new Map(),
     sharedDocs: new Map(
       baseState.files.map((file) => [file.id, createSharedDoc(file.content)])
     ),
   };
 
   rooms.set(roomId, room);
+
+  try {
+    await RoomModel.create({
+      roomId: room.roomId,
+      roomName: room.roomName,
+      createdBy: room.createdBy,
+      files: baseState.files.map(f => ({ id: f.id, name: f.name, content: f.content, updatedAt: f.updatedAt })),
+      lastUpdated: room.createdAt,
+      createdAt: room.createdAt
+    });
+  } catch (err) {
+    console.error('Failed to save room to DB:', err);
+  }
+
   return sanitizeRoom(room);
 }
 
@@ -194,7 +253,7 @@ function addParticipant(roomId, participant) {
 
   const nextParticipant = {
     ...participant,
-    cursorColor: pickCursorColor(room, participant.userId),
+    ...buildParticipantAppearance(room, participant.userId, participant.username),
   };
 
   room.participants.set(nextParticipant.socketId, nextParticipant);
@@ -269,6 +328,43 @@ function getDocumentState(roomId, fileId) {
   return encodeUpdate(Y.encodeStateAsUpdate(doc));
 }
 
+async function loadRoomFromDB(roomId) {
+  if (rooms.has(roomId)) return rooms.get(roomId);
+
+  try {
+    const dbRoom = await RoomModel.findOne({ roomId });
+    if (!dbRoom) return null;
+
+    const files = dbRoom.files && dbRoom.files.length > 0 ? dbRoom.files.map(f => ({
+      id: f.id,
+      name: f.name,
+      content: f.content || '',
+      updatedAt: f.updatedAt ? new Date(f.updatedAt).getTime() : Date.now()
+    })) : cloneFiles([{ ...DEFAULT_ROOM_FILE, updatedAt: Date.now() }]);
+
+    const room = {
+      roomId: dbRoom.roomId,
+      roomName: dbRoom.roomName || 'Untitled Room',
+      createdBy: dbRoom.createdBy,
+      createdAt: dbRoom.createdAt ? new Date(dbRoom.createdAt).getTime() : Date.now(),
+      files: files,
+      activeFileId: files[0].id,
+      openTabs: files.map(f => f.id),
+      participants: new Map(),
+      userAppearance: new Map(),
+      sharedDocs: new Map(
+        files.map((file) => [file.id, createSharedDoc(file.content)])
+      ),
+    };
+
+    rooms.set(roomId, room);
+    return room;
+  } catch (err) {
+    console.error('Failed to load room from DB', err);
+    return null;
+  }
+}
+
 module.exports = {
   addParticipant,
   applyDocumentUpdate,
@@ -278,4 +374,5 @@ module.exports = {
   getRoomSnapshot,
   removeParticipant,
   updateRoomState,
+  loadRoomFromDB,
 };

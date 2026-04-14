@@ -29,10 +29,18 @@ async function request(path = '', options = {}) {
   return data;
 }
 
-export function createRoom() {
-  return request('', { method: 'POST' });
+export function createRoom(roomName) {
+  return request('', { method: 'POST', body: JSON.stringify({ roomName }) });
 }
 
 export function getRoom(roomId) {
   return request(`/${String(roomId).trim().toUpperCase()}`);
+}
+
+export function getRecentRooms(userId) {
+  return request(`/recent/${encodeURIComponent(userId)}`);
+}
+
+export function deleteRoom(roomId) {
+  return request(`/${encodeURIComponent(roomId)}`, { method: 'DELETE' });
 }

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Loader2, Users } from 'lucide-react';
+import { ArrowRight, Loader2, Users, Code2 } from 'lucide-react';
 import { getRoom } from '../services/roomService';
 
 export default function JoinRoom() {
@@ -8,6 +8,11 @@ export default function JoinRoom() {
   const [roomId, setRoomId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    document.body.style.backgroundColor = '#05070d';
+    return () => { document.body.style.backgroundColor = ''; };
+  }, []);
 
   const handleJoinRoom = async (event) => {
     event.preventDefault();
@@ -40,7 +45,9 @@ export default function JoinRoom() {
 
       <div className="auth-container">
         <Link to="/dashboard" className="auth-logo-link">
-          <div className="auth-logo-icon" />
+          <div className="auth-logo-icon">
+            <Code2 size={24} className="text-white" />
+          </div>
           <span className="auth-logo-text">Synapse</span>
         </Link>
 

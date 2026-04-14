@@ -40,7 +40,7 @@ function formatConversationTime(value) {
   });
 }
 
-function CodeBlock({ inline, className, children }) {
+function CodeBlock({ inline, className, children, theme }) {
   const [copied, setCopied] = useState(false);
   const match = /language-([\w-]+)/.exec(className || '');
   const language = match?.[1] || 'code';
@@ -48,7 +48,9 @@ function CodeBlock({ inline, className, children }) {
 
   if (inline) {
     return (
-      <code className="px-1.5 py-0.5 rounded-md font-mono text-[11px] bg-white/10 text-indigo-200">
+      <code className={`px-1.5 py-0.5 rounded-md font-mono text-[11px] ${
+        theme === 'dark' ? 'bg-white/10 text-indigo-200' : 'bg-indigo-50 text-indigo-600'
+      }`}>
         {children}
       </code>
     );
@@ -65,13 +67,19 @@ function CodeBlock({ inline, className, children }) {
   };
 
   return (
-    <div className="my-3 overflow-hidden rounded-xl border border-white/10 bg-[#0d0d17]">
-      <div className="flex items-center justify-between px-3 py-2 text-[10px] uppercase tracking-[0.18em] border-b border-white/10 bg-white/5 text-slate-400">
+    <div className={`my-3 overflow-hidden rounded-xl border ${
+      theme === 'dark' ? 'border-white/10 bg-[#0d0d17]' : 'border-slate-200 bg-slate-50'
+    }`}>
+      <div className={`flex items-center justify-between px-3 py-2 text-[10px] uppercase tracking-[0.18em] border-b ${
+        theme === 'dark' ? 'border-white/10 bg-white/5 text-slate-400' : 'border-slate-200 bg-slate-100 text-slate-500'
+      }`}>
         <span>{language}</span>
         <button
           type="button"
           onClick={handleCopy}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 normal-case tracking-normal transition-colors text-slate-300 hover:bg-white/10"
+          className={`inline-flex items-center gap-1 rounded-md px-2 py-1 normal-case tracking-normal transition-colors ${
+            theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-slate-200'
+          }`}
           title="Copy code"
         >
           {copied ? <Check size={12} /> : <Copy size={12} />}
@@ -79,7 +87,9 @@ function CodeBlock({ inline, className, children }) {
         </button>
       </div>
       <pre className="overflow-x-auto p-3 custom-scrollbar">
-        <code className="font-mono text-[11px] leading-5 text-slate-200">
+        <code className={`font-mono text-[11px] leading-5 ${
+          theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
+        }`}>
           {code}
         </code>
       </pre>
@@ -87,9 +97,11 @@ function CodeBlock({ inline, className, children }) {
   );
 }
 
-function AssistantMessage({ content }) {
+function AssistantMessage({ content, theme }) {
   return (
-    <div className="prose prose-sm prose-invert max-w-none break-words prose-p:my-2 prose-headings:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-strong:text-inherit">
+    <div className={`prose prose-sm max-w-none break-words prose-p:my-2 prose-headings:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-strong:text-inherit ${
+      theme === 'dark' ? 'prose-invert' : 'prose-slate'
+    }`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -101,7 +113,7 @@ function AssistantMessage({ content }) {
           },
           code({ inline, className, children }) {
             return (
-              <CodeBlock inline={inline} className={className}>
+              <CodeBlock inline={inline} className={className} theme={theme}>
                 {children}
               </CodeBlock>
             );
@@ -381,7 +393,7 @@ export default function NeuraPanel({ theme }) {
       <div className={`w-12 border ${theme === 'dark' ? 'bg-[#0d1117] border-white/10 shadow-black/50' : 'bg-slate-200/80 border-slate-300 shadow-slate-200/50'} rounded-xl shadow-lg flex flex-col items-center py-4 shrink-0 transition-all duration-300 overflow-hidden`}>
         <button
           onClick={() => setIsOpen(true)}
-          className={`relative flex items-center justify-center w-8 h-8 rounded-lg outline-none overflow-hidden group border border-transparent hover:border-fuchsia-500/50 transition-all shadow-lg ${theme === 'dark' ? 'shadow-fuchsia-900/20' : 'shadow-fuchsia-200/50 cursor-pointer'}`}
+          className={`relative flex items-center justify-center w-8 h-8 rounded-lg outline-none overflow-hidden group border border-transparent hover:border-indigo-500/50 transition-all shadow-lg ${theme === 'dark' ? 'shadow-indigo-900/20' : 'shadow-indigo-200/50 cursor-pointer'}`}
           title="Open Neura AI Assistant"
         >
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 to-indigo-600 opacity-80 group-hover:opacity-100 transition-opacity" />
@@ -395,13 +407,15 @@ export default function NeuraPanel({ theme }) {
     <aside
       ref={panelRef}
       style={{ width: `${panelWidth}px` }}
-      className="relative flex flex-col transition-[width] duration-200 shrink-0 rounded-2xl overflow-hidden shadow-xl min-w-0 bg-[#0d0d17] border-white/10 shadow-black/50 text-slate-300 border"
+      className={`relative flex flex-col transition-[width] duration-200 shrink-0 rounded-2xl overflow-hidden shadow-xl min-w-0 border ${
+        theme === 'dark' ? 'bg-[#0d0d17] border-white/10 shadow-black/50 text-slate-300' : 'bg-slate-50 border-slate-200 shadow-slate-200/50 text-slate-700'
+      }`}
     >
       <button
         type="button"
         aria-label="Resize Neura panel"
         onPointerDown={startResizing}
-        className="absolute left-0 top-0 z-20 h-full w-3 -translate-x-1/2 cursor-col-resize hover:bg-white/5"
+        className={`absolute left-0 top-0 z-20 h-full w-3 -translate-x-1/2 cursor-col-resize hover:bg-white/5`}
       >
         <span className="sr-only">Resize</span>
       </button>
@@ -409,22 +423,28 @@ export default function NeuraPanel({ theme }) {
       {/* Main Container */}
       <div className="flex flex-col w-full h-full relative font-sans">
         {/* Header Section */}
-        <header className="px-4 py-3 border-b border-white/5 bg-[#12121f] flex items-center justify-between shrink-0">
+        <header className={`px-4 py-3 border-b flex items-center justify-between shrink-0 ${
+          theme === 'dark' ? 'border-white/5 bg-[#12121f]' : 'border-slate-200 bg-white'
+        }`}>
           <div className="flex items-center gap-3">
             <div className="relative">
               <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-[#12121f] rounded-full"></div>
+              <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 rounded-full ${
+                theme === 'dark' ? 'border-[#12121f]' : 'border-white'
+              }`}></div>
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-white tracking-tight">Neura AI</h2>
+              <h2 className={`text-sm font-semibold tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Neura AI</h2>
             </div>
           </div>
           
           <div className="flex items-center gap-1">
             <button 
-              className="p-1.5 hover:bg-white/5 rounded-md transition-colors text-slate-400" 
+              className={`p-1.5 rounded-md transition-colors ${
+                theme === 'dark' ? 'hover:bg-white/5 text-slate-400' : 'hover:bg-slate-100 text-slate-500'
+              }`} 
               title="New Chat"
               onClick={handleNewChat}
               disabled={isCreatingConversation || isSending}
@@ -433,7 +453,9 @@ export default function NeuraPanel({ theme }) {
             </button>
             <button
                onClick={() => setIsOpen(false)}
-               className="p-1.5 hover:bg-white/5 rounded-md transition-colors text-slate-400"
+               className={`p-1.5 rounded-md transition-colors ${
+                theme === 'dark' ? 'hover:bg-white/5 text-slate-400' : 'hover:bg-slate-100 text-slate-500'
+              }`}
                title="Close Panel"
             >
                <ChevronRight className="w-4 h-4" />
@@ -442,32 +464,40 @@ export default function NeuraPanel({ theme }) {
         </header>
 
         {/* Action Quick-Tabs */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 bg-[#0d0d17]/50 overflow-x-auto no-scrollbar shrink-0">
+        <div className={`flex items-center gap-2 px-4 py-2 border-b overflow-x-auto no-scrollbar shrink-0 ${
+          theme === 'dark' ? 'border-white/5 bg-[#0d0d17]/50' : 'border-slate-200 bg-slate-50/50'
+        }`}>
           <button onClick={() => handleSend("Explain the current code")} disabled={isSending} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-md text-xs whitespace-nowrap hover:bg-indigo-500/20 transition-all">
             <Zap className="w-3 h-3" />
             Explain Code
           </button>
-          <button onClick={() => handleSend("Find bugs in the current code")} disabled={isSending} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 text-slate-400 border border-white/10 rounded-md text-xs whitespace-nowrap hover:bg-white/10 transition-all">
+          <button onClick={() => handleSend("Find bugs in the current code")} disabled={isSending} className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-md text-xs whitespace-nowrap transition-all ${
+            theme === 'dark' ? 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+          }`}>
             <Bug className="w-3 h-3" />
             Find Bugs
           </button>
-          <button onClick={() => handleSend("Refactor the current code")} disabled={isSending} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 text-slate-400 border border-white/10 rounded-md text-xs whitespace-nowrap hover:bg-white/10 transition-all">
+          <button onClick={() => handleSend("Refactor the current code")} disabled={isSending} className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-md text-xs whitespace-nowrap transition-all ${
+            theme === 'dark' ? 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+          }`}>
             <Code2 className="w-3 h-3" />
             Refactor
           </button>
         </div>
 
         {/* History / Chat Toggle */}
-        <div className="flex px-4 py-2 text-[11px] font-medium text-slate-500 uppercase tracking-wider border-b border-white/5 shrink-0">
+        <div className={`flex px-4 py-2 text-[11px] font-medium uppercase tracking-wider border-b shrink-0 ${
+          theme === 'dark' ? 'text-slate-500 border-white/5' : 'text-slate-400 border-slate-200'
+        }`}>
           <button 
             onClick={() => setActiveTab('chat')}
-            className={`mr-4 pb-1 border-b-2 transition-all ${activeTab === 'chat' ? 'border-indigo-500 text-white' : 'border-transparent hover:text-slate-300'}`}
+            className={`mr-4 pb-1 border-b-2 transition-all ${activeTab === 'chat' ? 'border-indigo-500 text-indigo-500' : 'border-transparent hover:text-slate-300'}`}
           >
             Chat
           </button>
           <button 
             onClick={() => setActiveTab('history')}
-            className={`pb-1 border-b-2 transition-all ${activeTab === 'history' ? 'border-indigo-500 text-white' : 'border-transparent hover:text-slate-300'}`}
+            className={`pb-1 border-b-2 transition-all ${activeTab === 'history' ? 'border-indigo-500 text-indigo-500' : 'border-transparent hover:text-slate-300'}`}
           >
             History
           </button>
@@ -487,7 +517,9 @@ export default function NeuraPanel({ theme }) {
                 return (
                  <div key={msg._id || idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300 w-full`}>
                    <div className="flex items-center gap-2 mb-1.5 px-1">
-                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
+                     <span className={`text-[10px] font-bold uppercase tracking-tighter ${
+                        theme === 'dark' ? 'text-slate-500' : 'text-slate-400'
+                     }`}>
                        {msg.role === 'user' ? 'You' : 'Neura AI'}
                      </span>
                      <span className="text-[10px] text-slate-600">{timeStr}</span>
@@ -495,17 +527,21 @@ export default function NeuraPanel({ theme }) {
                    
                    <div className={`max-w-[90%] px-3.5 py-2.5 rounded-xl text-sm leading-relaxed shadow-sm break-words overflow-hidden ${
                      msg.role === 'user' 
-                       ? 'bg-indigo-600/90 text-white rounded-tr-none' 
-                       : 'bg-[#1a1a2e] text-slate-200 border border-white/5 rounded-tl-none'
+                       ? 'bg-indigo-600 text-white rounded-tr-none' 
+                       : theme === 'dark' 
+                         ? 'bg-[#1a1a2e] text-slate-200 border border-white/5 rounded-tl-none'
+                         : 'bg-white text-slate-800 border border-slate-200 shadow-sm rounded-tl-none'
                    }`}>
                      {msg.role === 'user' ? (
                        <div className="whitespace-pre-wrap">{msg.content}</div>
                      ) : (
-                       <AssistantMessage content={msg.content} />
+                       <AssistantMessage content={msg.content} theme={theme} />
                      )}
                      
                      {msg.role === 'assistant' && msg._id === 'welcome' && (activeFile || files.length > 0) && (
-                       <div className="mt-3 p-2 bg-black/30 rounded border border-white/5 font-mono text-[11px] text-indigo-300">
+                       <div className={`mt-3 p-2 rounded border font-mono text-[11px] ${
+                          theme === 'dark' ? 'bg-black/30 border-white/5 text-indigo-300' : 'bg-indigo-50 border-indigo-100 text-indigo-600'
+                       }`}>
                          <div className="flex items-center justify-between opacity-60">
                            <span>Context: {activeFile ? activeFile.name : 'Workspace'}</span>
                            <Terminal className="w-3 h-3" />
@@ -516,7 +552,9 @@ export default function NeuraPanel({ theme }) {
                    
                    {msg.role === 'assistant' && (
                      <div className="flex gap-2 mt-2 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                       <button onClick={() => { navigator.clipboard.writeText(msg.content) }} className="p-1 hover:bg-white/5 rounded text-slate-500 hover:text-slate-300" title="Copy to clipboard">
+                       <button onClick={() => { navigator.clipboard.writeText(msg.content) }} className={`p-1 rounded transition-colors ${
+                          theme === 'dark' ? 'hover:bg-white/5 text-slate-500 hover:text-slate-300' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'
+                       }`} title="Copy to clipboard">
                          <Copy className="w-3 h-3" />
                        </button>
                      </div>
@@ -527,11 +565,15 @@ export default function NeuraPanel({ theme }) {
               {isSending && (
                 <div className="flex flex-col items-start group animate-in fade-in slide-in-from-bottom-2 duration-300 w-full">
                   <div className="flex items-center gap-2 mb-1.5 px-1">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
+                    <span className={`text-[10px] font-bold uppercase tracking-tighter ${
+                        theme === 'dark' ? 'text-slate-500' : 'text-slate-400'
+                    }`}>
                       Neura AI
                     </span>
                   </div>
-                  <div className="max-w-[90%] px-4 py-3 rounded-xl border border-white/5 bg-[#1a1a2e] text-slate-200 rounded-tl-none text-[11px]">
+                  <div className={`max-w-[90%] px-4 py-3 rounded-xl border rounded-tl-none text-[11px] ${
+                    theme === 'dark' ? 'bg-[#1a1a2e] border-white/5 text-slate-200' : 'bg-white border-slate-200 text-slate-700 shadow-sm'
+                  }`}>
                     <div className="flex items-center gap-2">
                        <LoaderCircle size={13} className="animate-spin text-indigo-400" />
                        <span>Neura is thinking...</span>
@@ -562,22 +604,26 @@ export default function NeuraPanel({ theme }) {
                     <div key={item._id} className="relative group/item">
                       <button 
                          onClick={() => handleLoadConversation(item._id)}
-                         className={`w-full flex items-center justify-between p-2.5 pr-10 rounded-lg text-left transition-colors ${
-                           isActive ? 'bg-indigo-500/10 border border-indigo-500/20' : 'hover:bg-white/5 border border-transparent'
+                         className={`w-full flex items-center justify-between p-2.5 pr-10 rounded-lg text-left transition-colors border ${
+                           isActive 
+                             ? 'bg-indigo-500/10 border-indigo-500/20' 
+                             : theme === 'dark' 
+                               ? 'hover:bg-white/5 border-transparent' 
+                               : 'hover:bg-slate-100 border-transparent'
                          }`}
                       >
                         <div className="flex items-center gap-3 truncate">
                           <History className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-400' : 'text-slate-600 group-hover/item:text-indigo-400'}`} />
-                          <span className={`text-sm truncate ${isActive ? 'text-indigo-200' : 'text-slate-400 group-hover/item:text-slate-200'}`}>{item.title}</span>
+                          <span className={`text-sm truncate ${isActive ? 'text-indigo-500 font-medium' : theme === 'dark' ? 'text-slate-400 group-hover/item:text-slate-200' : 'text-slate-600 group-hover/item:text-slate-900'}`}>{item.title}</span>
                         </div>
-                        <span className="text-[10px] text-slate-600 whitespace-nowrap group-hover/item:hidden transition-all shrink-0 ml-2">
+                        <span className="text-[10px] text-slate-500 whitespace-nowrap group-hover/item:hidden transition-all shrink-0 ml-2">
                            {formatConversationTime(item.updatedAt)}
                         </span>
                       </button>
                       
                       <button 
                         onClick={(e) => deleteHistoryItem(e, item._id)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 opacity-0 group-hover/item:opacity-100 hover:bg-red-500/10 text-slate-600 hover:text-red-400 rounded-md transition-all z-10"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 opacity-0 group-hover/item:opacity-100 hover:bg-red-500/10 text-slate-500 hover:text-red-500 rounded-md transition-all z-10"
                         title="Delete chat"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -597,7 +643,9 @@ export default function NeuraPanel({ theme }) {
 
         {/* Footer Input Section */}
         {activeTab === 'chat' && (
-          <footer className="p-4 bg-[#12121f] border-t border-white/5 shrink-0 z-10 relative">
+          <footer className={`p-4 border-t shrink-0 z-10 relative ${
+            theme === 'dark' ? 'bg-[#12121f] border-white/5' : 'bg-white border-slate-200'
+          }`}>
             <div className="relative group">
               <textarea
                 value={inputValue}
@@ -610,21 +658,25 @@ export default function NeuraPanel({ theme }) {
                 }}
                 maxLength={4000}
                 placeholder="Ask for fixes, architecture advice..."
-                className="w-full min-h-[100px] bg-[#0d0d17] border border-white/10 rounded-xl p-3 pt-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all resize-none shadow-inner"
+                className={`w-full min-h-[100px] border rounded-xl p-3 pt-2 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all resize-none shadow-inner ${
+                  theme === 'dark' ? 'bg-[#0d0d17] border-white/10 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'
+                }`}
               />
               
               <div className="absolute bottom-3 left-3 flex items-center gap-3">
-                <button className="text-slate-600 hover:text-slate-400 transition-colors">
+                <button className="text-slate-500 hover:text-slate-400 transition-colors">
                   <ChevronDown className="w-4 h-4" />
                 </button>
-                <div className="h-4 w-px bg-white/10"></div>
-                <span className="text-[10px] font-medium text-slate-600">{inputValue.trim().length}/4000</span>
+                <div className={`h-4 w-px ${theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'}`}></div>
+                <span className="text-[10px] font-medium text-slate-500">{inputValue.trim().length}/4000</span>
               </div>
 
               <div className="absolute bottom-3 right-3 flex items-center gap-1">
                 <button 
                   onClick={() => setInputValue('')}
-                  className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-all"
+                  className={`p-1.5 hover:bg-red-400/10 rounded-md transition-all ${
+                    theme === 'dark' ? 'text-slate-500 hover:text-red-400' : 'text-slate-400 hover:text-red-500'
+                  }`}
                   title="Clear input"
                 >
                   <Eraser className="w-4 h-4" />
@@ -635,7 +687,7 @@ export default function NeuraPanel({ theme }) {
                   className={`flex items-center justify-center p-2 rounded-lg transition-all ${
                     inputValue.trim() && !isSending
                       ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 scale-100 hover:scale-105 active:scale-95' 
-                      : 'bg-white/5 text-slate-700 cursor-not-allowed'
+                      : theme === 'dark' ? 'bg-white/5 text-slate-700 cursor-not-allowed' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
                   }`}
                 >
                   <Send className="w-4 h-4" />
@@ -644,7 +696,9 @@ export default function NeuraPanel({ theme }) {
             </div>
             
             <div className="mt-3 flex items-center justify-center gap-2">
-              <p className="text-[10px] text-slate-600 flex items-center gap-1 overflow-hidden max-w-full">
+              <p className={`text-[10px] flex items-center gap-1 overflow-hidden max-w-full ${
+                theme === 'dark' ? 'text-slate-600' : 'text-slate-500'
+              }`}>
                 <Check className="w-3 h-3 text-green-500/50 shrink-0" />
                 <span className="truncate">Context: {activeFile ? activeFile.name : 'Current workspace'}</span>
               </p>

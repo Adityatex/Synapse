@@ -63,6 +63,9 @@ function cloneFiles(files = []) {
   return files.map((file) => ({
     id: file.id,
     name: file.name,
+    type: file.type || 'file',
+    parentId: file.parentId || null,
+    order: typeof file.order === 'number' ? file.order : 0,
     content: file.content ?? '',
     updatedAt: file.updatedAt ?? Date.now(),
   }));
@@ -338,6 +341,9 @@ async function loadRoomFromDB(roomId) {
     const files = dbRoom.files && dbRoom.files.length > 0 ? dbRoom.files.map(f => ({
       id: f.id,
       name: f.name,
+      type: f.type || 'file',
+      parentId: f.parentId || null,
+      order: typeof f.order === 'number' ? f.order : 0,
       content: f.content || '',
       updatedAt: f.updatedAt ? new Date(f.updatedAt).getTime() : Date.now()
     })) : cloneFiles([{ ...DEFAULT_ROOM_FILE, updatedAt: Date.now() }]);

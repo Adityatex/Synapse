@@ -24,6 +24,9 @@ function getStructureSignature({ files = [] }) {
     files: files.map((file) => ({
       id: file.id,
       name: file.name,
+      type: file.type,
+      parentId: file.parentId,
+      order: file.order,
     })),
   });
 }
@@ -54,6 +57,7 @@ function RoomSession({ roomId }) {
   const [chatMessages, setChatMessages] = useState([]);
   const [typingUsers, setTypingUsers] = useState({});
   const [fileLocks, setFileLocks] = useState({});
+  const [roomName, setRoomName] = useState('');
   const [lockNotice, setLockNotice] = useState('');
   const socketRef = useRef(null);
   const suppressStructureSyncRef = useRef(null);
@@ -128,9 +132,12 @@ function RoomSession({ roomId }) {
 
   useEffect(() => {
     latestRoomStateRef.current = {
-      files: files.map(({ id, name, content, updatedAt }) => ({
+      files: files.map(({ id, name, type, parentId, order, content, updatedAt }) => ({
         id,
         name,
+        type,
+        parentId,
+        order,
         content,
         updatedAt,
       })),
@@ -231,6 +238,7 @@ function RoomSession({ roomId }) {
 
     const handleRoomJoined = ({ room, sharedDocs, fileLocks: initialFileLocks, participant }) => {
       suppressStructureSyncRef.current = getStructureSignature(room);
+      setRoomName(room.roomName || '');
       replaceState(room);
       applySharedDocs(sharedDocs, room.files);
       setFileLocks(initialFileLocks || {});
@@ -610,14 +618,15 @@ function RoomSession({ roomId }) {
 
   return (
     <div className={`flex flex-col h-screen ${t.bg} ${t.text} font-sans select-none overflow-hidden transition-colors duration-300`} data-theme={theme}>
-      <Toolbar
-        theme={theme}
-        onToggleTheme={toggleTheme}
+      <Toolbar 
+        theme={theme} 
+        onToggleTheme={toggleTheme} 
         setOutput={setOutput}
-        onSaveVersion={handleSaveVersion}
         roomId={roomId}
+        roomName={roomName}
         copied={copied}
         onCopyInvite={handleCopyInvite}
+        onSaveVersion={handleSaveVersion}
         currentUser={user}
       />
 

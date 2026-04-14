@@ -25,6 +25,7 @@ export default function Toolbar({
   setOutput, 
   onSaveVersion,
   roomId,
+  roomName,
   copied,
   onCopyInvite,
   currentUser
@@ -185,7 +186,7 @@ export default function Toolbar({
 
             {isStdinOpen && (
               <div className={`absolute top-full left-0 mt-1 w-72 ${theme === 'dark' ? 'bg-[#161b22]' : 'bg-white'} border ${t.border} rounded-md shadow-2xl p-3 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-150`}>
-                <div className={`flex justify-between items-center text-[10px] font-bold ${t.textMuted} uppercase`}>
+                <div className={`flex justify-between items-center text-[11px] font-bold ${t.textMuted} uppercase`}>
                   Standard Input
                   <X size={12} className="cursor-pointer hover:text-indigo-500" onClick={() => setIsStdinOpen(false)} />
                 </div>
@@ -212,12 +213,18 @@ export default function Toolbar({
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
-        <div className={`hidden lg:flex items-center gap-2 px-3 py-1 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-slate-100'} rounded border ${t.border}`}>
-          <span className={`text-[10px] ${t.textMuted} font-mono uppercase`}>Room:</span>
-          <span className="text-xs font-mono text-indigo-500 font-bold tracking-wide">{roomId}</span>
+        <div className={`hidden lg:flex items-center gap-3 px-3 py-1 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-slate-100'} rounded border ${t.border}`}>
+          <div className="flex flex-col items-start leading-tight">
+            <span className={`text-[11px] font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'} truncate max-w-[150px] uppercase tracking-wide`}>
+              {roomName || 'Untitled Project'}
+            </span>
+            <span className={`text-[10px] ${t.textMuted} font-mono uppercase tracking-tighter`}>
+              ID: {roomId}
+            </span>
+          </div>
           <button 
             onClick={onCopyInvite}
-            className={`ml-2 p-1 hover:bg-white/5 rounded cursor-pointer transition-colors ${t.textMuted} hover:text-indigo-500`}
+            className={`ml-1 p-1 hover:bg-white/5 rounded cursor-pointer transition-colors ${t.textMuted} hover:text-indigo-500`}
             title="Copy invite link"
           >
             {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
@@ -230,7 +237,7 @@ export default function Toolbar({
           <Share2 size={14} />
           Invite
         </button>
-        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-[10px] font-bold text-white border-2 border-white/20 select-none">
+        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-[11px] font-bold text-white border-2 border-white/20 select-none">
           {getInitials(currentUser?.name)}
         </div>
       </div>

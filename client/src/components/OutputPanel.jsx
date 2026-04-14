@@ -83,7 +83,7 @@ export default function OutputPanel({ theme, output }) {
             <button 
               key={tab}
               onClick={() => { setActiveTab(tab); setIsOutputExpanded(true); }}
-              className={`text-[10px] font-bold uppercase tracking-widest h-full flex items-center gap-2 border-b-2 transition-all cursor-pointer ${activeTab === tab && isOutputExpanded ? 'border-indigo-500 text-indigo-500' : `border-transparent ${t.textMuted} hover:text-indigo-500`}`}
+              className={`text-[11px] font-bold uppercase tracking-widest h-full flex items-center gap-2 border-b-2 transition-all cursor-pointer ${activeTab === tab && isOutputExpanded ? 'border-indigo-500 text-indigo-500' : `border-transparent ${t.textMuted} hover:text-indigo-500`}`}
             >
               {tab === 'output' && <Terminal size={12} />}
               {tab === 'errors' && <AlertCircle size={12} />}

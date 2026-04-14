@@ -203,6 +203,7 @@ function createSocketServer(httpServer) {
       socket.emit('room-joined', {
         room: {
           roomId: snapshot.roomId,
+          roomName: snapshot.roomName,
           files: snapshot.files,
           activeFileId: snapshot.activeFileId,
           openTabs: snapshot.openTabs,
@@ -485,7 +486,15 @@ function createSocketServer(httpServer) {
           { roomId },
           {
             $set: { 
-              files: snapshot.files.map(f => ({ id: f.id, name: f.name, type: f.type || 'file', parentId: f.parentId || null, order: typeof f.order === 'number' ? f.order : 0, content: f.content, updatedAt: f.updatedAt })),
+              files: snapshot.files.map(f => ({ 
+                id: f.id, 
+                name: f.name, 
+                type: f.type || 'file', 
+                parentId: f.parentId || null, 
+                order: typeof f.order === 'number' ? f.order : 0, 
+                content: f.content, 
+                updatedAt: f.updatedAt 
+              })),
               lastUpdated: Date.now()
             }
           }

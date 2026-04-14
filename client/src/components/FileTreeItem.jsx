@@ -225,7 +225,7 @@ export default function FileTreeItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`relative flex items-center justify-between group text-xs cursor-pointer select-none
+      className={`relative flex items-center justify-between group text-[13px] cursor-pointer select-none
         transition-colors duration-75
         ${bgClass}
         ${isDragging ? 'z-10' : ''}
@@ -243,7 +243,7 @@ export default function FileTreeItem({
       
       {/* Content with proper indentation */}
       <div 
-        className="flex items-center gap-1.5 py-[3px] pr-4 truncate min-w-0 flex-1"
+        className="flex items-center gap-1.5 py-[4px] pr-4 truncate min-w-0 flex-1"
         style={{ paddingLeft: `${depth * 16 + 10}px` }}
       >
         {/* Folder chevron or spacer */}
@@ -303,7 +303,7 @@ export default function FileTreeItem({
                 onBlur={() => setTimeout(commitRename, 50)}
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
-                className={`flex-1 min-w-0 text-xs outline-none py-0.5 px-1 rounded ${
+                className={`flex-1 min-w-0 text-[13px] outline-none py-0 px-1 rounded ${
                   theme === 'dark' 
                     ? 'bg-[#1a1f2e] text-indigo-400 border border-indigo-500/50' 
                     : 'bg-white text-indigo-600 border border-indigo-500/50'

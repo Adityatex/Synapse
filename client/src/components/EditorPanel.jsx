@@ -377,7 +377,7 @@ export default function EditorPanel({
           options={{
             readOnly: isReadOnly,
             domReadOnly: isReadOnly,
-            fontSize: 14,
+            fontSize: 15,
             fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
             fontLigatures: true,
             minimap: { enabled: true, scale: 1 },

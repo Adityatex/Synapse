@@ -70,7 +70,7 @@ function CodeSnippet({ code, theme }) {
           {copied ? <Check size={12} /> : <Copy size={12} />}
         </button>
       </div>
-      <pre className={`p-2.5 text-[11px] font-mono overflow-x-auto ${
+      <pre className={`p-2.5 text-[12px] font-mono overflow-x-auto ${
         theme === 'dark' ? 'bg-[#0d1117] text-slate-300' : 'bg-slate-100 text-slate-800'
       }`}>
         <code>{code}</code>
@@ -408,7 +408,7 @@ export default function ChatPanel({
                   return (
                     <button key={emoji}
                       onClick={() => getSocket?.()?.emit('react-chat-message', { messageId: msg._id, emoji })}
-                      className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] border cursor-pointer transition-colors ${
+                      className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] border cursor-pointer transition-colors ${
                         iReacted
                           ? 'border-indigo-500/50 bg-indigo-500/10'
                           : theme === 'dark' ? 'border-white/10 bg-white/5 hover:bg-white/10' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'

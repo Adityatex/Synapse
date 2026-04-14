@@ -194,25 +194,25 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
       // Also prevent dropping a folder into itself
       if (newParentId === id) return prev;
 
-      const updated = prev.map(f => f.id === id ? { ...f, parentId: newParentId } : f);
+      const updated = prev.map(f => f.id === id ? { ...f, parentId: newParentId, updatedAt: Date.now() } : f);
       
-      // Sort children to re-apply order sequentially
+      // Get all children of the new parent (excluding the moving item)
       const siblings = updated.filter(f => f.parentId === newParentId && f.id !== id).sort((a, b) => a.order - b.order);
       const movingItem = updated.find(f => f.id === id);
       
-      const clampedOrder = Math.max(0, Math.min(newOrder, siblings.length));
-      siblings.splice(clampedOrder, 0, movingItem);
+      // Target position
+      const targetIndex = Math.max(0, Math.min(newOrder, siblings.length));
+      siblings.splice(targetIndex, 0, movingItem);
       
-      // Build a map of id -> new order (immutable)
-      const orderMap = new Map();
+      // Re-assign sequential orders to all siblings
+      const finalOrderMap = new Map();
       siblings.forEach((sib, index) => {
-        orderMap.set(sib.id, index);
+        finalOrderMap.set(sib.id, index);
       });
       
-      // Return new array with updated orders (immutable)
       return updated.map(f => {
-        if (orderMap.has(f.id)) {
-          return { ...f, order: orderMap.get(f.id) };
+        if (finalOrderMap.has(f.id)) {
+          return { ...f, order: finalOrderMap.get(f.id) };
         }
         return f;
       });

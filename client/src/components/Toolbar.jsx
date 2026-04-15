@@ -30,6 +30,7 @@ export default function Toolbar({
   copied,
   onCopyInvite,
   onExitRoom,
+  onExit,
   currentUser
 }) {
   const { activeFile, renameFile } = useFiles();
@@ -244,10 +245,10 @@ export default function Toolbar({
             Invite
           </button>
         )}
-        {showRoomControls && (
+        {(showRoomControls || onExit) && (
           <button
-            onClick={onExitRoom}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs font-medium transition-colors ${
+            onClick={showRoomControls ? onExitRoom : onExit}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs font-medium transition-colors cursor-pointer ${
               theme === 'dark'
                 ? 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 text-red-200'
                 : 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700'

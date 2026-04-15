@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FileProvider } from '../contexts/FileContext';
 import Sidebar from '../components/Sidebar';
 import TabBar from '../components/TabBar';
@@ -10,6 +11,8 @@ import NeuraPanel from '../components/NeuraPanel';
 import { readStorage, writeStorage } from '../utils/storage';
 
 function EditorPage() {
+  const navigate = useNavigate();
+
   const [theme, setTheme] = useState(() => {
     return readStorage('synapse-theme') || 'dark';
   });
@@ -29,6 +32,10 @@ function EditorPage() {
     writeStorage('synapse-theme', newTheme);
   };
 
+  const handleExit = useCallback(() => {
+    navigate('/dashboard');
+  }, [navigate]);
+
   return (
     <FileProvider>
       <div
@@ -40,6 +47,7 @@ function EditorPage() {
           theme={theme}
           onToggleTheme={toggleTheme}
           setOutput={setOutput}
+          onExit={handleExit}
         />
 
         {/* Main content area */}

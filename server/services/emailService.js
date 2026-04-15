@@ -6,8 +6,27 @@ function getMailerConfig() {
   const user = process.env.GMAIL_USER || process.env.EMAIL_USER;
   const pass = process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
   const from = process.env.EMAIL_FROM || user || 'mock@synapse.local';
+  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = Number(process.env.SMTP_PORT || 587);
+  const secure = String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
+  const connectionTimeout = Number(process.env.SMTP_CONNECTION_TIMEOUT || 30000);
+  const greetingTimeout = Number(process.env.SMTP_GREETING_TIMEOUT || 30000);
+  const socketTimeout = Number(process.env.SMTP_SOCKET_TIMEOUT || 30000);
+  const requireTls = String(process.env.SMTP_REQUIRE_TLS || 'true').toLowerCase() === 'true';
 
-  return { user: user || 'mock', pass, from, isMocked: !user || !pass };
+  return {
+    user: user || 'mock',
+    pass,
+    from,
+    host,
+    port,
+    secure,
+    connectionTimeout,
+    greetingTimeout,
+    socketTimeout,
+    requireTls,
+    isMocked: !user || !pass,
+  };
 }
 
 function getTransporter() {
@@ -15,7 +34,7 @@ function getTransporter() {
     return cachedTransporter;
   }
 
-  const { user, pass, isMocked } = getMailerConfig();
+  const { user, pass, host, port, secure, connectionTimeout, greetingTimeout, socketTimeout, requireTls, isMocked } = getMailerConfig();
 
   if (isMocked) {
     console.warn("WARNING: Email service not configured (GMAIL_USER/GMAIL_APP_PASSWORD missing). Falling back to logging OTPs to console.");
@@ -33,11 +52,17 @@ function getTransporter() {
   }
 
   cachedTransporter = nodemailer.createTransport({
-    service: 'gmail',
+    host,
+    port,
+    secure,
     auth: {
       user,
       pass,
     },
+    requireTLS: requireTls,
+    connectionTimeout,
+    greetingTimeout,
+    socketTimeout,
   });
 
   return cachedTransporter;

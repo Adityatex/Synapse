@@ -35,6 +35,10 @@ function getPublicAuthError(error, fallbackMessage) {
     return 'OTP email delivery is misconfigured on the server. Please update the Gmail app password in server/.env.';
   }
 
+  if (error?.code === 'ETIMEDOUT') {
+    return 'OTP email delivery timed out connecting to Gmail. Check Render outbound network access and SMTP settings.';
+  }
+
   if (/BadCredentials|Username and Password not accepted/i.test(error?.message || '')) {
     return 'OTP email delivery is misconfigured on the server. Please update the Gmail app password in server/.env.';
   }
@@ -88,7 +92,7 @@ async function createAndSendOtp({ email, purpose, pendingSignup, loginUserId }) 
     },
     {
       upsert: true,
-      new: true,
+      returnDocument: 'after',
       setDefaultsOnInsert: true,
     }
   );

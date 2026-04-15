@@ -581,6 +581,27 @@ function RoomSession({ roomId }) {
     }
   };
 
+  const handleExitRoom = useCallback(() => {
+    const socket = socketRef.current;
+
+    structureEmitterRef.current?.cancel?.();
+    localChangeEmitterRef.current?.cancel?.();
+
+    if (socket?.connected) {
+      if (roomReady) {
+        socket.emit('sync-room-state', latestRoomStateRef.current);
+      }
+      if (ownedLockRef.current) {
+        socket.emit('release-file-lock', { roomId, fileId: ownedLockRef.current });
+        ownedLockRef.current = null;
+      }
+      socket.emit('leave-room');
+      socket.disconnect();
+    }
+
+    navigate('/dashboard');
+  }, [navigate, roomId, roomReady]);
+
   const activeRemotePeers = useMemo(
     () =>
       Object.values(presence).filter(
@@ -631,6 +652,7 @@ function RoomSession({ roomId }) {
         roomName={roomName}
         copied={copied}
         onCopyInvite={handleCopyInvite}
+        onExitRoom={handleExitRoom}
         onSaveVersion={handleSaveVersion}
         currentUser={user}
       />

@@ -16,7 +16,8 @@ import {
   Sun,
   Moon,
   Copy,
-  Share2
+  Share2,
+  LogOut
 } from 'lucide-react';
 
 export default function Toolbar({ 
@@ -28,6 +29,7 @@ export default function Toolbar({
   roomName,
   copied,
   onCopyInvite,
+  onExitRoom,
   currentUser
 }) {
   const { activeFile, renameFile } = useFiles();
@@ -240,6 +242,21 @@ export default function Toolbar({
           >
             <Share2 size={14} />
             Invite
+          </button>
+        )}
+        {showRoomControls && (
+          <button
+            onClick={onExitRoom}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs font-medium transition-colors ${
+              theme === 'dark'
+                ? 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 text-red-200'
+                : 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700'
+            }`}
+            title="Exit session"
+            type="button"
+          >
+            <LogOut size={14} />
+            <span className="hidden sm:inline">Exit</span>
           </button>
         )}
         <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-[11px] font-bold text-white border-2 border-white/20 select-none">

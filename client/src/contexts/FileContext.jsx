@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { LANGUAGES, getLanguageByExtension } from '../utils/languageMap';
+import { readStorage, writeStorage } from '../utils/storage';
 
 const FileContext = createContext();
 
@@ -58,7 +59,7 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
     }
 
     try {
-      const saved = localStorage.getItem(storageKey);
+      const saved = readStorage(storageKey);
       if (saved) {
         return JSON.parse(saved).map(normalizeFile);
       }
@@ -89,7 +90,7 @@ export function FileProvider({ children, storageKey = STORAGE_KEY }) {
         content,
         updatedAt,
       }));
-      localStorage.setItem(storageKey, JSON.stringify(toSave));
+      writeStorage(storageKey, JSON.stringify(toSave));
     } catch (error) {
       console.error('Failed to save files:', error);
     }

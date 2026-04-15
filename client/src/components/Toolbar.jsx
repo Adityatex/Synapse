@@ -38,6 +38,7 @@ export default function Toolbar({
 
   const t = getThemeClasses(theme);
   const currentLang = activeFile ? getLanguageByExtension(activeFile.name) : LANGUAGES[0];
+  const showRoomControls = Boolean(roomId || onCopyInvite);
 
   const handleRun = useCallback(async () => {
     if (!activeFile || isRunning) return;
@@ -213,30 +214,34 @@ export default function Toolbar({
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
-        <div className={`hidden lg:flex items-center gap-3 px-3 py-1 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-slate-100'} rounded border ${t.border}`}>
-          <div className="flex flex-col items-start leading-tight">
-            <span className={`text-[11px] font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'} truncate max-w-[150px] uppercase tracking-wide`}>
-              {roomName || 'Untitled Project'}
-            </span>
-            <span className={`text-[10px] ${t.textMuted} font-mono uppercase tracking-tighter`}>
-              ID: {roomId}
-            </span>
+        {showRoomControls && (
+          <div className={`hidden lg:flex items-center gap-3 px-3 py-1 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-slate-100'} rounded border ${t.border}`}>
+            <div className="flex flex-col items-start leading-tight">
+              <span className={`text-[11px] font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'} truncate max-w-[150px] uppercase tracking-wide`}>
+                {roomName || 'Untitled Project'}
+              </span>
+              <span className={`text-[10px] ${t.textMuted} font-mono uppercase tracking-tighter`}>
+                ID: {roomId}
+              </span>
+            </div>
+            <button 
+              onClick={onCopyInvite}
+              className={`ml-1 p-1 hover:bg-white/5 rounded cursor-pointer transition-colors ${t.textMuted} hover:text-indigo-500`}
+              title="Copy invite link"
+            >
+              {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+            </button>
           </div>
+        )}
+        {showRoomControls && (
           <button 
             onClick={onCopyInvite}
-            className={`ml-1 p-1 hover:bg-white/5 rounded cursor-pointer transition-colors ${t.textMuted} hover:text-indigo-500`}
-            title="Copy invite link"
+            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded cursor-pointer text-xs font-medium transition-all shadow-lg shadow-indigo-900/20"
           >
-            {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+            <Share2 size={14} />
+            Invite
           </button>
-        </div>
-        <button 
-          onClick={onCopyInvite}
-          className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded cursor-pointer text-xs font-medium transition-all shadow-lg shadow-indigo-900/20"
-        >
-          <Share2 size={14} />
-          Invite
-        </button>
+        )}
         <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-[11px] font-bold text-white border-2 border-white/20 select-none">
           {getInitials(currentUser?.name)}
         </div>

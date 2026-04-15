@@ -110,7 +110,16 @@ function ContextMenu({ x, y, items, onClose, theme }) {
 }
 
 // ─── Main Sidebar ───────────────────────────────────────────────────────────
-export default function Sidebar({ theme, collaborators = [], chatMessages, typingUsers, getSocket, roomId, currentUser, fileLocks = {} }) {
+export default function Sidebar({
+  theme,
+  collaborators = [],
+  chatMessages = [],
+  typingUsers = [],
+  getSocket = () => null,
+  roomId,
+  currentUser,
+  fileLocks = {},
+}) {
   const { files, activeFileId, openTab, createFile, createFolder, moveItem, renameFile, deleteFile, toggleFolder, jumpToFileLine } = useFiles();
   const [activeSidebar, setActiveSidebar] = useState('explorer');
   const [selectedItemId, setSelectedItemId] = useState(null);

@@ -1,3 +1,5 @@
+import { readStorage, removeStorage, writeStorage } from './storage';
+
 const TOKEN_KEY = 'synapse_auth_token';
 const AUTH_STORAGE_KEY = 'synapse_auth';
 
@@ -5,32 +7,32 @@ const AUTH_STORAGE_KEY = 'synapse_auth';
  * Get the stored JWT token
  */
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return readStorage(TOKEN_KEY);
 }
 
 /**
  * Store JWT token
  */
 export function setToken(token) {
-  localStorage.setItem(TOKEN_KEY, token);
+  writeStorage(TOKEN_KEY, token);
 }
 
 /**
  * Remove stored JWT token
  */
 export function removeToken() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(AUTH_STORAGE_KEY);
+  removeStorage(TOKEN_KEY);
+  removeStorage(AUTH_STORAGE_KEY);
 }
 
 export function setAuthSession(session) {
-  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  writeStorage(AUTH_STORAGE_KEY, JSON.stringify(session));
   setToken(session.token);
 }
 
 export function getAuthSession() {
   try {
-    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    const stored = readStorage(AUTH_STORAGE_KEY);
     return stored ? JSON.parse(stored) : null;
   } catch {
     return null;

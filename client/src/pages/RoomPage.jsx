@@ -16,6 +16,7 @@ import { getThemeClasses } from '../utils/theme';
 import { createCollaborationSocket } from '../services/socket';
 import { getRoom } from '../services/roomService';
 import { RoomYjsManager } from '../services/yjsRoom';
+import { readStorage, writeStorage } from '../utils/storage';
 
 const FILE_LOCK_RENEW_INTERVAL_MS = 15000;
 
@@ -36,7 +37,7 @@ function RoomSession({ roomId }) {
   const { user, logout } = useAuth();
   const { files, activeFileId, openTabs, updateContent, replaceState, replaceSharedFiles } = useFiles();
   const prevFilesRef = useRef([]);
-  const [theme, setTheme] = useState(() => localStorage.getItem('synapse-theme') || 'dark');
+  const [theme, setTheme] = useState(() => readStorage('synapse-theme') || 'dark');
   const [output, setOutput] = useState({
     stdout: '',
     stderr: '',
@@ -108,7 +109,7 @@ function RoomSession({ roomId }) {
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(nextTheme);
-    localStorage.setItem('synapse-theme', nextTheme);
+    writeStorage('synapse-theme', nextTheme);
   };
 
   const structureSignature = useMemo(

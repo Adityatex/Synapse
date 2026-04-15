@@ -19,6 +19,7 @@ import {
   LoaderCircle
 } from 'lucide-react';
 import { useFiles } from '../contexts/FileContext';
+import { readStorage, writeStorage } from '../utils/storage';
 import {
   chatWithNeura,
   createNeuraConversation,
@@ -134,7 +135,7 @@ export default function NeuraPanel({ theme }) {
   const messagesEndRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(() => {
-    const savedWidth = Number(localStorage.getItem(PANEL_WIDTH_KEY));
+    const savedWidth = Number(readStorage(PANEL_WIDTH_KEY));
     if (Number.isFinite(savedWidth) && savedWidth >= MIN_PANEL_WIDTH && savedWidth <= MAX_PANEL_WIDTH) {
       return savedWidth;
     }
@@ -153,7 +154,7 @@ export default function NeuraPanel({ theme }) {
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'history'
 
   useEffect(() => {
-    localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth));
+    writeStorage(PANEL_WIDTH_KEY, String(panelWidth));
   }, [panelWidth]);
 
   useEffect(() => {

@@ -7,10 +7,11 @@ import Toolbar from '../components/Toolbar';
 import OutputPanel from '../components/OutputPanel';
 import StatusBar from '../components/StatusBar';
 import NeuraPanel from '../components/NeuraPanel';
+import { readStorage, writeStorage } from '../utils/storage';
 
 function EditorPage() {
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('synapse-theme') || 'dark';
+    return readStorage('synapse-theme') || 'dark';
   });
 
   const [output, setOutput] = useState({
@@ -25,7 +26,7 @@ function EditorPage() {
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
-    localStorage.setItem('synapse-theme', newTheme);
+    writeStorage('synapse-theme', newTheme);
   };
 
   return (

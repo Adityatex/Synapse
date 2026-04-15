@@ -3,6 +3,7 @@ import {
   Send, Copy, Check, Pin, Reply, Pencil, Trash2,
   Search, X, CornerDownRight, SmilePlus, ChevronUp
 } from 'lucide-react';
+import { copyText } from '../utils/clipboard';
 
 // ─── URL / Link detection ────────────────────────────────────────────────────
 const URL_REGEX = /(https?:\/\/[^\s<]+)/g;
@@ -53,10 +54,12 @@ function RichText({ text }) {
 // ─── Code snippet with copy ──────────────────────────────────────────────────
 function CodeSnippet({ code, theme }) {
   const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    const didCopy = await copyText(code);
+    setCopied(didCopy);
+    if (didCopy) {
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
   return (
     <div className="relative group mt-1.5 rounded-md overflow-hidden border border-white/10">

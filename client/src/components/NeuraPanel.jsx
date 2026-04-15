@@ -27,6 +27,7 @@ import {
   getNeuraConversationHistory,
   deleteNeuraConversation
 } from '../services/aiService';
+import { copyText } from '../utils/clipboard';
 
 const PANEL_WIDTH_KEY = 'synapse-neura-width';
 const MIN_PANEL_WIDTH = 300;
@@ -59,7 +60,10 @@ function CodeBlock({ inline, className, children, theme }) {
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(code);
+      const didCopy = await copyText(code);
+      if (!didCopy) {
+        throw new Error('Copy failed');
+      }
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -553,7 +557,7 @@ export default function NeuraPanel({ theme }) {
                    
                    {msg.role === 'assistant' && (
                      <div className="flex gap-2 mt-2 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                       <button onClick={() => { navigator.clipboard.writeText(msg.content) }} className={`p-1 rounded transition-colors ${
+                       <button onClick={() => { copyText(msg.content); }} className={`p-1 rounded transition-colors ${
                           theme === 'dark' ? 'hover:bg-white/5 text-slate-500 hover:text-slate-300' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'
                        }`} title="Copy to clipboard">
                          <Copy className="w-3 h-3" />

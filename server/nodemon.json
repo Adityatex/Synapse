@@ -1,0 +1,15 @@
+{
+  "watch": [
+    "server.js",
+    "routes",
+    "models",
+    "middleware",
+    "services",
+    "socket",
+    ".env"
+  ],
+  "ext": "js,json,env",
+  "ignore": [
+    "debug.log"
+  ]
+}

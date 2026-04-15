@@ -33,6 +33,7 @@ import {
 } from '@dnd-kit/sortable';
 import FileTreeItem from './FileTreeItem';
 import ChatPanel from './ChatPanel';
+import { copyText } from '../utils/clipboard';
 
 // ─── Context Menu Component ─────────────────────────────────────────────────
 function ContextMenu({ x, y, items, onClose, theme }) {
@@ -323,7 +324,7 @@ export default function Sidebar({
     menuItems.push({
       label: 'Copy Name',
       icon: Copy,
-      action: () => navigator.clipboard?.writeText(item.name),
+      action: () => copyText(item.name),
     });
 
     setContextMenu({ x: e.clientX, y: e.clientY, items: menuItems });

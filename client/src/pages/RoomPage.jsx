@@ -16,6 +16,7 @@ import { getThemeClasses } from '../utils/theme';
 import { createCollaborationSocket } from '../services/socket';
 import { getRoom } from '../services/roomService';
 import { RoomYjsManager } from '../services/yjsRoom';
+import { copyText } from '../utils/clipboard';
 import { readStorage, writeStorage } from '../utils/storage';
 
 const FILE_LOCK_RENEW_INTERVAL_MS = 15000;
@@ -568,7 +569,10 @@ function RoomSession({ roomId }) {
     const inviteLink = `${publicAppUrl}/room/${roomId}`;
 
     try {
-      await navigator.clipboard.writeText(inviteLink);
+      const didCopy = await copyText(inviteLink);
+      if (!didCopy) {
+        throw new Error('Copy failed');
+      }
       setCopied(true);
       clearTimeout(copyTimerRef.current);
       copyTimerRef.current = setTimeout(() => setCopied(false), 1800);

@@ -1,6 +1,11 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
 
 let cachedTransporter = null;
+
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder(process.env.DNS_RESULT_ORDER || 'ipv4first');
+}
 
 function getMailerConfig() {
   const user = process.env.GMAIL_USER || process.env.EMAIL_USER;

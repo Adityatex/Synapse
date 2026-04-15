@@ -26,7 +26,6 @@
     "react-syntax-highlighter": "^16.1.1",
     "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.3",
-    "synapse-root": "file:..",
     "tailwindcss": "^4.2.2",
     "y-monaco": "^0.1.6",
     "y-protocols": "^1.0.7",

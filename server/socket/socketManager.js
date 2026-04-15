@@ -201,10 +201,16 @@ function releaseLocksForSocket(io, socket) {
 }
 
 function createSocketServer(httpServer) {
+  const allowedOrigins = (process.env.CORS_ORIGIN || process.env.CLIENT_URL || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   const io = new Server(httpServer, {
     cors: {
-      origin: '*',
+      origin: allowedOrigins.length > 0 ? allowedOrigins : true,
       methods: ['GET', 'POST'],
+      credentials: true,
     },
   });
 

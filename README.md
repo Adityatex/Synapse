@@ -29,6 +29,12 @@ OTP_MAX_ATTEMPTS=5
 
 You can copy the template from `server/.env.example`.
 
+For Render deployment, set these additional server variables:
+
+```env
+CORS_ORIGIN=https://your-vercel-app.vercel.app
+```
+
 If port `5000` is already in use on a machine, change the backend port in `server/.env` and set matching client values in `client/.env`:
 
 ```env
@@ -39,6 +45,14 @@ VITE_SOCKET_URL=http://localhost:5001
 ```
 
 You can copy the template from `client/.env.example`.
+
+For Vercel deployment, set these production client variables:
+
+```env
+VITE_API_URL=https://your-render-service.onrender.com/api
+VITE_SOCKET_URL=https://your-render-service.onrender.com
+VITE_PUBLIC_APP_URL=https://your-vercel-app.vercel.app
+```
 
 For cross-machine local collaboration, all users must connect to the same machine running the backend. Do not have each user run their own backend if they need to join the same room.
 
@@ -101,3 +115,9 @@ start.bat
 - Shared rooms are stored in server memory right now, so everyone must use the same running backend process to collaborate in one room.
 - Gmail OTP auth is enabled for both signup and login. Signup creates the account only after OTP verification, and login issues the JWT only after both password and OTP are verified.
 - For Gmail, use an App Password rather than your normal inbox password. The backend sends OTPs with Nodemailer and stores temporary OTP records in MongoDB with automatic expiry.
+
+## Deployment
+
+- Render backend: set the root directory to `server`, build command to `npm install`, and start command to `npm start`.
+- Vercel frontend: set the root directory to `client`; the root `vercel.json` enables React Router deep links.
+- Keep the backend and frontend URLs in sync across Render and Vercel env vars so API calls and Socket.IO connect to the deployed backend.

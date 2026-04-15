@@ -47,7 +47,7 @@ function getMailerConfig() {
 }
 
 function createSmtpTransport(config, override = {}) {
-  const host = override.host || config.host;
+  const hostSpec = override.host || config.host;
   const port = Number(override.port || config.port);
   const secure = typeof override.secure === 'boolean' ? override.secure : config.secure;
   const requireTls = typeof override.requireTls === 'boolean' ? override.requireTls : config.requireTls;
@@ -58,8 +58,8 @@ function createSmtpTransport(config, override = {}) {
       servername: tlsServername,
     };
 
-  return nodemailer.createTransport({
-    host,
+  const transportConfig = {
+    host: hostSpec,
     port,
     secure,
     auth: {
@@ -71,7 +71,13 @@ function createSmtpTransport(config, override = {}) {
     greetingTimeout: config.greetingTimeout,
     socketTimeout: config.socketTimeout,
     ...(tlsConfig ? { tls: tlsConfig } : {}),
-  });
+  };
+
+  if (!net.isIP(hostSpec)) {
+    transportConfig.connectionUrl = `smtp${secure ? 's' : ''}://${encodeURIComponent(config.user)}:${encodeURIComponent(config.pass)}@${hostSpec}:${port}`;
+  }
+
+  return nodemailer.createTransport(transportConfig);
 }
 
 async function resolveIpv4Host(host) {
@@ -168,13 +174,13 @@ async function tryAlternateSmtpRoutes({ config, mailOptions, firstError, email }
   throw latestError;
 }
 
-function getTransporter() {
+async function getTransporter() {
   if (cachedTransporter) {
     return cachedTransporter;
   }
 
   const config = getMailerConfig();
-  const { user, pass, isMocked } = config;
+  const { user, pass, isMocked, host } = config;
 
   if (isMocked) {
     console.warn("WARNING: Email service not configured (GMAIL_USER/GMAIL_APP_PASSWORD missing). Falling back to logging OTPs to console.");
@@ -191,13 +197,22 @@ function getTransporter() {
     return cachedTransporter;
   }
 
-  cachedTransporter = createSmtpTransport(config);
+  let resolvedHost = host;
+  if (!net.isIP(host)) {
+    const ipv4Addr = await resolveIpv4Host(host);
+    if (ipv4Addr) {
+      resolvedHost = ipv4Addr;
+      console.log(`Resolved SMTP host ${host} to IPv4: ${ipv4Addr}`);
+    }
+  }
+
+  cachedTransporter = createSmtpTransport(config, { host: resolvedHost, tlsServername: host });
 
   return cachedTransporter;
 }
 
 async function sendOtpEmail({ email, otp, purpose }) {
-  const transporter = getTransporter();
+  const transporter = await getTransporter();
   const mailerConfig = getMailerConfig();
   const { from, deliveryMode } = mailerConfig;
   const actionLabel = purpose === 'signup' ? 'complete your signup' : 'complete your login';

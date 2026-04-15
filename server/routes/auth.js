@@ -39,6 +39,10 @@ function getPublicAuthError(error, fallbackMessage) {
     return 'OTP email delivery timed out connecting to Gmail. Check Render outbound network access and SMTP settings.';
   }
 
+  if (error?.code === 'ENETUNREACH' || error?.code === 'EHOSTUNREACH' || error?.code === 'ESOCKET') {
+    return 'OTP email delivery could not reach Gmail from the server network. Check Render outbound SMTP access and IPv6/IPv4 routing.';
+  }
+
   if (/BadCredentials|Username and Password not accepted/i.test(error?.message || '')) {
     return 'OTP email delivery is misconfigured on the server. Please update the Gmail app password in server/.env.';
   }

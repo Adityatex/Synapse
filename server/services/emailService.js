@@ -3,6 +3,14 @@ const dns = require('dns');
 
 let cachedTransporter = null;
 const isProduction = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+const TRANSIENT_SMTP_ERROR_CODES = new Set([
+  'ETIMEDOUT',
+  'ESOCKET',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'ECONNECTION',
+  'ECONNREFUSED',
+]);
 
 if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder(process.env.DNS_RESULT_ORDER || 'ipv4first');
@@ -37,12 +45,44 @@ function getMailerConfig() {
   };
 }
 
+function createSmtpTransport(config, override = {}) {
+  const host = override.host || config.host;
+
+  return nodemailer.createTransport({
+    host,
+    port: config.port,
+    secure: config.secure,
+    auth: {
+      user: config.user,
+      pass: config.pass,
+    },
+    requireTLS: config.requireTls,
+    connectionTimeout: config.connectionTimeout,
+    greetingTimeout: config.greetingTimeout,
+    socketTimeout: config.socketTimeout,
+    tls: {
+      // Preserve certificate hostname verification when connecting to raw IPv4 address.
+      servername: config.host,
+    },
+  });
+}
+
+async function resolveIpv4Host(host) {
+  try {
+    const lookup = await dns.promises.lookup(host, { family: 4 });
+    return lookup?.address || null;
+  } catch {
+    return null;
+  }
+}
+
 function getTransporter() {
   if (cachedTransporter) {
     return cachedTransporter;
   }
 
-  const { user, pass, host, port, secure, connectionTimeout, greetingTimeout, socketTimeout, requireTls, isMocked } = getMailerConfig();
+  const config = getMailerConfig();
+  const { user, pass, isMocked } = config;
 
   if (isMocked) {
     console.warn("WARNING: Email service not configured (GMAIL_USER/GMAIL_APP_PASSWORD missing). Falling back to logging OTPs to console.");
@@ -59,26 +99,15 @@ function getTransporter() {
     return cachedTransporter;
   }
 
-  cachedTransporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: {
-      user,
-      pass,
-    },
-    requireTLS: requireTls,
-    connectionTimeout,
-    greetingTimeout,
-    socketTimeout,
-  });
+  cachedTransporter = createSmtpTransport(config);
 
   return cachedTransporter;
 }
 
 async function sendOtpEmail({ email, otp, purpose }) {
   const transporter = getTransporter();
-  const { from, deliveryMode } = getMailerConfig();
+  const mailerConfig = getMailerConfig();
+  const { from, deliveryMode } = mailerConfig;
   const actionLabel = purpose === 'signup' ? 'complete your signup' : 'complete your login';
   const expiryMinutes = process.env.OTP_EXPIRY_MINUTES || 10;
 
@@ -104,16 +133,33 @@ async function sendOtpEmail({ email, otp, purpose }) {
     await transporter.sendMail(mailOptions);
     return { delivered: true, mocked: false };
   } catch (error) {
+    const shouldRetryWithIpv4 =
+      TRANSIENT_SMTP_ERROR_CODES.has(error?.code) ||
+      /ENETUNREACH|ETIMEDOUT|Local \(:::\d+\)/i.test(error?.message || '');
+
+    if (shouldRetryWithIpv4 && !mailerConfig.isMocked) {
+      const ipv4Address = await resolveIpv4Host(mailerConfig.host);
+
+      if (ipv4Address) {
+        try {
+          const ipv4Transporter = createSmtpTransport(mailerConfig, { host: ipv4Address });
+          await ipv4Transporter.sendMail(mailOptions);
+          console.warn(
+            `WARNING: OTP SMTP fallback succeeded via IPv4 (${ipv4Address}) after ${error?.code || 'unknown'} for ${email}.`
+          );
+          return { delivered: true, mocked: false, retriedWithIpv4: true };
+        } catch (retryError) {
+          // Keep original error context and continue existing fallback/throw handling.
+          error = retryError;
+        }
+      }
+    }
+
     const fallbackEligible =
       !isProduction &&
       deliveryMode !== 'smtp' &&
       (error?.code === 'EAUTH' ||
-        error?.code === 'ETIMEDOUT' ||
-        error?.code === 'ESOCKET' ||
-        error?.code === 'ECONNECTION' ||
-        error?.code === 'ECONNREFUSED' ||
-        error?.code === 'ENETUNREACH' ||
-        error?.code === 'EHOSTUNREACH' ||
+        TRANSIENT_SMTP_ERROR_CODES.has(error?.code) ||
         /BadCredentials|Username and Password not accepted/i.test(error?.message || ''));
 
     if (!fallbackEligible) {

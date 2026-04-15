@@ -5,6 +5,7 @@ import { executeCode } from '../services/api';
 import { getThemeClasses } from '../utils/theme';
 import { LANGUAGES, getLanguageByExtension } from '../utils/languageMap';
 import { getAvatarColor, getAvatarStyle, getUserInitial } from '../utils/avatar';
+import SynapseLogo from './SynapseLogo';
 import {
   Code2,
   LayoutGrid,
@@ -100,7 +101,7 @@ export default function Toolbar({
           <Link to="/" className="flex items-center hover:opacity-80 transition-opacity">
             <div className="w-12 flex items-center justify-center shrink-0">
               <div className="flex w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded drop-shadow-[0_0_12px_rgba(99,102,241,0.35)] items-center justify-center">
-                <Code2 size={14} className="text-white" />
+                <SynapseLogo size={14} color="#ffffff" nodeColor="#ffffff" />
               </div>
             </div>
             <span className={`ml-1 font-black uppercase tracking-[-0.04em] ${theme === 'dark' ? 'text-white' : 'text-slate-800'} text-sm`} style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}>SYNAPSE</span>

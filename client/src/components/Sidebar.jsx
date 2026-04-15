@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useFiles } from '../contexts/FileContext';
 import { getThemeClasses } from '../utils/theme';
 import {
@@ -134,89 +134,28 @@ export default function Sidebar({
   const [dragOffset, setDragOffset] = useState(0);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, item }
   const [renameTargetId, setRenameTargetId] = useState(null);
-  const [hasUnreadMsgs, setHasUnreadMsgs] = useState(false);
-  const [hasUnreadMention, setHasUnreadMention] = useState(false);
-  const [hasNewUser, setHasNewUser] = useState(false);
-  const lastMessagesRef = useRef(chatMessages);
-  const lastCollabCountRef = useRef(collaborators.length);
-  const mountedRef = useRef(false);
+  const [seenChatCount, setSeenChatCount] = useState(chatMessages.length);
+  const [seenUserCount, setSeenUserCount] = useState(collaborators.length);
   const t = getThemeClasses(theme);
 
   const createCommittedRef = useRef(false);
   const createInputRef = useRef(null);
 
-  // Handle "New User" notifications
-  useEffect(() => {
-    if (activeSidebar === 'users') {
-      setHasNewUser(false);
-      lastCollabCountRef.current = collaborators.length;
-      return;
-    }
+  const effectiveSelectedItemId = selectedItemId || activeFileId || null;
 
-    if (collaborators.length > lastCollabCountRef.current) {
-      setHasNewUser(true);
-    }
-    lastCollabCountRef.current = collaborators.length;
-  }, [collaborators.length, activeSidebar]);
-
-  // Keep selectedItemId in sync with activeFileId
-  useEffect(() => {
-    if (activeFileId && !selectedItemId) {
-      setSelectedItemId(activeFileId);
-    }
-  }, [activeFileId]);
-
-  // Handle chat notifications
-  useEffect(() => {
-    if (!mountedRef.current) {
-      lastMessagesRef.current = chatMessages;
-      mountedRef.current = true;
-      return;
-    }
-
-    if (activeSidebar === 'chat') {
-      setHasUnreadMsgs(false);
-      setHasUnreadMention(false);
-      lastMessagesRef.current = chatMessages;
-      return;
-    }
-
-    // Only notify if chatMessages length increased
-    if (chatMessages.length > lastMessagesRef.current.length) {
-      const newMsgs = chatMessages.slice(lastMessagesRef.current.length);
-      
-      let mentionFound = false;
-      let generalUnread = false;
-      const myName = (currentUser?.username || currentUser?.name || '').toLowerCase();
-      
-      newMsgs.forEach(msg => {
-        if (msg.type === 'system' || msg.senderId === currentUser?.userId) return;
-        
-        const isMention = myName && msg.content?.toLowerCase().includes(`@${myName}`);
-        if (isMention) {
-          mentionFound = true;
-        } else {
-          generalUnread = true;
-        }
-      });
-      
-      if (generalUnread) setHasUnreadMsgs(true);
-      if (mentionFound) setHasUnreadMention(true);
-    }
-    
-    lastMessagesRef.current = chatMessages;
-  }, [chatMessages, activeSidebar, currentUser]);
-
-  useEffect(() => {
-    if (activeSidebar === 'chat') {
-      setHasUnreadMsgs(false);
-      setHasUnreadMention(false);
-    }
-  }, [activeSidebar]);
+  const hasNewUser = activeSidebar !== 'users' && collaborators.length > seenUserCount;
+  const unreadMessages = Math.max(0, chatMessages.length - seenChatCount);
+  const recentMessages = chatMessages.slice(Math.max(0, seenChatCount));
+  const myName = (currentUser?.username || currentUser?.name || '').toLowerCase();
+  const hasUnreadMention = activeSidebar !== 'chat' && recentMessages.some((msg) => {
+    if (msg.type === 'system' || msg.senderId === currentUser?.userId) return false;
+    return myName && msg.content?.toLowerCase().includes(`@${myName}`);
+  });
+  const hasUnreadMsgs = activeSidebar !== 'chat' && unreadMessages > 0 && !hasUnreadMention;
 
   // ─── Target folder logic ────────────────────────────────────────────
   const getTargetParentId = (itemOrId) => {
-    const refId = itemOrId || selectedItemId || activeFileId;
+    const refId = itemOrId || effectiveSelectedItemId;
     if (!refId) return null;
     const item = files.find(f => f.id === refId);
     if (!item) return null;
@@ -247,7 +186,7 @@ export default function Sidebar({
     startCreate('folder');
   };
 
-  const commitCreate = useCallback(() => {
+  const commitCreate = () => {
     if (createCommittedRef.current) return;
     createCommittedRef.current = true;
     const trimmed = newItemName.trim();
@@ -259,17 +198,17 @@ export default function Sidebar({
     setCreatingType(null);
     setCreateParentId(null);
     setNewItemName('');
-  }, [newItemName, creatingType, createParentId, createFile, createFolder]);
+  };
 
-  const cancelCreate = useCallback(() => {
+  const cancelCreate = () => {
     createCommittedRef.current = true;
     setCreatingType(null);
     setCreateParentId(null);
     setNewItemName('');
-  }, []);
+  };
 
   // ─── Context menu handler ──────────────────────────────────────────
-  const handleItemContextMenu = useCallback((e, item) => {
+  const handleItemContextMenu = (e, item) => {
     const isFolder = item.type === 'folder';
     const menuItems = [];
 
@@ -329,7 +268,7 @@ export default function Sidebar({
     });
 
     setContextMenu({ x: e.clientX, y: e.clientY, items: menuItems });
-  }, [files, deleteFile]);
+  };
 
   // ─── Rename trigger handling ───────────────────────────────────────
   // When renameTargetId is set by context menu, we pass it down to the matching FileTreeItem
@@ -518,6 +457,22 @@ export default function Sidebar({
     setSelectedItemId(null);
   };
 
+  const handleSidebarToggle = (type) => {
+    setActiveSidebar((prev) => {
+      const next = prev === type ? null : type;
+
+      if (next === 'users') {
+        setSeenUserCount(collaborators.length);
+      }
+
+      if (next === 'chat') {
+        setSeenChatCount(chatMessages.length);
+      }
+
+      return next;
+    });
+  };
+
   return (
     <>
       {/* Activity Bar */}
@@ -525,7 +480,7 @@ export default function Sidebar({
         {(roomId ? ['explorer', 'search', 'users', 'chat'] : ['explorer', 'search']).map((type) => (
           <button 
             key={type}
-            onClick={() => setActiveSidebar(prev => prev === type ? null : type)}
+            onClick={() => handleSidebarToggle(type)}
             className={`p-2 rounded-lg transition-all cursor-pointer ${activeSidebar === type ? 'text-indigo-500 bg-indigo-500/10' : theme === 'dark' ? 'text-slate-500 hover:text-slate-300 hover:bg-white/5' : 'text-slate-500 hover:text-slate-800 hover:bg-black/5'}`}
             title={type.charAt(0).toUpperCase() + type.slice(1)}
           >
@@ -543,7 +498,7 @@ export default function Sidebar({
               <div className="relative">
                 <MessageSquare size={20} />
                 {hasUnreadMention && (
-                  <div className={`absolute -top-2.5 -left-2.5 w-5 h-5 min-w-[20px] min-h-[20px] bg-indigo-500 text-white text-[11px] font-black rounded-full flex items-center justify-center border-2 ${theme === 'dark' ? 'border-white/20' : 'border-indigo-100'} shadow-[0_0_8px_rgba(99,102,241,0.5)] animate-pulse z-20`}>
+                  <div className={`absolute -top-2.5 -left-2.5 w-5 h-5 min-w-5 min-h-5 bg-indigo-500 text-white text-[11px] font-black rounded-full flex items-center justify-center border-2 ${theme === 'dark' ? 'border-white/20' : 'border-indigo-100'} shadow-[0_0_8px_rgba(99,102,241,0.5)] animate-pulse z-20`}>
                     @
                   </div>
                 )}
@@ -601,7 +556,7 @@ export default function Sidebar({
                           return (
                             <div
                               key="__creating__"
-                              className={`relative flex items-center gap-1.5 py-[3px] text-xs ${theme === 'dark' ? 'bg-indigo-500/10' : 'bg-indigo-50'}`}
+                              className={`relative flex items-center gap-1.5 py-0.75 text-xs ${theme === 'dark' ? 'bg-indigo-500/10' : 'bg-indigo-50'}`}
                               style={{ paddingLeft: `${inputDepth * 16 + 12}px` }}
                               onClick={(e) => e.stopPropagation()}
                             >
@@ -641,7 +596,7 @@ export default function Sidebar({
                             item={{ ...file, _triggerRename: renameTargetId === file.id }}
                             depth={displayDepth}
                             activeFileId={activeFileId}
-                            selectedItemId={selectedItemId}
+                            selectedItemId={effectiveSelectedItemId}
                             fileLock={fileLocks[file.id]}
                             currentUserId={currentUser?.userId}
                             onOpenTempFile={openTab}
@@ -675,7 +630,7 @@ export default function Sidebar({
                 </DndContext>
 
                 {/* Empty space fill for right-click */}
-                <div className="flex-1 min-h-[40px]" />
+                <div className="flex-1 min-h-10" />
               </div>
             )}
 

@@ -29,6 +29,10 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 router.get('/recent/:userId', authMiddleware, async (req, res) => {
+  if (req.user.userId !== req.params.userId) {
+    return res.status(403).json({ error: 'You can only view your own rooms.' });
+  }
+
   try {
     const rooms = await Room.find({ createdBy: req.params.userId })
                             .sort({ lastUpdated: -1 })
@@ -37,6 +41,26 @@ router.get('/recent/:userId', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Fetch recent rooms error:', error);
     res.status(500).json({ error: 'Failed to fetch recent rooms.' });
+  }
+});
+
+router.get('/shared/:userId', authMiddleware, async (req, res) => {
+  if (req.user.userId !== req.params.userId) {
+    return res.status(403).json({ error: 'You can only view rooms shared with you.' });
+  }
+
+  try {
+    const rooms = await Room.find({
+      createdBy: { $ne: req.params.userId },
+      members: {
+        $elemMatch: { userId: req.params.userId },
+      },
+    }).sort({ lastUpdated: -1 });
+
+    res.json(rooms);
+  } catch (error) {
+    console.error('Fetch shared rooms error:', error);
+    res.status(500).json({ error: 'Failed to fetch shared rooms.' });
   }
 });
 

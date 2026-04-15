@@ -399,7 +399,23 @@ function RoomSession({ roomId }) {
     socket.on('file-locks-updated', handleFileLocksUpdated);
     socket.on('lock-denied', handleLockDenied);
     socket.on('chat-message', (msg) => setChatMessages((prev) => [...prev, msg]));
-    socket.on('chat-history', (history) => setChatMessages(history));
+    socket.on('chat-history', (history = []) => {
+      setChatMessages((prev) => {
+        const merged = [...history, ...prev];
+        const seen = new Set();
+
+        return merged
+          .filter((message) => {
+            const key = message?._id || `${message?.timestamp}-${message?.content}`;
+            if (seen.has(key)) {
+              return false;
+            }
+            seen.add(key);
+            return true;
+          })
+          .sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime());
+      });
+    });
     socket.on('chat-message-updated', (updated) => {
       setChatMessages((prev) => prev.map(m => (m._id === updated._id ? updated : m)));
     });

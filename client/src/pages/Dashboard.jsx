@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import {
@@ -14,8 +14,130 @@ import {
   Trash2,
   FileCode2,
 } from 'lucide-react';
-import { getRecentRooms, deleteRoom } from '../services/roomService';
+import { getRecentRooms, getSharedRooms, deleteRoom } from '../services/roomService';
 import { getAvatarStyle, getUserInitial } from '../utils/avatar';
+import SynapseInteractiveBackground from '../components/SynapseInteractiveBackground';
+import SynapseLogo from '../components/SynapseLogo';
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_GAP_MS = 45 * 60 * 1000;
+const SESSION_MIN_MS = 15 * 60 * 1000;
+const SESSION_MAX_MS = 2 * 60 * 60 * 1000;
+
+function countLines(content = '') {
+  return String(content)
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .length;
+}
+
+function formatCompactCount(value) {
+  return new Intl.NumberFormat(undefined, {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatHours(minutes) {
+  if (minutes < 60) {
+    return `${Math.max(0, Math.round(minutes))} min this week`;
+  }
+
+  const hours = minutes / 60;
+  return `${hours.toFixed(hours % 1 === 0 ? 0 : 1)} ${hours === 1 ? 'hr' : 'hrs'} this week`;
+}
+
+function gatherRoomActivityTimestamps(room) {
+  const timestamps = [];
+
+  if (Array.isArray(room?.versions)) {
+    room.versions.forEach((version) => {
+      const timestamp = new Date(version?.timestamp).getTime();
+      if (Number.isFinite(timestamp)) {
+        timestamps.push(timestamp);
+      }
+    });
+  }
+
+  if (Array.isArray(room?.files)) {
+    room.files.forEach((file) => {
+      const timestamp = new Date(file?.updatedAt || room?.lastUpdated || room?.createdAt).getTime();
+      if (Number.isFinite(timestamp)) {
+        timestamps.push(timestamp);
+      }
+    });
+  }
+
+  const roomCreatedAt = new Date(room?.createdAt).getTime();
+  if (Number.isFinite(roomCreatedAt)) {
+    timestamps.push(roomCreatedAt);
+  }
+
+  return Array.from(new Set(timestamps)).sort((left, right) => left - right);
+}
+
+function estimateCodingMinutes(room, windowStart, windowEnd) {
+  const timestamps = gatherRoomActivityTimestamps(room).filter(
+    (timestamp) => timestamp >= windowStart && timestamp < windowEnd
+  );
+
+  if (timestamps.length === 0) {
+    return 0;
+  }
+
+  let totalMinutes = 0;
+  let sessionStart = timestamps[0];
+  let previousTimestamp = timestamps[0];
+
+  for (let index = 1; index < timestamps.length; index += 1) {
+    const timestamp = timestamps[index];
+
+    if (timestamp - previousTimestamp > SESSION_GAP_MS) {
+      const sessionDuration = Math.min(
+        Math.max(previousTimestamp - sessionStart + SESSION_MIN_MS, SESSION_MIN_MS),
+        SESSION_MAX_MS
+      );
+      totalMinutes += sessionDuration / 60000;
+      sessionStart = timestamp;
+    }
+
+    previousTimestamp = timestamp;
+  }
+
+  const finalSessionDuration = Math.min(
+    Math.max(previousTimestamp - sessionStart + SESSION_MIN_MS, SESSION_MIN_MS),
+    SESSION_MAX_MS
+  );
+  totalMinutes += finalSessionDuration / 60000;
+
+  return totalMinutes;
+}
+
+function calculateTimeSpentStats(rooms, currentTime) {
+  const currentWindowStart = currentTime - WEEK_MS;
+  const previousWindowStart = currentTime - WEEK_MS * 2;
+
+  const currentMinutes = rooms.reduce(
+    (total, room) => total + estimateCodingMinutes(room, currentWindowStart, currentTime),
+    0
+  );
+  const previousMinutes = rooms.reduce(
+    (total, room) => total + estimateCodingMinutes(room, previousWindowStart, currentWindowStart),
+    0
+  );
+
+  const changePercent = previousMinutes > 0
+    ? Math.round(((currentMinutes - previousMinutes) / previousMinutes) * 100)
+    : currentMinutes > 0
+      ? 100
+      : 0;
+
+  return {
+    value: formatHours(currentMinutes),
+    meta: `${changePercent >= 0 ? '+' : ''}${changePercent}% vs last week`,
+    metaClass: changePercent >= 0 ? 'db-stat-meta-positive' : 'db-stat-meta-negative',
+  };
+}
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -23,6 +145,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('recent');
   const [searchQuery, setSearchQuery] = useState('');
   const [recentRooms, setRecentRooms] = useState([]);
+  const [sharedRooms, setSharedRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [roomToDelete, setRoomToDelete] = useState(null);
   const [now, setNow] = useState(() => Date.now());
@@ -38,8 +161,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user?.userId) {
-      getRecentRooms(user.userId)
-        .then(setRecentRooms)
+      setLoadingRooms(true);
+      Promise.all([getRecentRooms(user.userId), getSharedRooms(user.userId)])
+        .then(([ownedRooms, joinedRooms]) => {
+          setRecentRooms(ownedRooms);
+          setSharedRooms(joinedRooms);
+        })
         .catch(console.error)
         .finally(() => setLoadingRooms(false));
     }
@@ -64,6 +191,7 @@ export default function Dashboard() {
     try {
       await deleteRoom(roomToDelete.roomId);
       setRecentRooms((prev) => prev.filter((r) => r.roomId !== roomToDelete.roomId));
+      setSharedRooms((prev) => prev.filter((r) => r.roomId !== roomToDelete.roomId));
       setRoomToDelete(null);
     } catch (err) {
       console.error('Failed to delete room:', err);
@@ -85,7 +213,9 @@ export default function Dashboard() {
     return `${Math.floor(days / 7)} week${Math.floor(days / 7) > 1 ? 's' : ''} ago`;
   }
 
-  const filteredRooms = recentRooms.filter((room) => {
+  const visibleRooms = activeTab === 'shared' ? sharedRooms : recentRooms;
+
+  const filteredRooms = visibleRooms.filter((room) => {
     const q = searchQuery.toLowerCase();
     return (
       (room.roomName || '').toLowerCase().includes(q) ||
@@ -93,22 +223,58 @@ export default function Dashboard() {
     );
   });
 
+  const joinedRoomCount = new Set(
+    [...recentRooms, ...sharedRooms].map((room) => room.roomId)
+  ).size;
+
   /* ---------- stats ---------- */
-  const stats = [
-    { label: 'Rooms Joined', value: String(recentRooms.length), icon: <Clock size={16} />, color: 'db-stat-blue' },
-    { label: 'Collaborators', value: '—', icon: <Users size={16} />, color: 'db-stat-purple' },
-    { label: 'Sessions', value: '—', icon: <Code2 size={16} />, color: 'db-stat-green' },
-  ];
+  const stats = useMemo(() => {
+    const totalLinesContributed = recentRooms.reduce((total, room) => {
+      const roomLineCount = Array.isArray(room.files)
+        ? room.files.reduce((fileTotal, file) => fileTotal + countLines(file?.content || ''), 0)
+        : 0;
+
+      return total + roomLineCount;
+    }, 0);
+
+    const timeSpentStats = calculateTimeSpentStats(recentRooms, now);
+
+    return [
+      {
+        label: 'Rooms Joined',
+        value: String(recentRooms.length),
+        icon: <Clock size={16} />,
+        color: 'db-stat-blue',
+      },
+      {
+        label: 'Total Lines Contributed',
+        value: formatCompactCount(totalLinesContributed),
+        meta: 'across shared rooms',
+        icon: <FileCode2 size={16} />,
+        color: 'db-stat-purple',
+      },
+      {
+        label: 'Time Spent Coding',
+        value: timeSpentStats.value,
+        meta: timeSpentStats.meta,
+        metaClass: timeSpentStats.metaClass,
+        icon: <Code2 size={16} />,
+        color: 'db-stat-green',
+      },
+    ];
+  }, [now, recentRooms]);
 
   return (
     <div className="db-page">
+      <SynapseInteractiveBackground />
+
       {/* ─── Navbar ─── */}
       <nav className="db-nav">
         <div className="db-nav-inner">
           {/* Logo — matches Landing Page */}
           <Link to="/" className="db-logo-link">
             <div className="db-logo-icon">
-              <Code2 size={20} className="text-white" />
+              <SynapseLogo size={20} color="#ffffff" nodeColor="#ffffff" />
             </div>
             <span className="db-logo-text">Synapse</span>
           </Link>
@@ -166,6 +332,9 @@ export default function Dashboard() {
                     {stat.icon} {stat.label}
                   </span>
                   <span className="db-stat-value">{stat.value}</span>
+                  {stat.meta ? (
+                    <span className={`db-stat-meta ${stat.metaClass || ''}`}>{stat.meta}</span>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -253,6 +422,7 @@ export default function Dashboard() {
                 const fileCount = Array.isArray(room.files)
                   ? room.files.filter((f) => f.type === 'file').length
                   : 0;
+                const canDeleteRoom = room.createdBy === user?.userId;
                 return (
                   <div
                     key={room.roomId}
@@ -265,13 +435,15 @@ export default function Dashboard() {
                         <span className="db-room-id">{room.roomId}</span>
                         <h4 className="db-room-name">{room.roomName || 'Untitled Room'}</h4>
                       </div>
-                      <button
-                        className="db-room-delete-btn"
-                        title="Delete room"
-                        onClick={(e) => handleDeleteClick(e, { roomId: room.roomId, roomName: room.roomName })}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {canDeleteRoom ? (
+                        <button
+                          className="db-room-delete-btn"
+                          title="Delete room"
+                          onClick={(e) => handleDeleteClick(e, { roomId: room.roomId, roomName: room.roomName })}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      ) : null}
                     </div>
 
                     {/* Meta row */}
@@ -305,7 +477,9 @@ export default function Dashboard() {
             <p className="db-empty-state">
               {searchQuery
                 ? 'No rooms match your search.'
-                : "You haven't participated in any rooms recently. Start your first session above!"}
+                : activeTab === 'shared'
+                  ? "You haven't joined any shared rooms yet."
+                  : "You haven't created any rooms recently. Start your first session above!"}
             </p>
           )}
         </section>

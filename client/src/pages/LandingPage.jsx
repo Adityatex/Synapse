@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
 import { getAvatarStyle, getUserInitial } from '../utils/avatar';
+import SynapseLogo from '../components/SynapseLogo';
 
 class BackgroundParticle {
   constructor(canvas) {
@@ -245,24 +246,24 @@ function getUserInitials(user) {
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }
 
-const featureCards = [
+const collaborationHighlights = [
   {
     icon: Users2,
-    title: 'CRDT Engine',
+    title: 'Instant shared workspaces',
     description:
-      'Conflict-free replication keeps every collaborator in sync across rooms with near-instant updates.',
-  },
-  {
-    icon: Cpu,
-    title: 'Neural Assist',
-    description:
-      'Built-in AI support helps teams review changes, catch issues early, and move faster inside the workspace.',
+      'Create a room, invite teammates, and collaborate with live sync from any browser.',
   },
   {
     icon: Layers,
-    title: 'Multi-Environment',
+    title: 'One loop for code, review, and run',
     description:
-      'Switch between coding, pairing, and execution flows without losing context or breaking team momentum.',
+      'Edit together, review changes live, and run code without switching tools.',
+  },
+  {
+    icon: Cpu,
+    title: 'AI support for faster delivery',
+    description:
+      'Use built-in AI to explain logic, catch issues early, and ship with confidence.',
   },
 ];
 
@@ -273,55 +274,40 @@ const trustStats = [
   { value: 'AI-native', label: 'review workflow', detail: 'Get context-aware assistance without leaving the IDE.' },
 ];
 
-const workflowSteps = [
-  {
-    title: 'Create a shared workspace',
-    description: 'Start a room, invite collaborators, and move from idea to code without local setup friction.',
-  },
-  {
-    title: 'Edit and review together',
-    description: 'See presence, cursor activity, and changes in real time with collaboration built into the editor.',
-  },
-  {
-    title: 'Ship with AI support',
-    description: 'Use built-in assistance to explain code, catch issues early, and keep momentum across the team.',
-  },
-];
-
 const useCases = [
   {
     icon: Terminal,
     title: 'Interview Practice',
-    description: 'Share a ready-to-code environment for live interviews, pair sessions, and fast technical screens.',
+    description: 'Run live interviews and pair sessions in a ready-to-code browser workspace.',
   },
   {
     icon: GitBranch,
     title: 'Team Pairing',
-    description: 'Work through bugs, reviews, and architecture decisions together without juggling separate tools.',
+    description: 'Resolve bugs, review code, and make decisions together in one place.',
   },
   {
     icon: ShieldCheck,
     title: 'Classrooms And Labs',
-    description: 'Give students one browser-based workspace for coding, execution, and guided AI help.',
+    description: 'Give students one browser workspace for coding, execution, and guided AI help.',
   },
 ];
 
 const testimonials = [
   {
     quote:
-      'Synapse removed the usual setup overhead. Our team went from sharing screens to actually collaborating in one space.',
+      'Synapse removed setup overhead. We moved from screen-sharing to true collaboration.',
     name: 'Riya Sharma',
     role: 'Engineering Lead, BuildLab',
   },
   {
     quote:
-      'The AI layer feels integrated instead of bolted on. It helps us review faster without interrupting the session.',
+      'The AI feels native to the editor and helps us review faster without breaking flow.',
     name: 'Aditya Mehta',
     role: 'Product Engineer, SprintForge',
   },
   {
     quote:
-      'For mentoring and student demos, it is much easier to send a room link than to debug local environments for everyone.',
+      'For mentoring and demos, sending one room link is much easier than fixing local setups.',
     name: 'Neha Verma',
     role: 'Instructor, CodeCircle',
   },
@@ -330,15 +316,15 @@ const testimonials = [
 const faqItems = [
   {
     question: 'Do users need to install anything before joining?',
-    answer: 'No. Synapse is designed for browser-first collaboration, so teams can join rooms and start coding without local setup.',
+    answer: 'No. Synapse is browser-first, so users can join and start coding immediately.',
   },
   {
     question: 'Is this useful only for teams?',
-    answer: 'Not at all. It also fits interviews, classrooms, mentoring sessions, and solo work when you want execution plus AI assistance in one place.',
+    answer: 'No. It works for interviews, classrooms, mentoring sessions, and solo work too.',
   },
   {
     question: 'What makes the AI experience different?',
-    answer: 'The assistant is placed inside the workspace flow, which makes it easier to ask about the code you are already editing instead of switching contexts.',
+    answer: 'The assistant lives inside the editor, so you can ask in context while coding.',
   },
 ];
 
@@ -413,7 +399,7 @@ export default function LandingPage() {
         <div className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-4 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8 xl:px-10">
           <Link to="/" className="flex shrink-0 items-center gap-3 justify-self-start">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-[0_0_24px_rgba(99,102,241,0.35)]">
-              <Code2 className="h-6 w-6 text-white" />
+              <SynapseLogo size={24} color="#ffffff" nodeColor="#ffffff" className="h-6 w-6" />
             </div>
             <span
               className="text-2xl font-black uppercase tracking-[-0.06em] text-white"
@@ -694,42 +680,24 @@ export default function LandingPage() {
                 A faster path from idea to shared output.
               </h2>
               <p className="mt-5 text-base leading-8 text-slate-400 sm:text-lg">
-                Synapse keeps setup, collaboration, execution, and AI support in one workflow so
-                teams can move with less friction and fewer context switches.
+                Setup, collaboration, execution, and AI support in one streamlined flow.
               </p>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-3">
-              {workflowSteps.map((step, index) => (
+              {collaborationHighlights.map((highlight) => (
                 <article
-                  key={step.title}
-                  className="relative overflow-hidden rounded-[2rem] border border-white/[0.06] bg-white/[0.04] p-8 backdrop-blur-xl"
+                  key={highlight.title}
+                  className="relative overflow-hidden rounded-[2rem] border border-indigo-400/30 bg-white/[0.04] p-8 backdrop-blur-xl transition-all duration-300 hover:border-indigo-300/60 hover:bg-indigo-500/10"
                 >
                   <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-indigo-500/10 blur-3xl" />
                   <div className="relative">
-                    <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-400/20 bg-indigo-500/10 text-sm font-black text-indigo-300">
-                      0{index + 1}
+                    <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-400/20 bg-indigo-500/10 text-indigo-300">
+                      <highlight.icon size={22} />
                     </div>
-                    <h3 className="text-2xl font-bold text-white">{step.title}</h3>
-                    <p className="mt-4 text-sm leading-7 text-slate-400">{step.description}</p>
+                    <h3 className="text-2xl font-bold text-white">{highlight.title}</h3>
+                    <p className="mt-4 text-sm leading-7 text-slate-400">{highlight.description}</p>
                   </div>
-                </article>
-              ))}
-            </div>
-          </div>
-
-          <div className="mx-auto max-w-[92rem]">
-            <div className="grid gap-6 md:grid-cols-3 md:gap-8">
-              {featureCards.map((feature) => (
-                <article
-                  key={feature.title}
-                  className="rounded-[2rem] border border-white/[0.06] bg-white/5 p-8 backdrop-blur-sm transition-all hover:bg-white/[0.08] sm:p-10"
-                >
-                  <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-400">
-                    <feature.icon size={28} />
-                  </div>
-                  <h3 className="mb-4 text-2xl font-bold text-white">{feature.title}</h3>
-                  <p className="text-sm leading-relaxed text-slate-400">{feature.description}</p>
                 </article>
               ))}
             </div>
@@ -751,8 +719,7 @@ export default function LandingPage() {
                 </h2>
               </div>
               <p className="max-w-2xl text-base leading-8 text-slate-400">
-                Whether you are pairing with a teammate, running a live interview, or guiding a
-                classroom, the workflow stays lightweight and shared from the first click.
+                Built for pair programming, interviews, and classrooms.
               </p>
             </div>
 
@@ -760,9 +727,9 @@ export default function LandingPage() {
               {useCases.map((useCase) => (
                 <article
                   key={useCase.title}
-                  className="rounded-[2rem] border border-white/[0.06] bg-white/[0.04] p-8 backdrop-blur-xl"
+                  className="rounded-[2rem] border border-teal-400/30 bg-white/[0.04] p-8 backdrop-blur-xl transition-all duration-300 hover:border-teal-300/60 hover:bg-teal-500/10"
                 >
-                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-300">
+                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-500/10 text-teal-300">
                     <useCase.icon size={28} />
                   </div>
                   <h3 className="text-2xl font-bold text-white">{useCase.title}</h3>
@@ -783,7 +750,7 @@ export default function LandingPage() {
                 className="mt-4 text-3xl font-black tracking-[-0.05em] text-white sm:text-5xl"
                 style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}
               >
-                Social proof that makes the product feel real.
+                Loved by teams building together.
               </h2>
             </div>
 
@@ -791,10 +758,10 @@ export default function LandingPage() {
               {testimonials.map((testimonial) => (
                 <article
                   key={testimonial.name}
-                  className="rounded-[2rem] border border-white/[0.06] bg-white/[0.04] p-8 backdrop-blur-xl"
+                  className="rounded-[2rem] border border-rose-400/30 bg-white/4 p-8 backdrop-blur-xl transition-all duration-300 hover:border-rose-300/60 hover:bg-rose-500/10"
                 >
                   <p className="text-base leading-8 text-slate-300">&ldquo;{testimonial.quote}&rdquo;</p>
-                  <div className="mt-8 border-t border-white/[0.06] pt-6">
+                  <div className="mt-8 border-t border-rose-300/20 pt-6">
                     <p className="text-sm font-bold text-white">{testimonial.name}</p>
                     <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                       {testimonial.role}
@@ -808,7 +775,7 @@ export default function LandingPage() {
 
         <section id="faq" className="px-5 pb-24 sm:px-6 lg:px-8">
           <div className="mx-auto grid max-w-[92rem] gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-            <div className="rounded-[2.25rem] border border-white/[0.06] bg-white/[0.03] p-8 backdrop-blur-xl sm:p-10">
+            <div className="rounded-[2.25rem] border border-lime-400/30 bg-white/3 p-8 backdrop-blur-xl transition-all duration-300 hover:border-lime-300/60 hover:bg-lime-500/8 sm:p-10">
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-indigo-300">
                 FAQ
               </p>
@@ -816,11 +783,10 @@ export default function LandingPage() {
                 className="mt-4 text-3xl font-black tracking-[-0.05em] text-white sm:text-5xl"
                 style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}
               >
-                Clear answers for adoption questions.
+                Quick answers before you start.
               </h2>
               <p className="mt-5 text-base leading-8 text-slate-400">
-                Professional product pages reduce doubt early. These answers help visitors understand
-                how Synapse fits into their workflow before they sign up.
+                Everything teams usually ask before creating a room.
               </p>
             </div>
 
@@ -828,7 +794,7 @@ export default function LandingPage() {
               {faqItems.map((item) => (
                 <article
                   key={item.question}
-                  className="rounded-[1.75rem] border border-white/[0.06] bg-white/[0.04] p-6 backdrop-blur-xl"
+                  className="rounded-[1.75rem] border border-lime-400/30 bg-white/4 p-6 backdrop-blur-xl transition-all duration-300 hover:border-lime-300/60 hover:bg-lime-500/10"
                 >
                   <h3 className="text-lg font-bold text-white">{item.question}</h3>
                   <p className="mt-3 text-sm leading-7 text-slate-400">{item.answer}</p>
@@ -839,20 +805,20 @@ export default function LandingPage() {
         </section>
 
         <section className="px-5 pb-24 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-[92rem] rounded-[2.25rem] border border-white/[0.06] bg-white/[0.04] px-6 py-10 text-center backdrop-blur-xl sm:px-10 sm:py-14">
+          <div className="mx-auto max-w-[92rem] rounded-[2.25rem] border border-amber-400/30 bg-white/4 px-6 py-10 text-center backdrop-blur-xl transition-all duration-300 hover:border-amber-300/60 hover:bg-amber-500/8 sm:px-10 sm:py-14">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-300">
               <Sparkles size={14} className="text-indigo-300" />
-              Ready To Ship Faster
+              Ready To Collaborate
             </div>
             <h2
               className="mb-4 text-3xl font-black tracking-[-0.05em] text-white sm:text-5xl"
               style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}
             >
-              Keep the workflow. Change the interface.
+              Build faster with your team in Synapse.
             </h2>
             <p className="mx-auto mb-8 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg">
-              The new landing experience mirrors your reference UI, but still keeps Synapse&apos;s
-              existing routes for authentication, dashboard access, and editor launch.
+              Create rooms, code together in real time, run your programs, and use AI assistance
+              without leaving your browser.
             </p>
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link
@@ -865,7 +831,7 @@ export default function LandingPage() {
                 to={isAuthenticated ? '/editor' : '/login'}
                 className="inline-flex min-w-[12rem] items-center justify-center rounded-full bg-indigo-600 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-indigo-500"
               >
-                {isAuthenticated ? 'Go To Editor' : 'Launch Editor'}
+                {isAuthenticated ? 'Open Editor' : 'Launch Editor'}
               </Link>
             </div>
           </div>

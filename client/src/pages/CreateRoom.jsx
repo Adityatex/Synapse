@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Loader2, PlusCircle, Code2 } from 'lucide-react';
+import { ArrowRight, Loader2, PlusCircle } from 'lucide-react';
 import { createRoom } from '../services/roomService';
+import SynapseInteractiveBackground from '../components/SynapseInteractiveBackground';
+import SynapseLogo from '../components/SynapseLogo';
 
 export default function CreateRoom() {
   const navigate = useNavigate();
@@ -29,16 +31,12 @@ export default function CreateRoom() {
 
   return (
     <div className="auth-page">
-      <div className="auth-bg-effects">
-        <div className="auth-bg-orb auth-bg-orb-1" />
-        <div className="auth-bg-orb auth-bg-orb-2" />
-        <div className="auth-bg-orb auth-bg-orb-3" />
-      </div>
+      <SynapseInteractiveBackground />
 
       <div className="auth-container">
         <Link to="/dashboard" className="auth-logo-link">
           <div className="auth-logo-icon">
-            <Code2 size={24} className="text-white" />
+            <SynapseLogo size={24} color="#ffffff" nodeColor="#ffffff" />
           </div>
           <span className="auth-logo-text">Synapse</span>
         </Link>
@@ -58,17 +56,19 @@ export default function CreateRoom() {
 
           <div className="auth-form" style={{ marginBottom: '1.5rem', width: '100%', textAlign: 'left' }}>
             <label className="auth-label" htmlFor="roomName">Room Name</label>
-            <input
-              id="roomName"
-              type="text"
-              className="auth-input"
-              placeholder="e.g. System Design Practice"
-              value={roomName}
-              onChange={(e) => setRoomName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreateRoom();
-              }}
-            />
+            <div className="auth-input-wrapper">
+              <input
+                id="roomName"
+                type="text"
+                className="auth-input"
+                placeholder="e.g. System Design Practice"
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreateRoom();
+                }}
+              />
+            </div>
           </div>
 
           <button onClick={handleCreateRoom} className="auth-btn" disabled={loading}>

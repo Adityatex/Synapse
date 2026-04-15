@@ -51,6 +51,54 @@ function emitParticipants(io, roomId) {
 const FILE_LOCK_TIMEOUT_MS = 45000;
 const roomLocks = new Map();
 
+async function recordRoomMembership(roomId, participant) {
+  const userId = String(participant?.userId || '').trim();
+  if (!roomId || !userId) {
+    return;
+  }
+
+  const username = String(participant?.username || '').trim();
+  const now = new Date();
+
+  try {
+    const updateResult = await RoomModel.updateOne(
+      {
+        roomId,
+        'members.userId': userId,
+      },
+      {
+        $set: {
+          'members.$.username': username,
+          'members.$.lastVisitedAt': now,
+        },
+      }
+    );
+
+    if (updateResult.matchedCount > 0) {
+      return;
+    }
+
+    await RoomModel.updateOne(
+      {
+        roomId,
+        'members.userId': { $ne: userId },
+      },
+      {
+        $push: {
+          members: {
+            userId,
+            username,
+            joinedAt: now,
+            lastVisitedAt: now,
+          },
+        },
+      }
+    );
+  } catch (error) {
+    console.error('Failed to record room membership:', error);
+  }
+}
+
 function serializeRoomLocks(roomId) {
   const locks = roomLocks.get(roomId);
   if (!locks) {
@@ -199,6 +247,8 @@ function createSocketServer(httpServer) {
         (nextParticipant) => nextParticipant.socketId === socket.id
       );
       socket.data.participant = currentParticipant;
+
+      await recordRoomMembership(normalizedRoomId, currentParticipant);
 
       socket.emit('room-joined', {
         room: {

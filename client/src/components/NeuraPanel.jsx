@@ -50,7 +50,7 @@ function CodeBlock({ inline, className, children, theme }) {
 
   if (inline) {
     return (
-      <code className={`px-1.5 py-0.5 rounded-md font-mono text-[11px] ${
+      <code className={`select-text px-1.5 py-0.5 rounded-md font-mono text-[11px] ${
         theme === 'dark' ? 'bg-white/10 text-indigo-200' : 'bg-indigo-50 text-indigo-600'
       }`}>
         {children}
@@ -91,8 +91,8 @@ function CodeBlock({ inline, className, children, theme }) {
           <span>{copied ? 'Copied' : 'Copy'}</span>
         </button>
       </div>
-      <pre className="overflow-x-auto p-3 custom-scrollbar">
-        <code className={`font-mono text-[11px] leading-5 ${
+      <pre className="overflow-x-auto p-3 custom-scrollbar select-text">
+        <code className={`font-mono text-[11px] leading-5 select-text ${
           theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
         }`}>
           {code}
@@ -104,17 +104,17 @@ function CodeBlock({ inline, className, children, theme }) {
 
 function AssistantMessage({ content, theme }) {
   return (
-    <div className={`prose prose-sm max-w-none break-words prose-p:my-2 prose-headings:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-strong:text-inherit ${
+    <div className={`select-text prose prose-sm max-w-none wrap-break-word prose-p:my-2 prose-headings:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-strong:text-inherit ${
       theme === 'dark' ? 'prose-invert' : 'prose-slate'
     }`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           p({ children }) {
-            return <p className="break-words whitespace-pre-wrap m-0">{children}</p>;
+            return <p className="break-words whitespace-pre-wrap m-0 select-text">{children}</p>;
           },
           li({ children }) {
-            return <li className="break-words">{children}</li>;
+            return <li className="break-words select-text">{children}</li>;
           },
           code({ inline, className, children }) {
             return (
@@ -538,7 +538,7 @@ export default function NeuraPanel({ theme }) {
                          : 'bg-white text-slate-800 border border-slate-200 shadow-sm rounded-tl-none'
                    }`}>
                      {msg.role === 'user' ? (
-                       <div className="whitespace-pre-wrap">{msg.content}</div>
+                      <div className="whitespace-pre-wrap select-text">{msg.content}</div>
                      ) : (
                        <AssistantMessage content={msg.content} theme={theme} />
                      )}

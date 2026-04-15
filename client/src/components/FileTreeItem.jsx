@@ -5,7 +5,7 @@ import {
   FileCode, FileText, FileJson, FileType, File, Braces, Hash, 
   Code, Terminal, Image, Settings, Database
 } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 // VS Code-style file icon mapping
 function getFileIcon(name, isActive, mutedClass) {
@@ -102,12 +102,19 @@ export default function FileTreeItem({
   const renameInputRef = useRef(null);
   const renameCommittedRef = useRef(false);
 
+  const startRenaming = useCallback(() => {
+    renameCommittedRef.current = false;
+    setRenameValue(item.name);
+    setIsRenaming(true);
+  }, [item.name]);
+
   // Allow parent to trigger rename via ref
   useEffect(() => {
     if (item._triggerRename) {
-      startRenaming();
+      const timer = window.setTimeout(() => startRenaming(), 0);
+      return () => window.clearTimeout(timer);
     }
-  }, [item._triggerRename]);
+  }, [item._triggerRename, startRenaming]);
 
   useEffect(() => {
     if (isRenaming && renameInputRef.current) {
@@ -123,7 +130,7 @@ export default function FileTreeItem({
         renameInputRef.current.select();
       }
     }
-  }, [isRenaming]);
+  }, [isRenaming, isFolder, renameValue]);
 
   const handleClick = (e) => {
     e.stopPropagation();
@@ -159,12 +166,6 @@ export default function FileTreeItem({
       e.preventDefault();
       setConfirmDelete(true);
     }
-  };
-
-  const startRenaming = () => {
-    renameCommittedRef.current = false;
-    setRenameValue(item.name);
-    setIsRenaming(true);
   };
 
   const commitRename = () => {
@@ -243,7 +244,7 @@ export default function FileTreeItem({
       
       {/* Content with proper indentation */}
       <div 
-        className="flex items-center gap-1.5 py-[4px] pr-4 truncate min-w-0 flex-1"
+        className="flex items-center gap-1.5 py-1 pr-4 truncate min-w-0 flex-1"
         style={{ paddingLeft: `${depth * 16 + 10}px` }}
       >
         {/* Folder chevron or spacer */}

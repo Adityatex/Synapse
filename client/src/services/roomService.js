@@ -41,6 +41,10 @@ export function getRecentRooms(userId) {
   return request(`/recent/${encodeURIComponent(userId)}`);
 }
 
+export function getSharedRooms(userId) {
+  return request(`/shared/${encodeURIComponent(userId)}`);
+}
+
 export function deleteRoom(roomId) {
   return request(`/${encodeURIComponent(roomId)}`, { method: 'DELETE' });
 }

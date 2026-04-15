@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { requestSignupOtp } from '../services/authService';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, User, KeyRound, Code2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, User, KeyRound } from 'lucide-react';
+import SynapseInteractiveBackground from '../components/SynapseInteractiveBackground';
+import SynapseLogo from '../components/SynapseLogo';
 
 export default function Signup() {
   const { completeSignup } = useAuth();
@@ -133,18 +135,13 @@ export default function Signup() {
 
   return (
     <div className="auth-page">
-      {/* Background effects */}
-      <div className="auth-bg-effects">
-        <div className="auth-bg-orb auth-bg-orb-1" />
-        <div className="auth-bg-orb auth-bg-orb-2" />
-        <div className="auth-bg-orb auth-bg-orb-3" />
-      </div>
+      <SynapseInteractiveBackground />
 
       <div className="auth-container">
         {/* Logo */}
         <Link to="/" className="auth-logo-link">
           <div className="auth-logo-icon">
-            <Code2 size={24} className="text-white" />
+            <SynapseLogo size={24} color="#ffffff" nodeColor="#ffffff" />
           </div>
           <span className="auth-logo-text">Synapse</span>
         </Link>

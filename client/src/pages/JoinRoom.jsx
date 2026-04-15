@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Loader2, Users, Code2 } from 'lucide-react';
+import { ArrowRight, Loader2, Users } from 'lucide-react';
 import { getRoom } from '../services/roomService';
+import SynapseInteractiveBackground from '../components/SynapseInteractiveBackground';
+import SynapseLogo from '../components/SynapseLogo';
 
 export default function JoinRoom() {
   const navigate = useNavigate();
@@ -37,16 +39,12 @@ export default function JoinRoom() {
 
   return (
     <div className="auth-page">
-      <div className="auth-bg-effects">
-        <div className="auth-bg-orb auth-bg-orb-1" />
-        <div className="auth-bg-orb auth-bg-orb-2" />
-        <div className="auth-bg-orb auth-bg-orb-3" />
-      </div>
+      <SynapseInteractiveBackground />
 
       <div className="auth-container">
         <Link to="/dashboard" className="auth-logo-link">
           <div className="auth-logo-icon">
-            <Code2 size={24} className="text-white" />
+            <SynapseLogo size={24} color="#ffffff" nodeColor="#ffffff" />
           </div>
           <span className="auth-logo-text">Synapse</span>
         </Link>

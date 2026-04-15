@@ -14,7 +14,7 @@ import {
   Trash2,
   FileCode2,
 } from 'lucide-react';
-import { getRecentRooms, deleteRoom } from '../services/roomService';
+import { getRecentRooms, getSharedRooms, deleteRoom } from '../services/roomService';
 import { getAvatarStyle, getUserInitial } from '../utils/avatar';
 
 export default function Dashboard() {
@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('recent');
   const [searchQuery, setSearchQuery] = useState('');
   const [recentRooms, setRecentRooms] = useState([]);
+  const [sharedRooms, setSharedRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [roomToDelete, setRoomToDelete] = useState(null);
   const [now, setNow] = useState(() => Date.now());
@@ -38,8 +39,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user?.userId) {
-      getRecentRooms(user.userId)
-        .then(setRecentRooms)
+      setLoadingRooms(true);
+      Promise.all([getRecentRooms(user.userId), getSharedRooms(user.userId)])
+        .then(([ownedRooms, joinedRooms]) => {
+          setRecentRooms(ownedRooms);
+          setSharedRooms(joinedRooms);
+        })
         .catch(console.error)
         .finally(() => setLoadingRooms(false));
     }
@@ -64,6 +69,7 @@ export default function Dashboard() {
     try {
       await deleteRoom(roomToDelete.roomId);
       setRecentRooms((prev) => prev.filter((r) => r.roomId !== roomToDelete.roomId));
+      setSharedRooms((prev) => prev.filter((r) => r.roomId !== roomToDelete.roomId));
       setRoomToDelete(null);
     } catch (err) {
       console.error('Failed to delete room:', err);
@@ -85,7 +91,9 @@ export default function Dashboard() {
     return `${Math.floor(days / 7)} week${Math.floor(days / 7) > 1 ? 's' : ''} ago`;
   }
 
-  const filteredRooms = recentRooms.filter((room) => {
+  const visibleRooms = activeTab === 'shared' ? sharedRooms : recentRooms;
+
+  const filteredRooms = visibleRooms.filter((room) => {
     const q = searchQuery.toLowerCase();
     return (
       (room.roomName || '').toLowerCase().includes(q) ||
@@ -93,9 +101,13 @@ export default function Dashboard() {
     );
   });
 
+  const joinedRoomCount = new Set(
+    [...recentRooms, ...sharedRooms].map((room) => room.roomId)
+  ).size;
+
   /* ---------- stats ---------- */
   const stats = [
-    { label: 'Rooms Joined', value: String(recentRooms.length), icon: <Clock size={16} />, color: 'db-stat-blue' },
+    { label: 'Rooms Joined', value: String(joinedRoomCount), icon: <Clock size={16} />, color: 'db-stat-blue' },
     { label: 'Collaborators', value: '—', icon: <Users size={16} />, color: 'db-stat-purple' },
     { label: 'Sessions', value: '—', icon: <Code2 size={16} />, color: 'db-stat-green' },
   ];
@@ -253,6 +265,7 @@ export default function Dashboard() {
                 const fileCount = Array.isArray(room.files)
                   ? room.files.filter((f) => f.type === 'file').length
                   : 0;
+                const canDeleteRoom = room.createdBy === user?.userId;
                 return (
                   <div
                     key={room.roomId}
@@ -265,13 +278,15 @@ export default function Dashboard() {
                         <span className="db-room-id">{room.roomId}</span>
                         <h4 className="db-room-name">{room.roomName || 'Untitled Room'}</h4>
                       </div>
-                      <button
-                        className="db-room-delete-btn"
-                        title="Delete room"
-                        onClick={(e) => handleDeleteClick(e, { roomId: room.roomId, roomName: room.roomName })}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {canDeleteRoom ? (
+                        <button
+                          className="db-room-delete-btn"
+                          title="Delete room"
+                          onClick={(e) => handleDeleteClick(e, { roomId: room.roomId, roomName: room.roomName })}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      ) : null}
                     </div>
 
                     {/* Meta row */}
@@ -305,7 +320,9 @@ export default function Dashboard() {
             <p className="db-empty-state">
               {searchQuery
                 ? 'No rooms match your search.'
-                : "You haven't participated in any rooms recently. Start your first session above!"}
+                : activeTab === 'shared'
+                  ? "You haven't joined any shared rooms yet."
+                  : "You haven't created any rooms recently. Start your first session above!"}
             </p>
           )}
         </section>

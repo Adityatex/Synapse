@@ -55,11 +55,6 @@ function createSmtpTransport(config, override = {}) {
   const secure = typeof override.secure === 'boolean' ? override.secure : config.secure;
   const requireTls = typeof override.requireTls === 'boolean' ? override.requireTls : config.requireTls;
   const tlsServername = override.tlsServername || config.host;
-  const tlsConfig = net.isIP(String(tlsServername || '').trim())
-    ? undefined
-    : {
-      servername: tlsServername,
-    };
 
   const transportConfig = {
     host: hostSpec,
@@ -73,11 +68,10 @@ function createSmtpTransport(config, override = {}) {
     connectionTimeout: config.connectionTimeout,
     greetingTimeout: config.greetingTimeout,
     socketTimeout: config.socketTimeout,
-    ...(tlsConfig ? { tls: tlsConfig } : {}),
   };
 
-  if (!net.isIP(hostSpec)) {
-    transportConfig.connectionUrl = `smtp${secure ? 's' : ''}://${encodeURIComponent(config.user)}:${encodeURIComponent(config.pass)}@${hostSpec}:${port}`;
+  if (!net.isIP(String(tlsServername || '').trim())) {
+    transportConfig.tls = { servername: tlsServername };
   }
 
   return nodemailer.createTransport(transportConfig);
@@ -175,25 +169,27 @@ async function tryAlternateSmtpRoutes({ config, mailOptions, firstError, email }
   }
 
   throw latestError;
-}SmtpTransporter() {
+}
+
+async function getSmtpTransporter() {
   if (cachedSmtpTransporter) {
     return cachedSmtpTransporter;
   }
 
   const config = getMailerConfig();
-  const { user, pass, isMocked, host } = config;
+  const { isMocked, host } = config;
 
   if (isMocked) {
-    console.warn("WARNING: Email service not configured (GMAIL_USER/GMAIL_APP_PASSWORD missing). Falling back to logging OTPs to console.");
+    console.warn('WARNING: Email service not configured (GMAIL_USER/GMAIL_APP_PASSWORD missing). Falling back to logging OTPs to console.');
     cachedSmtpTransporter = {
       sendMail: async (mailOptions) => {
-        console.log(`\n============== MOCK EMAIL =============`);
+        console.log('\n============== MOCK EMAIL =============');
         console.log(`To: ${mailOptions.to}`);
         console.log(`Subject: ${mailOptions.subject}`);
         console.log(`Text: ${mailOptions.text}`);
-        console.log(`=======================================\n`);
+        console.log('=======================================\n');
         return true;
-      }
+      },
     };
     return cachedSmtpTransporter;
   }
@@ -207,15 +203,54 @@ async function tryAlternateSmtpRoutes({ config, mailOptions, firstError, email }
     }
   }
 
-  cachedSmtpTransporter = createSmtpTransport(config, { host: resolvedHost, tlsServername: host });
+  cachedSmtpTransporter = createSmtpTransport(config, {
+    host: resolvedHost,
+    tlsServername: host,
+  });
 
   return cachedSmtpTransporter;
 }
 
 async function sendViaResend({ email, subject, text, html, from }) {
+  const { resendApiKey } = getMailerConfig();
+
+  if (!resendApiKey) {
+    throw new Error('RESEND_API_KEY not configured');
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.resend.com/emails',
+      {
+        from: from || 'noreply@synapse.dev',
+        to: email,
+        subject,
+        text,
+        html,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      }
+    );
+
+    if (response.status === 200 && response.data?.id) {
+      console.log(`OTP email sent via Resend to ${email} (${response.data.id})`);
+      return { delivered: true, mocked: false, provider: 'resend' };
+    }
+
+    throw new Error(response.data?.message || 'Resend API returned no message ID');
+  } catch (error) {
+    const message = error?.response?.data?.message || error?.message || 'Unknown Resend error';
+    throw new Error(`Resend delivery failed: ${message}`);
+  }
+}
+
+async function sendOtpEmail({ email, otp, purpose }) {
   const mailerConfig = getMailerConfig();
-  const apiKey = mailerConfig.resendApiKey;
-mailerConfig = getMailerConfig();
   const { from, deliveryMode } = mailerConfig;
   const actionLabel = purpose === 'signup' ? 'complete your signup' : 'complete your login';
   const expiryMinutes = process.env.OTP_EXPIRY_MINUTES || 10;
@@ -251,7 +286,7 @@ mailerConfig = getMailerConfig();
 
       try {
         await transporter.sendMail(mailOptions);
-        return { delivered: true, mocked: false };
+        return { delivered: true, mocked: false, provider: 'smtp' };
       } catch (error) {
         const shouldRetryWithIpv4 =
           TRANSIENT_SMTP_ERROR_CODES.has(error?.code) ||
@@ -289,49 +324,14 @@ mailerConfig = getMailerConfig();
       `WARNING: OTP email delivery failed for ${email} (${lastError?.code || lastError?.name || 'unknown error'}). Falling back to console logging because NODE_ENV is not production.`
     );
     console.log(`\n============== OTP FALLBACK ==============\nTo: ${email}\nPurpose: ${purpose}\nOTP: ${otp}\nExpires in: ${expiryMinutes} minutes\n==========================================\n`);
-    return { delivered: false, mocked: true, fallbackReason: lastError?.message || 'Email delivery failed' };
+    return {
+      delivered: false,
+      mocked: true,
+      fallbackReason: lastError?.message || 'Email delivery failed',
+    };
   }
 
   throw lastError || new Error('OTP email delivery failed');
-  try {
-    await transporter.sendMail(mailOptions);
-    return { delivered: true, mocked: false };
-  } catch (error) {
-    const shouldRetryWithIpv4 =
-      TRANSIENT_SMTP_ERROR_CODES.has(error?.code) ||
-      /ENETUNREACH|ETIMEDOUT|Local \(:::\d+\)/i.test(error?.message || '');
-
-    if (shouldRetryWithIpv4 && !mailerConfig.isMocked) {
-      try {
-        return await tryAlternateSmtpRoutes({
-          config: mailerConfig,
-          mailOptions,
-          firstError: error,
-          email,
-        });
-      } catch (retryError) {
-        // Keep original flow for non-production fallback and final throw path.
-        error = retryError;
-      }
-    }
-
-    const fallbackEligible =
-      !isProduction &&
-      deliveryMode !== 'smtp' &&
-      (error?.code === 'EAUTH' ||
-        TRANSIENT_SMTP_ERROR_CODES.has(error?.code) ||
-        /BadCredentials|Username and Password not accepted/i.test(error?.message || ''));
-
-    if (!fallbackEligible) {
-      throw error;
-    }
-
-    console.warn(
-      `WARNING: OTP email delivery failed for ${email} (${error?.code || error?.name || 'unknown error'}). Falling back to console logging because NODE_ENV is not production.`
-    );
-    console.log(`\n============== OTP FALLBACK ==============\nTo: ${email}\nPurpose: ${purpose}\nOTP: ${otp}\nExpires in: ${expiryMinutes} minutes\n==========================================\n`);
-    return { delivered: false, mocked: true, fallbackReason: error?.message || 'Email delivery failed' };
-  }
 }
 
 module.exports = {

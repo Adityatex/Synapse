@@ -31,6 +31,7 @@ function getMailerConfig() {
   const requireTls = String(process.env.SMTP_REQUIRE_TLS || 'true').toLowerCase() === 'true';
   const deliveryMode = String(process.env.OTP_DELIVERY_MODE || 'auto').toLowerCase();
   const resendApiKey = String(process.env.RESEND_API_KEY || '').trim();
+  const resendFrom = String(process.env.RESEND_FROM || '').trim();
 
   return {
     user: user || 'mock',
@@ -45,8 +46,23 @@ function getMailerConfig() {
     requireTls,
     deliveryMode,
     resendApiKey,
+    resendFrom,
     isMocked: !user || !pass,
   };
+}
+
+function getResendFromAddress(config) {
+  if (config.resendFrom) {
+    return config.resendFrom;
+  }
+
+  const smtpFrom = String(config.from || '').trim();
+  if (smtpFrom && !/@gmail\.com\s*>?$/i.test(smtpFrom) && !/@gmail\.com$/i.test(smtpFrom)) {
+    return smtpFrom;
+  }
+
+  // Resend's default verified sender for onboarding/testing.
+  return 'onboarding@resend.dev';
 }
 
 function createSmtpTransport(config, override = {}) {
@@ -60,6 +76,7 @@ function createSmtpTransport(config, override = {}) {
     host: hostSpec,
     port,
     secure,
+    family: 4,
     auth: {
       user: config.user,
       pass: config.pass,
@@ -121,15 +138,6 @@ async function tryAlternateSmtpRoutes({ config, mailOptions, firstError, email }
   }
 
   if (isLikelyGmailHost(config.host) && Number(config.port) !== 465) {
-    attempts.push({
-      label: 'gmail:465:implicit-tls',
-      override: {
-        port: 465,
-        secure: true,
-        requireTls: false,
-      },
-    });
-
     if (primaryIpv4) {
       attempts.push({
         label: `gmail:ipv4:${primaryIpv4}:465:implicit-tls`,
@@ -212,7 +220,9 @@ async function getSmtpTransporter() {
 }
 
 async function sendViaResend({ email, subject, text, html, from }) {
-  const { resendApiKey } = getMailerConfig();
+  const mailerConfig = getMailerConfig();
+  const { resendApiKey } = mailerConfig;
+  const resendFrom = getResendFromAddress(mailerConfig);
 
   if (!resendApiKey) {
     throw new Error('RESEND_API_KEY not configured');
@@ -222,7 +232,7 @@ async function sendViaResend({ email, subject, text, html, from }) {
     const response = await axios.post(
       'https://api.resend.com/emails',
       {
-        from: from || 'noreply@synapse.dev',
+        from: resendFrom,
         to: email,
         subject,
         text,

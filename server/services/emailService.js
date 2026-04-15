@@ -32,6 +32,9 @@ function getMailerConfig() {
   const deliveryMode = String(process.env.OTP_DELIVERY_MODE || 'auto').toLowerCase();
   const resendApiKey = String(process.env.RESEND_API_KEY || '').trim();
   const resendFrom = String(process.env.RESEND_FROM || '').trim();
+  const brevoApiKey = String(process.env.BREVO_API_KEY || '').trim();
+  const brevoSenderEmail = String(process.env.BREVO_SENDER_EMAIL || '').trim();
+  const brevoSenderName = String(process.env.BREVO_SENDER_NAME || 'Synapse').trim();
 
   return {
     user: user || 'mock',
@@ -47,6 +50,9 @@ function getMailerConfig() {
     deliveryMode,
     resendApiKey,
     resendFrom,
+    brevoApiKey,
+    brevoSenderEmail,
+    brevoSenderName,
     isMocked: !user || !pass,
   };
 }
@@ -259,6 +265,51 @@ async function sendViaResend({ email, subject, text, html, from }) {
   }
 }
 
+async function sendViaBrevo({ email, subject, text, html }) {
+  const { brevoApiKey, brevoSenderEmail, brevoSenderName } = getMailerConfig();
+
+  if (!brevoApiKey) {
+    throw new Error('BREVO_API_KEY not configured');
+  }
+
+  if (!brevoSenderEmail) {
+    throw new Error('BREVO_SENDER_EMAIL not configured');
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.brevo.com/v3/smtp/email',
+      {
+        sender: {
+          email: brevoSenderEmail,
+          name: brevoSenderName || 'Synapse',
+        },
+        to: [{ email }],
+        subject,
+        textContent: text,
+        htmlContent: html,
+      },
+      {
+        headers: {
+          'api-key': brevoApiKey,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      }
+    );
+
+    if ((response.status === 200 || response.status === 201) && response.data?.messageId) {
+      console.log(`OTP email sent via Brevo to ${email} (${response.data.messageId})`);
+      return { delivered: true, mocked: false, provider: 'brevo' };
+    }
+
+    throw new Error('Brevo API returned no message ID');
+  } catch (error) {
+    const message = error?.response?.data?.message || error?.message || 'Unknown Brevo error';
+    throw new Error(`Brevo delivery failed: ${message}`);
+  }
+}
+
 async function sendOtpEmail({ email, otp, purpose }) {
   const mailerConfig = getMailerConfig();
   const { from, deliveryMode } = mailerConfig;
@@ -280,6 +331,13 @@ async function sendOtpEmail({ email, otp, purpose }) {
   `;
 
   const providers = [];
+
+  if (mailerConfig.brevoApiKey) {
+    providers.push({
+      name: 'brevo',
+      send: async () => sendViaBrevo({ email, subject, text, html }),
+    });
+  }
 
   if (mailerConfig.resendApiKey) {
     providers.push({

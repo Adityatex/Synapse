@@ -15,6 +15,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
+import { getAvatarStyle, getUserInitial } from '../utils/avatar';
 
 class BackgroundParticle {
   constructor(canvas) {
@@ -372,7 +373,8 @@ export default function LandingPage() {
   const [isScrolled, setIsScrolled] = useState(false);
   const { isAuthenticated, user, logout } = useAuth();
   const displayName = getDisplayName(user);
-  const initials = getUserInitials(user);
+  const initials = isAuthenticated ? getUserInitial(user) : getUserInitials(user);
+  const userAvatarStyle = getAvatarStyle(user);
 
   useEffect(() => {
     document.body.style.backgroundColor = '#05070d';
@@ -443,7 +445,10 @@ export default function LandingPage() {
 
             {isAuthenticated ? (
               <div className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 pr-4 text-sm font-semibold text-white">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 via-indigo-500 to-purple-600 text-xs font-black tracking-[0.14em] text-white shadow-[0_0_20px_rgba(99,102,241,0.35)]">
+                <span
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-xs font-black tracking-[0.14em] text-white shadow-[0_0_20px_rgba(99,102,241,0.35)]"
+                  style={userAvatarStyle}
+                >
                   {initials}
                 </span>
                 <span className="hidden text-left sm:flex sm:flex-col">

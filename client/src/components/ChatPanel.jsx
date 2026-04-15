@@ -4,6 +4,7 @@ import {
   Search, X, CornerDownRight, SmilePlus, ChevronUp
 } from 'lucide-react';
 import { copyText } from '../utils/clipboard';
+import { getAvatarStyle, getUserInitial } from '../utils/avatar';
 
 // ─── URL / Link detection ────────────────────────────────────────────────────
 const URL_REGEX = /(https?:\/\/[^\s<]+)/g;
@@ -263,7 +264,6 @@ export default function ChatPanel({
   };
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
-  const getInitials = (name) => (name ? name.charAt(0).toUpperCase() : 'A');
   const border = t?.border || 'border-slate-700';
   const textMuted = t?.textMuted || 'text-slate-500';
 
@@ -309,6 +309,13 @@ export default function ChatPanel({
     const reactions = msg.reactions
       ? (msg.reactions instanceof Map ? Object.fromEntries(msg.reactions) : msg.reactions)
       : {};
+    const avatarStyle = getAvatarStyle(
+      {
+        userId: msg.senderId,
+        name: msg.senderName,
+      },
+      isMe ? currentUser?.cursorColor : undefined
+    );
 
     return (
       <div key={msgKey}
@@ -327,10 +334,11 @@ export default function ChatPanel({
 
         <div className={`flex items-end gap-2 max-w-[95%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
           {/* Avatar */}
-          <div className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[9px] font-bold text-white ${
-            isMe ? 'bg-indigo-500' : 'bg-slate-600'
-          }`}>
-            {getInitials(msg.senderName)}
+          <div
+            className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[9px] font-bold"
+            style={avatarStyle}
+          >
+            {getUserInitial(msg.senderName)}
           </div>
 
           {/* Bubble */}

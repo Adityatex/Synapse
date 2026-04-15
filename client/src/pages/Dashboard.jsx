@@ -15,6 +15,7 @@ import {
   FileCode2,
 } from 'lucide-react';
 import { getRecentRooms, deleteRoom } from '../services/roomService';
+import { getAvatarStyle, getUserInitial } from '../utils/avatar';
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -27,7 +28,8 @@ export default function Dashboard() {
   const [now, setNow] = useState(() => Date.now());
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'Developer';
-  const avatarInitial = (user?.name || user?.email || 'U')[0].toUpperCase();
+  const avatarInitial = getUserInitial(user);
+  const avatarStyle = getAvatarStyle(user);
 
   useEffect(() => {
     document.body.style.backgroundColor = '#030711';
@@ -128,7 +130,7 @@ export default function Dashboard() {
 
             {/* User badge */}
             <div className="db-user-badge">
-              <div className="db-user-avatar">{avatarInitial}</div>
+              <div className="db-user-avatar" style={avatarStyle}>{avatarInitial}</div>
               <span className="db-user-name">{displayName}</span>
             </div>
 
@@ -287,7 +289,7 @@ export default function Dashboard() {
                         Edited {timeAgo(room.lastUpdated, now)}
                       </span>
                       <div className="db-room-avatars">
-                        <div className="db-room-avatar-circle">
+                        <div className="db-room-avatar-circle" style={avatarStyle}>
                           {avatarInitial}
                         </div>
                       </div>

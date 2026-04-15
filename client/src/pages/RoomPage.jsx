@@ -612,6 +612,17 @@ function RoomSession({ roomId }) {
       ),
     [activeFileId, presence, user?.userId]
   );
+  const toolbarUser = useMemo(() => {
+    const participant = user?.userId ? presence[user.userId] : null;
+    return participant
+      ? {
+          ...user,
+          username: participant.username,
+          cursorColor: participant.cursorColor,
+          avatarGlyph: participant.avatarGlyph,
+        }
+      : user;
+  }, [presence, user]);
 
   if (loadingRoom) {
     return (
@@ -654,7 +665,7 @@ function RoomSession({ roomId }) {
         onCopyInvite={handleCopyInvite}
         onExitRoom={handleExitRoom}
         onSaveVersion={handleSaveVersion}
-        currentUser={user}
+        currentUser={toolbarUser}
       />
 
       <div className={`flex flex-1 overflow-hidden p-2 gap-2 ${theme === 'dark' ? 'bg-[#030509]' : 'bg-slate-200/60'}`}>

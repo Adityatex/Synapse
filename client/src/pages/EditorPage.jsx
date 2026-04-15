@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileProvider } from '../contexts/FileContext';
+import { useAuth } from '../context/useAuth';
 import Sidebar from '../components/Sidebar';
 import TabBar from '../components/TabBar';
 import EditorPanel from '../components/EditorPanel';
@@ -12,6 +13,7 @@ import { readStorage, writeStorage } from '../utils/storage';
 
 function EditorPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [theme, setTheme] = useState(() => {
     return readStorage('synapse-theme') || 'dark';
@@ -48,6 +50,7 @@ function EditorPage() {
           onToggleTheme={toggleTheme}
           setOutput={setOutput}
           onExit={handleExit}
+          currentUser={user}
         />
 
         {/* Main content area */}

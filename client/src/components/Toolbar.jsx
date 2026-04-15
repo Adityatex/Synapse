@@ -4,6 +4,7 @@ import { useFiles } from '../contexts/FileContext';
 import { executeCode } from '../services/api';
 import { getThemeClasses } from '../utils/theme';
 import { LANGUAGES, getLanguageByExtension } from '../utils/languageMap';
+import { getAvatarColor, getAvatarStyle, getUserInitial } from '../utils/avatar';
 import {
   Code2,
   LayoutGrid,
@@ -42,6 +43,8 @@ export default function Toolbar({
   const t = getThemeClasses(theme);
   const currentLang = activeFile ? getLanguageByExtension(activeFile.name) : LANGUAGES[0];
   const showRoomControls = Boolean(roomId || onCopyInvite);
+  const avatarColor = getAvatarColor(currentUser, currentUser?.cursorColor || currentUser?.avatarColor);
+  const avatarStyle = getAvatarStyle(currentUser, avatarColor);
 
   const handleRun = useCallback(async () => {
     if (!activeFile || isRunning) return;
@@ -88,10 +91,6 @@ export default function Toolbar({
       setTimeout(() => setSaveStatus('saved'), 1500);
       setTimeout(() => setSaveStatus('idle'), 4000);
     }
-  };
-
-  const getInitials = (name) => {
-    return name ? name.charAt(0).toUpperCase() : 'A';
   };
 
   return (
@@ -260,8 +259,11 @@ export default function Toolbar({
             <span className="hidden sm:inline">Exit</span>
           </button>
         )}
-        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-[11px] font-bold text-white border-2 border-white/20 select-none">
-          {getInitials(currentUser?.name)}
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold border-2 border-white/20 select-none"
+          style={avatarStyle}
+        >
+          {getUserInitial(currentUser)}
         </div>
       </div>
     </header>

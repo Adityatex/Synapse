@@ -16,29 +16,6 @@ const CURSOR_COLORS = [
   '#EF4444',
   '#14B8A6',
 ];
-const COLLABORATOR_GLYPHS = [
-  'A',
-  'B',
-  'C',
-  'D',
-  'E',
-  'F',
-  'G',
-  'H',
-  'J',
-  'K',
-  'L',
-  'M',
-  'N',
-  'P',
-  'R',
-  'S',
-  'T',
-  'V',
-  'W',
-  'Y',
-];
-
 const DEFAULT_ROOM_FILE = {
   id: 'welcome-py',
   name: 'main.py',
@@ -116,17 +93,12 @@ function buildParticipantAppearance(room, userId, username = '') {
       .map((participant) => participant.cursorColor)
       .filter(Boolean)
   );
-  const activeGlyphs = new Set(
-    Array.from(room.participants.values())
-      .map((participant) => participant.avatarGlyph)
-      .filter(Boolean)
-  );
   const hash = hashUserId(`${userId}:${username}`);
   const fallbackColor = CURSOR_COLORS[hash % CURSOR_COLORS.length];
-  const fallbackGlyph = COLLABORATOR_GLYPHS[hash % COLLABORATOR_GLYPHS.length];
+  const normalizedName = String(username || '').trim();
   const nextAppearance = {
     cursorColor: findFirstAvailable(CURSOR_COLORS, activeColors) || fallbackColor,
-    avatarGlyph: findFirstAvailable(COLLABORATOR_GLYPHS, activeGlyphs) || fallbackGlyph,
+    avatarGlyph: normalizedName.charAt(0).toUpperCase() || 'U',
   };
 
   room.userAppearance.set(userId, nextAppearance);

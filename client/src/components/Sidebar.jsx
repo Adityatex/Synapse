@@ -34,6 +34,7 @@ import {
 import FileTreeItem from './FileTreeItem';
 import ChatPanel from './ChatPanel';
 import { copyText } from '../utils/clipboard';
+import { getAvatarStyle, getUserInitial } from '../utils/avatar';
 
 // ─── Context Menu Component ─────────────────────────────────────────────────
 function ContextMenu({ x, y, items, onClose, theme }) {
@@ -749,13 +750,14 @@ export default function Sidebar({
               <div className="px-2 space-y-1 py-1">
                 {collaborators.map(user => {
                   const isOnline = user.status !== 'offline';
-                  const userGlyph = user.avatarGlyph || (user.username ? user.username[0].toUpperCase() : 'A');
+                  const userGlyph = getUserInitial(user);
+                  const avatarStyle = getAvatarStyle(user, user.cursorColor || user.color);
                   return (
                     <div key={user.userId || user.id} className={`flex items-center gap-3 p-2 ${theme === 'dark' ? 'hover:bg-white/5' : 'hover:bg-slate-200'} rounded-md group cursor-pointer transition-colors`}>
                       <div className="relative shrink-0">
                         <div 
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm"
-                          style={{ backgroundColor: user.cursorColor || user.color || '#3b82f6' }}
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm"
+                          style={avatarStyle}
                         >
                           {userGlyph}
                         </div>

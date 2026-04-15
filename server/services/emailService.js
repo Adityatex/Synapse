@@ -23,9 +23,9 @@ function getMailerConfig() {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
   const port = Number(process.env.SMTP_PORT || 587);
   const secure = String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
-  const connectionTimeout = Number(process.env.SMTP_CONNECTION_TIMEOUT || 30000);
-  const greetingTimeout = Number(process.env.SMTP_GREETING_TIMEOUT || 30000);
-  const socketTimeout = Number(process.env.SMTP_SOCKET_TIMEOUT || 30000);
+  const connectionTimeout = Number(process.env.SMTP_CONNECTION_TIMEOUT || 60000);
+  const greetingTimeout = Number(process.env.SMTP_GREETING_TIMEOUT || 60000);
+  const socketTimeout = Number(process.env.SMTP_SOCKET_TIMEOUT || 60000);
   const requireTls = String(process.env.SMTP_REQUIRE_TLS || 'true').toLowerCase() === 'true';
   const deliveryMode = String(process.env.OTP_DELIVERY_MODE || 'auto').toLowerCase();
 
@@ -47,16 +47,19 @@ function getMailerConfig() {
 
 function createSmtpTransport(config, override = {}) {
   const host = override.host || config.host;
+  const port = Number(override.port || config.port);
+  const secure = typeof override.secure === 'boolean' ? override.secure : config.secure;
+  const requireTls = typeof override.requireTls === 'boolean' ? override.requireTls : config.requireTls;
 
   return nodemailer.createTransport({
     host,
-    port: config.port,
-    secure: config.secure,
+    port,
+    secure,
     auth: {
       user: config.user,
       pass: config.pass,
     },
-    requireTLS: config.requireTls,
+    requireTLS: requireTls,
     connectionTimeout: config.connectionTimeout,
     greetingTimeout: config.greetingTimeout,
     socketTimeout: config.socketTimeout,
@@ -74,6 +77,79 @@ async function resolveIpv4Host(host) {
   } catch {
     return null;
   }
+}
+
+async function resolveIpv4Hosts(host) {
+  try {
+    const records = await dns.promises.resolve4(host);
+    if (!Array.isArray(records) || records.length === 0) {
+      return [];
+    }
+    return [...new Set(records.filter(Boolean))];
+  } catch {
+    const single = await resolveIpv4Host(host);
+    return single ? [single] : [];
+  }
+}
+
+function isLikelyGmailHost(host) {
+  return /(^|\.)gmail\.com$/i.test(String(host || '').trim());
+}
+
+async function tryAlternateSmtpRoutes({ config, mailOptions, firstError, email }) {
+  const ipv4Hosts = await resolveIpv4Hosts(config.host);
+  const attempts = [];
+
+  for (const ipv4Address of ipv4Hosts) {
+    attempts.push({
+      label: `ipv4:${ipv4Address}:${config.port}`,
+      override: { host: ipv4Address },
+    });
+  }
+
+  if (isLikelyGmailHost(config.host) && Number(config.port) !== 465) {
+    attempts.push({
+      label: 'gmail:465:implicit-tls',
+      override: {
+        port: 465,
+        secure: true,
+        requireTls: false,
+      },
+    });
+
+    for (const ipv4Address of ipv4Hosts) {
+      attempts.push({
+        label: `gmail:ipv4:${ipv4Address}:465:implicit-tls`,
+        override: {
+          host: ipv4Address,
+          port: 465,
+          secure: true,
+          requireTls: false,
+        },
+      });
+    }
+  }
+
+  let latestError = firstError;
+
+  for (const attempt of attempts) {
+    try {
+      const attemptConfig = {
+        ...config,
+        ...attempt.override,
+      };
+      const transport = createSmtpTransport(attemptConfig);
+      await transport.sendMail(mailOptions);
+      console.warn(
+        `WARNING: OTP SMTP fallback succeeded via ${attempt.label} after ${firstError?.code || 'unknown'} for ${email}.`
+      );
+      return { delivered: true, mocked: false, retriedWithFallbackRoute: attempt.label };
+    } catch (attemptError) {
+      latestError = attemptError;
+    }
+  }
+
+  throw latestError;
 }
 
 function getTransporter() {
@@ -138,20 +214,16 @@ async function sendOtpEmail({ email, otp, purpose }) {
       /ENETUNREACH|ETIMEDOUT|Local \(:::\d+\)/i.test(error?.message || '');
 
     if (shouldRetryWithIpv4 && !mailerConfig.isMocked) {
-      const ipv4Address = await resolveIpv4Host(mailerConfig.host);
-
-      if (ipv4Address) {
-        try {
-          const ipv4Transporter = createSmtpTransport(mailerConfig, { host: ipv4Address });
-          await ipv4Transporter.sendMail(mailOptions);
-          console.warn(
-            `WARNING: OTP SMTP fallback succeeded via IPv4 (${ipv4Address}) after ${error?.code || 'unknown'} for ${email}.`
-          );
-          return { delivered: true, mocked: false, retriedWithIpv4: true };
-        } catch (retryError) {
-          // Keep original error context and continue existing fallback/throw handling.
-          error = retryError;
-        }
+      try {
+        return await tryAlternateSmtpRoutes({
+          config: mailerConfig,
+          mailOptions,
+          firstError: error,
+          email,
+        });
+      } catch (retryError) {
+        // Keep original flow for non-production fallback and final throw path.
+        error = retryError;
       }
     }
 

@@ -12,6 +12,7 @@ import {
   Sparkles,
   Terminal,
   Users2,
+  UserRound,
   Zap,
 } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
@@ -227,25 +228,6 @@ function getDisplayName(user) {
   return user.name || user.username || user.fullName || user.email?.split('@')[0] || 'Account';
 }
 
-function getUserInitials(user) {
-  const displayName = getDisplayName(user);
-
-  if (!displayName || displayName === 'Log in') {
-    return 'LG';
-  }
-
-  const parts = displayName
-    .split(' ')
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-
-  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-}
-
 const collaborationHighlights = [
   {
     icon: Users2,
@@ -359,7 +341,6 @@ export default function LandingPage() {
   const [isScrolled, setIsScrolled] = useState(false);
   const { isAuthenticated, user, logout } = useAuth();
   const displayName = getDisplayName(user);
-  const initials = isAuthenticated ? getUserInitial(user) : getUserInitials(user);
   const userAvatarStyle = getAvatarStyle(user);
 
   useEffect(() => {
@@ -449,8 +430,8 @@ export default function LandingPage() {
                 to="/login"
                 className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 pr-4 text-sm font-semibold text-white transition-all hover:bg-white/[0.08]"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-slate-500 via-slate-400 to-slate-600 text-xs font-black tracking-[0.14em] text-white">
-                  {initials}
+                <span className="flex h-10 w-10 items-center justify-center rounded-full border border-indigo-400/30 bg-gradient-to-br from-slate-700 via-slate-800 to-[#0b1020] text-indigo-200 shadow-[0_0_18px_rgba(79,70,229,0.18)]">
+                  <UserRound className="h-5 w-5" />
                 </span>
                 <span className="hidden text-left sm:flex sm:flex-col">
                   <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
@@ -758,10 +739,10 @@ export default function LandingPage() {
               {testimonials.map((testimonial) => (
                 <article
                   key={testimonial.name}
-                  className="rounded-[2rem] border border-rose-400/30 bg-white/4 p-8 backdrop-blur-xl transition-all duration-300 hover:border-rose-300/60 hover:bg-rose-500/10"
+                  className="rounded-[2rem] border border-white/[0.08] bg-[#0b1020]/70 p-8 backdrop-blur-xl transition-all duration-300 hover:border-indigo-300/40 hover:bg-indigo-500/[0.06]"
                 >
                   <p className="text-base leading-8 text-slate-300">&ldquo;{testimonial.quote}&rdquo;</p>
-                  <div className="mt-8 border-t border-rose-300/20 pt-6">
+                  <div className="mt-8 border-t border-indigo-300/15 pt-6">
                     <p className="text-sm font-bold text-white">{testimonial.name}</p>
                     <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                       {testimonial.role}
@@ -775,7 +756,7 @@ export default function LandingPage() {
 
         <section id="faq" className="px-5 pb-24 sm:px-6 lg:px-8">
           <div className="mx-auto grid max-w-[92rem] gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-            <div className="rounded-[2.25rem] border border-lime-400/30 bg-white/3 p-8 backdrop-blur-xl transition-all duration-300 hover:border-lime-300/60 hover:bg-lime-500/8 sm:p-10">
+            <div className="rounded-[2.25rem] border border-indigo-400/20 bg-[#0b1020]/75 p-8 backdrop-blur-xl transition-all duration-300 hover:border-indigo-300/40 hover:bg-indigo-500/[0.06] sm:p-10">
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-indigo-300">
                 FAQ
               </p>
@@ -794,7 +775,7 @@ export default function LandingPage() {
               {faqItems.map((item) => (
                 <article
                   key={item.question}
-                  className="rounded-[1.75rem] border border-lime-400/30 bg-white/4 p-6 backdrop-blur-xl transition-all duration-300 hover:border-lime-300/60 hover:bg-lime-500/10"
+                  className="rounded-[1.75rem] border border-white/[0.08] bg-[#0b1020]/70 p-6 backdrop-blur-xl transition-all duration-300 hover:border-cyan-300/30 hover:bg-cyan-500/[0.06]"
                 >
                   <h3 className="text-lg font-bold text-white">{item.question}</h3>
                   <p className="mt-3 text-sm leading-7 text-slate-400">{item.answer}</p>
@@ -805,8 +786,8 @@ export default function LandingPage() {
         </section>
 
         <section className="px-5 pb-24 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-[92rem] rounded-[2.25rem] border border-amber-400/30 bg-white/4 px-6 py-10 text-center backdrop-blur-xl transition-all duration-300 hover:border-amber-300/60 hover:bg-amber-500/8 sm:px-10 sm:py-14">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-300">
+          <div className="mx-auto max-w-[92rem] rounded-[2.25rem] border border-indigo-400/20 bg-[#0b1020]/75 px-6 py-10 text-center backdrop-blur-xl transition-all duration-300 hover:border-indigo-300/40 hover:bg-indigo-500/[0.06] sm:px-10 sm:py-14">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-500/[0.08] px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-indigo-200">
               <Sparkles size={14} className="text-indigo-300" />
               Ready To Collaborate
             </div>
@@ -816,20 +797,20 @@ export default function LandingPage() {
             >
               Build faster with your team in Synapse.
             </h2>
-            <p className="mx-auto mb-8 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg">
+            <p className="mx-auto mb-8 max-w-2xl text-base leading-relaxed text-slate-300 sm:text-lg">
               Create rooms, code together in real time, run your programs, and use AI assistance
               without leaving your browser.
             </p>
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link
                 to={isAuthenticated ? '/dashboard' : '/signup'}
-                className="inline-flex min-w-[12rem] items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-white/10"
+                className="inline-flex min-w-[12rem] items-center justify-center rounded-full border border-indigo-300/20 bg-white/[0.05] px-6 py-3.5 text-sm font-bold text-white transition hover:border-indigo-300/35 hover:bg-indigo-500/[0.08]"
               >
                 {isAuthenticated ? 'Open Dashboard' : 'Create Account'}
               </Link>
               <Link
                 to={isAuthenticated ? '/editor' : '/login'}
-                className="inline-flex min-w-[12rem] items-center justify-center rounded-full bg-indigo-600 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-indigo-500"
+                className="inline-flex min-w-[12rem] items-center justify-center rounded-full bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-3.5 text-sm font-bold text-white transition hover:from-indigo-500 hover:to-blue-500"
               >
                 {isAuthenticated ? 'Open Editor' : 'Launch Editor'}
               </Link>

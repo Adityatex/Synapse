@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useFiles } from '../contexts/FileContext';
 import { getThemeClasses } from '../utils/theme';
+import { readStorage, writeStorage } from '../utils/storage';
 import {
   Files,
   Search,
@@ -35,6 +36,14 @@ import FileTreeItem from './FileTreeItem';
 import ChatPanel from './ChatPanel';
 import { copyText } from '../utils/clipboard';
 import { getAvatarStyle, getUserInitial } from '../utils/avatar';
+
+const SIDEBAR_WIDTH_KEY = 'synapse-primary-sidebar-width';
+const MIN_SIDEBAR_WIDTH = 280;
+const MAX_SIDEBAR_WIDTH = 720;
+
+function clampSidebarWidth(value) {
+  return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, value));
+}
 
 // ─── Context Menu Component ─────────────────────────────────────────────────
 function ContextMenu({ x, y, items, onClose, theme }) {
@@ -136,10 +145,46 @@ export default function Sidebar({
   const [renameTargetId, setRenameTargetId] = useState(null);
   const [seenChatCount, setSeenChatCount] = useState(chatMessages.length);
   const [seenUserCount, setSeenUserCount] = useState(collaborators.length);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const savedWidth = Number(readStorage(SIDEBAR_WIDTH_KEY));
+    if (Number.isFinite(savedWidth)) {
+      return clampSidebarWidth(savedWidth);
+    }
+    return 320;
+  });
   const t = getThemeClasses(theme);
 
   const createCommittedRef = useRef(false);
   const createInputRef = useRef(null);
+  const resizeStateRef = useRef(null);
+
+  useEffect(() => {
+    writeStorage(SIDEBAR_WIDTH_KEY, String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    const handlePointerMove = (event) => {
+      const resizeState = resizeStateRef.current;
+      if (!resizeState) return;
+
+      const nextWidth = resizeState.startWidth + (event.clientX - resizeState.startX);
+      setSidebarWidth(clampSidebarWidth(nextWidth));
+    };
+
+    const stopResizing = () => {
+      resizeStateRef.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', stopResizing);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', stopResizing);
+    };
+  }, []);
 
   const effectiveSelectedItemId = selectedItemId || activeFileId || null;
 
@@ -473,6 +518,16 @@ export default function Sidebar({
     });
   };
 
+  const startResizing = (event) => {
+    event.preventDefault();
+    resizeStateRef.current = {
+      startX: event.clientX,
+      startWidth: sidebarWidth,
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
   return (
     <>
       {/* Activity Bar */}
@@ -514,7 +569,18 @@ export default function Sidebar({
 
       {/* Primary Sidebar */}
       {activeSidebar && (
-        <aside className={`w-64 ${t.sidebar} border rounded-xl shadow-lg flex flex-col transition-colors duration-300 shrink-0 overflow-hidden ${theme === 'dark' ? 'border-white/10 shadow-black/50' : 'border-slate-300 shadow-slate-200/50'}`}>
+        <aside
+          style={{ width: `${sidebarWidth}px` }}
+          className={`relative ${t.sidebar} border rounded-xl shadow-lg flex flex-col transition-[width] duration-200 shrink-0 overflow-hidden min-w-0 ${theme === 'dark' ? 'border-white/10 shadow-black/50' : 'border-slate-300 shadow-slate-200/50'}`}
+        >
+          <button
+            type="button"
+            aria-label="Resize sidebar"
+            onPointerDown={startResizing}
+            className="absolute right-0 top-0 z-20 h-full w-3 translate-x-1/2 cursor-col-resize hover:bg-white/5"
+          >
+            <span className="sr-only">Resize</span>
+          </button>
           <div className={`p-3 text-[11px] font-bold ${t.textMuted} uppercase tracking-[0.12em] flex justify-between items-center bg-black/10`}>
             {activeSidebar === 'explorer' && "Explorer"}
             {activeSidebar === 'search' && "Search"}

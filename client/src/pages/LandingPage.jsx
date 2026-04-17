@@ -341,6 +341,7 @@ export default function LandingPage() {
   const [isScrolled, setIsScrolled] = useState(false);
   const { isAuthenticated, user, logout } = useAuth();
   const displayName = getDisplayName(user);
+  const initials = getUserInitial(user);
   const userAvatarStyle = getAvatarStyle(user);
 
   useEffect(() => {

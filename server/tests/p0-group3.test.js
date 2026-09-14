@@ -1,8 +1,7 @@
 /**
  * P0 Group 3 tests, part 1 (P0-09 → P0-10).
  *
- * Uses Node's built-in test runner (node:test) + supertest.
- * Migrated to Vitest in P0-12 (same file, new runner).
+ * Uses Vitest + Supertest (migrated from node:test in P0-12).
  *
  * Run: npm test (server/)
  */
@@ -12,10 +11,16 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-that-is-long-eno
 process.env.JUDGE0_API_HOST = '127.0.0.1:9';
 process.env.JUDGE0_API_KEY = 'p0-test-key';
 
-const { describe, it } = require('node:test');
+import { describe, it, beforeAll, afterEach, afterAll } from 'vitest';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const path = require('node:path');
 const express = require('express');
 const pino = require('pino');
 const pinoHttp = require('pino-http');
@@ -199,6 +204,236 @@ describe('P0-10: Sentry error tracking', () => {
     };
     walk(CLIENT_SRC);
     assert.deepEqual(offenders, [], `hardcoded Sentry DSN in: ${offenders.join(', ')}`);
+  });
+});
+
+describe('P0-12: OTP consume logic', () => {
+  const crypto = require('node:crypto');
+  const OtpVerification = require('../models/OtpVerification');
+  const { consumeValidOtp } = require('../routes/auth');
+
+  const realFindOne = OtpVerification.findOne;
+  const realDeleteOne = OtpVerification.deleteOne;
+
+  afterEach(() => {
+    OtpVerification.findOne = realFindOne;
+    OtpVerification.deleteOne = realDeleteOne;
+  });
+
+  function sha(otp) {
+    return crypto.createHash('sha256').update(String(otp)).digest('hex');
+  }
+
+  function stubDb(record) {
+    const deleted = [];
+    OtpVerification.findOne = async () => record;
+    OtpVerification.deleteOne = async (filter) => {
+      deleted.push(filter);
+      return {};
+    };
+    return deleted;
+  }
+
+  function liveRecord(overrides = {}) {
+    return {
+      _id: 'otp-id-1',
+      email: 'otp@example.com',
+      purpose: 'login',
+      otpHash: sha('123456'),
+      expiresAt: new Date(Date.now() + 60000),
+      attempts: 0,
+      loginUserId: 'user-1',
+      savedAttempts: null,
+      save: async function save() {
+        this.savedAttempts = this.attempts;
+      },
+      ...overrides,
+    };
+  }
+
+  it('rejects when no OTP was requested', async () => {
+    stubDb(null);
+    const result = await consumeValidOtp({ email: 'otp@example.com', purpose: 'login', otp: '123456' });
+    assert.ok(/No active OTP/.test(result.error));
+  });
+
+  it('rejects expired OTPs and deletes them', async () => {
+    const deleted = stubDb(liveRecord({ expiresAt: new Date(Date.now() - 1000) }));
+    const result = await consumeValidOtp({ email: 'otp@example.com', purpose: 'login', otp: '123456' });
+    assert.ok(/expired/.test(result.error));
+    assert.equal(deleted.length, 1);
+  });
+
+  it('rejects after too many attempts and deletes the record', async () => {
+    const deleted = stubDb(liveRecord({ attempts: 5 }));
+    const result = await consumeValidOtp({ email: 'otp@example.com', purpose: 'login', otp: '123456' });
+    assert.ok(/Too many/.test(result.error));
+    assert.equal(deleted.length, 1);
+  });
+
+  it('rejects a wrong OTP and increments attempts', async () => {
+    const record = liveRecord();
+    stubDb(record);
+    const result = await consumeValidOtp({ email: 'otp@example.com', purpose: 'login', otp: '000000' });
+    assert.ok(/Invalid OTP/.test(result.error));
+    assert.equal(record.savedAttempts, 1);
+  });
+
+  it('consumes a correct OTP and deletes it', async () => {
+    const record = liveRecord();
+    const deleted = stubDb(record);
+    const result = await consumeValidOtp({ email: 'otp@example.com', purpose: 'login', otp: '123456' });
+    assert.ok(!result.error);
+    assert.equal(result.record, record);
+    assert.deepEqual(deleted, [{ _id: 'otp-id-1' }]);
+  });
+});
+
+describe('P0-12: roomStore.applyDocumentUpdate', () => {
+  const Y = require('yjs');
+  const RoomModel = require('../models/Room');
+  const roomStore = require('../socket/roomStore');
+
+  beforeAll(() => {
+    // Pure in-memory behaviour — never touch the database.
+    RoomModel.create = async () => ({});
+    RoomModel.updateOne = async () => ({});
+    RoomModel.findOne = async () => null;
+  });
+
+  function yUpdateFor(text) {
+    const doc = new Y.Doc();
+    doc.getText('content').insert(0, text);
+    return Buffer.from(Y.encodeStateAsUpdate(doc)).toString('base64');
+  }
+
+  it('merges a remote Yjs update into the file (no overwrite)', async () => {
+    const room = await roomStore.createRoom({ userId: 'u-room-1' }, 'P0-12 Room');
+    const fileId = room.files[0].id;
+    const originalHead = room.files[0].content.slice(0, 20);
+
+    const result = roomStore.applyDocumentUpdate(room.roomId, fileId, yUpdateFor('hello-p0-12'));
+    assert.ok(result);
+    assert.ok(result.content.includes('hello-p0-12'), 'remote insert must be present');
+    assert.ok(result.content.includes(originalHead), 'original content must survive (CRDT merge)');
+  });
+
+  it('returns null for an unknown room', () => {
+    assert.equal(roomStore.applyDocumentUpdate('NOPE00', 'whatever', yUpdateFor('x')), null);
+  });
+
+  it('returns null for an unknown file', async () => {
+    const room = await roomStore.createRoom({ userId: 'u-room-2' }, 'P0-12 Room 2');
+    assert.equal(roomStore.applyDocumentUpdate(room.roomId, 'no-such-file', yUpdateFor('x')), null);
+  });
+
+  it('two sequential updates converge in one document', async () => {
+    const room = await roomStore.createRoom({ userId: 'u-room-3' }, 'P0-12 Room 3');
+    const fileId = room.files[0].id;
+    roomStore.applyDocumentUpdate(room.roomId, fileId, yUpdateFor('alpha'));
+    const result = roomStore.applyDocumentUpdate(room.roomId, fileId, yUpdateFor('beta'));
+    assert.ok(result.content.includes('alpha'));
+    assert.ok(result.content.includes('beta'));
+  });
+});
+
+describe('P0-12: socket lock enforcement end-to-end (P0-03 regression)', () => {
+  const http = require('node:http');
+  const jwt = require('jsonwebtoken');
+  const { io: ioClient } = require('socket.io-client');
+  const { createSocketServer } = require('../socket/socketManager');
+  const RoomModel = require('../models/Room');
+  const MessageModel = require('../models/Message');
+  const roomStore = require('../socket/roomStore');
+  const Y = require('yjs');
+
+  const victim = { userId: 'victim-1', name: 'Victim', email: 'victim@example.com' };
+  const attacker = { userId: 'attacker-9', name: 'Attacker', email: 'attacker@example.com' };
+
+  let httpServer;
+  let io;
+  let url;
+  let roomId;
+  let fileId;
+  let victimSocket;
+  let attackerSocket;
+
+  function sign(user) {
+    return jwt.sign(user, process.env.JWT_SECRET, { expiresIn: '1h' });
+  }
+
+  function waitFor(socket, event, timeoutMs = 3000) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`timed out waiting for ${event}`)), timeoutMs);
+      socket.once(event, (payload) => {
+        clearTimeout(timer);
+        resolve(payload);
+      });
+    });
+  }
+
+  beforeAll(async () => {
+    RoomModel.create = async () => ({});
+    RoomModel.updateOne = async () => ({});
+    RoomModel.findOne = async () => null;
+    MessageModel.create = async (doc) => ({ _id: 'mock-msg', ...doc });
+
+    const room = await roomStore.createRoom({ userId: victim.userId }, 'Lock Room');
+    roomId = room.roomId;
+    fileId = room.files[0].id;
+
+    httpServer = http.createServer();
+    io = createSocketServer(httpServer);
+    await new Promise((resolve) => httpServer.listen(0, resolve));
+    url = `http://127.0.0.1:${httpServer.address().port}`;
+
+    victimSocket = ioClient(url, { auth: { token: sign(victim) } });
+    attackerSocket = ioClient(url, { auth: { token: sign(attacker) } });
+
+    victimSocket.emit('join-room', { roomId });
+    attackerSocket.emit('join-room', { roomId });
+    await waitFor(victimSocket, 'room-joined');
+    await waitFor(attackerSocket, 'room-joined');
+
+    victimSocket.emit('request-file-lock', { roomId, fileId });
+    // The lock broadcast is the signal the lock is held.
+    await waitFor(victimSocket, 'file-locks-updated');
+  }, 15000);
+
+  afterAll(async () => {
+    victimSocket?.disconnect();
+    attackerSocket?.disconnect();
+    io?.close();
+    if (httpServer) {
+      await new Promise((resolve) => httpServer.close(resolve));
+    }
+  });
+
+  it("a second user's edit to a locked file is denied (no bypass)", async () => {
+    const noLeak = new Promise((resolve) => {
+      const timer = setTimeout(() => resolve('none'), 500);
+      victimSocket.once('remote-code-change', (payload) => {
+        clearTimeout(timer);
+        resolve(payload);
+      });
+    });
+
+    attackerSocket.emit('code-change', { roomId, fileId, changes: 'bogus-update' });
+    const denial = await waitFor(attackerSocket, 'lock-denied');
+    assert.equal(denial.fileId, fileId);
+    assert.equal(denial.lockedBy.userId, victim.userId);
+
+    assert.equal(await noLeak, 'none', 'locked edit must not propagate to peers');
+  });
+
+  it('the lock owner can still edit (channel is alive)', async () => {
+    const doc = new Y.Doc();
+    doc.getText('content').insert(0, 'owner-edit-p0-12');
+    const changes = Buffer.from(Y.encodeStateAsUpdate(doc)).toString('base64');
+
+    victimSocket.emit('code-change', { roomId, fileId, changes });
+    const remote = await waitFor(attackerSocket, 'remote-code-change');
+    assert.equal(remote.fileId, fileId);
   });
 });
 

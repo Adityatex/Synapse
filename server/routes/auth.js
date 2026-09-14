@@ -398,3 +398,7 @@ router.get('/me', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+// P0-12: exported for unit testing (OTP consume logic). Attaching to the
+// router keeps existing `require('../routes/auth')` mounts working unchanged.
+module.exports.consumeValidOtp = consumeValidOtp;

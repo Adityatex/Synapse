@@ -1,7 +1,7 @@
 /**
  * P0 Group 1 regression tests (P0-01 → P0-04).
  *
- * Uses Node's built-in test runner (node:test) + supertest.
+ * Uses Vitest + Supertest (migrated from node:test in P0-12).
  * Full Vitest + Supertest suite with 15+ tests lands in P0-12 (Group 3);
  * these are the minimal security regression tests required by Group 1.
  *
@@ -16,10 +16,16 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-that-is-long-eno
 process.env.JUDGE0_API_HOST = '127.0.0.1:9';
 process.env.JUDGE0_API_KEY = 'p0-test-key';
 
-const { describe, it, before } = require('node:test');
+import { describe, it, beforeAll } from 'vitest';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const path = require('node:path');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const request = require('supertest');
@@ -35,7 +41,7 @@ function signTestToken(user = TEST_USER) {
 
 describe('P0-01: /api/execute requires authentication', () => {
   let app;
-  before(() => {
+  beforeAll(() => {
     const executeRoute = require('../routes/execute');
     const requestIdMiddleware = require('../middleware/requestId');
     app = express();

@@ -1,7 +1,7 @@
 /**
  * P0 Group 2 regression tests (P0-05 → P0-08).
  *
- * Uses Node's built-in test runner (node:test) + supertest.
+ * Uses Vitest + Supertest (migrated from node:test in P0-12).
  * Full Vitest suite lands in P0-12 (Group 3); these are the minimal
  * acceptance tests required by Group 2.
  *
@@ -14,12 +14,17 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-that-is-long-eno
 process.env.JUDGE0_API_HOST = '127.0.0.1:9';
 process.env.JUDGE0_API_KEY = 'p0-test-key';
 
-const { describe, it } = require('node:test');
+import { describe, it } from 'vitest';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const path = require('node:path');
-const { execFileSync } = require('node:child_process');
-const express = require('express');
+const { execFileSync } = require('node:child_process');const express = require('express');
 const helmet = require('helmet');
 const request = require('supertest');
 

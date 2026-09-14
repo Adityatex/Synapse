@@ -16,4 +16,11 @@ module.exports = [
     },
     ...js.configs.recommended,
   },
+  {
+    // Vitest transforms test files as ESM (runner imports).
+    files: ['tests/**/*.js', 'vitest.config.js'],
+    languageOptions: {
+      sourceType: 'module',
+    },
+  },
 ];

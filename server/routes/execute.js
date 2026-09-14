@@ -37,6 +37,7 @@ router.post(
     if (!source_code || !language_id) {
       return res.status(400).json({
         error: 'source_code and language_id are required',
+        requestId: req.id,
       });
     }
 
@@ -75,6 +76,7 @@ router.post(
     if (!result) {
       return res.status(408).json({
         error: 'Code execution timed out. Please try again.',
+        requestId: req.id,
       });
     }
 
@@ -87,9 +89,12 @@ router.post(
       memory: result.memory,
     });
   } catch (error) {
-    console.error('Execution error:', error.response?.data || error.message);
+    // P0-07: full upstream detail stays in server logs; the client only gets
+    // a generic message + correlation ID (never Judge0 response bodies).
+    console.error(`[${req.id}] Execution error:`, error.response?.data || error.message);
     res.status(500).json({
-      error: error.response?.data?.message || 'Failed to execute code. Please try again.',
+      error: 'Failed to execute code. Please try again.',
+      requestId: req.id,
     });
   }
 });
@@ -100,8 +105,8 @@ router.get('/languages', authMiddleware, async (req, res) => {
     const response = await judge0Client.get('/languages');
     res.json(response.data);
   } catch (error) {
-    console.error('Languages error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch languages' });
+    console.error(`[${req.id}] Languages error:`, error.message);
+    res.status(500).json({ error: 'Failed to fetch languages', requestId: req.id });
   }
 });
 

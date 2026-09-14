@@ -8,13 +8,14 @@ const AIMessage = require('../models/AIMessage');
 
 const router = express.Router();
 
-function ensureDatabaseReady(res) {
+function ensureDatabaseReady(req, res) {
   if (mongoose.connection.readyState === 1) {
     return true;
   }
 
   res.status(503).json({
     error: 'AI chat is temporarily unavailable because the database is disconnected.',
+    requestId: req.id,
   });
   return false;
 }
@@ -47,7 +48,7 @@ router.use(authMiddleware);
 
 router.post('/new', async (req, res) => {
   try {
-    if (!ensureDatabaseReady(res)) {
+    if (!ensureDatabaseReady(req, res)) {
       return;
     }
 
@@ -58,16 +59,17 @@ router.post('/new', async (req, res) => {
 
     return res.status(201).json(conversation);
   } catch (error) {
-    console.error('Create conversation error:', error);
+    console.error(`[${req.id}] Create conversation error:`, error);
     return res.status(500).json({
       error: 'Failed to create a new conversation.',
+      requestId: req.id,
     });
   }
 });
 
 router.get('/history', async (req, res) => {
   try {
-    if (!ensureDatabaseReady(res)) {
+    if (!ensureDatabaseReady(req, res)) {
       return;
     }
 
@@ -79,16 +81,17 @@ router.get('/history', async (req, res) => {
 
     return res.json(conversations);
   } catch (error) {
-    console.error('Fetch conversation history error:', error);
+    console.error(`[${req.id}] Fetch conversation history error:`, error);
     return res.status(500).json({
       error: 'Failed to load conversation history.',
+      requestId: req.id,
     });
   }
 });
 
 router.get('/conversation/:conversationId', async (req, res) => {
   try {
-    if (!ensureDatabaseReady(res)) {
+    if (!ensureDatabaseReady(req, res)) {
       return;
     }
 
@@ -100,6 +103,7 @@ router.get('/conversation/:conversationId', async (req, res) => {
     if (!conversation) {
       return res.status(404).json({
         error: 'Conversation not found.',
+      requestId: req.id,
       });
     }
 
@@ -112,16 +116,17 @@ router.get('/conversation/:conversationId', async (req, res) => {
       messages,
     });
   } catch (error) {
-    console.error('Load conversation error:', error);
+    console.error(`[${req.id}] Load conversation error:`, error);
     return res.status(500).json({
       error: 'Failed to load conversation messages.',
+      requestId: req.id,
     });
   }
 });
 
 router.delete('/conversation/:conversationId', async (req, res) => {
   try {
-    if (!ensureDatabaseReady(res)) {
+    if (!ensureDatabaseReady(req, res)) {
       return;
     }
 
@@ -133,6 +138,7 @@ router.delete('/conversation/:conversationId', async (req, res) => {
     if (!conversation) {
       return res.status(404).json({
         error: 'Conversation not found.',
+      requestId: req.id,
       });
     }
 
@@ -141,16 +147,17 @@ router.delete('/conversation/:conversationId', async (req, res) => {
 
     return res.json({ success: true });
   } catch (error) {
-    console.error('Delete conversation error:', error);
+    console.error(`[${req.id}] Delete conversation error:`, error);
     return res.status(500).json({
       error: 'Failed to delete conversation.',
+      requestId: req.id,
     });
   }
 });
 
 router.post('/message', async (req, res) => {
   try {
-    if (!ensureDatabaseReady(res)) {
+    if (!ensureDatabaseReady(req, res)) {
       return;
     }
 
@@ -160,12 +167,14 @@ router.post('/message', async (req, res) => {
     if (!normalizedContent) {
       return res.status(400).json({
         error: 'Message content is required.',
+        requestId: req.id,
       });
     }
 
     if (!['user', 'assistant', 'system'].includes(role)) {
       return res.status(400).json({
         error: 'A valid message role is required.',
+        requestId: req.id,
       });
     }
 
@@ -173,6 +182,7 @@ router.post('/message', async (req, res) => {
     if (!conversation) {
       return res.status(404).json({
         error: 'Conversation not found.',
+      requestId: req.id,
       });
     }
 
@@ -198,16 +208,17 @@ router.post('/message', async (req, res) => {
       message,
     });
   } catch (error) {
-    console.error('Save conversation message error:', error);
+    console.error(`[${req.id}] Save conversation message error:`, error);
     return res.status(500).json({
       error: 'Failed to save the conversation message.',
+      requestId: req.id,
     });
   }
 });
 
 router.post('/chat', aiChatLimiter, async (req, res) => {
   try {
-    if (!ensureDatabaseReady(res)) {
+    if (!ensureDatabaseReady(req, res)) {
       return;
     }
 
@@ -217,6 +228,7 @@ router.post('/chat', aiChatLimiter, async (req, res) => {
     if (!normalizedMessage) {
       return res.status(400).json({
         error: 'A message is required.',
+        requestId: req.id,
       });
     }
 
@@ -228,6 +240,7 @@ router.post('/chat', aiChatLimiter, async (req, res) => {
       if (!conversation) {
         return res.status(404).json({
           error: 'Conversation not found.',
+      requestId: req.id,
         });
       }
     } else {
@@ -281,20 +294,13 @@ router.post('/chat', aiChatLimiter, async (req, res) => {
       assistantMessage,
     });
   } catch (error) {
-    console.error('AI chat error:', error.response?.data || error.message);
+    // P0-07: full upstream detail stays in server logs; the client only gets
+    // a generic message + correlation ID (never Groq response bodies).
+    console.error(`[${req.id}] AI chat error:`, error.response?.data || error.message);
 
-    const upstreamMessage =
-      error.response?.data?.error?.message ||
-      error.response?.data?.message ||
-      error.message;
-
-    const statusCode =
-      error.response?.status && error.response.status >= 400 && error.response.status < 600
-        ? error.response.status
-        : 500;
-
-    return res.status(statusCode).json({
-      error: upstreamMessage || 'Failed to generate AI response.',
+    return res.status(500).json({
+      error: 'Failed to generate AI response.',
+      requestId: req.id,
     });
   }
 });

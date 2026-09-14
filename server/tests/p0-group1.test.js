@@ -37,8 +37,10 @@ describe('P0-01: /api/execute requires authentication', () => {
   let app;
   before(() => {
     const executeRoute = require('../routes/execute');
+    const requestIdMiddleware = require('../middleware/requestId');
     app = express();
     app.use(express.json());
+    app.use(requestIdMiddleware);
     app.use('/api', executeRoute);
   });
 

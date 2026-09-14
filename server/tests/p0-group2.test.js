@@ -10,6 +10,9 @@
 'use strict';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-that-is-long-enough-for-p0-group2-1234567890';
+// Closed local port → fast, deterministic, offline-safe upstream failures.
+process.env.JUDGE0_API_HOST = '127.0.0.1:9';
+process.env.JUDGE0_API_KEY = 'p0-test-key';
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
@@ -192,5 +195,74 @@ describe('P0-06: boot-time env validation', () => {
     const listenAt = src.indexOf('server.listen(');
     assert.ok(validateAt > 0, 'server.js must call loadEnvOrExit');
     assert.ok(validateAt < listenAt, 'validation must run before listen()');
+  });
+});
+
+describe('P0-07: sanitized error responses', () => {
+  const jwt = require('jsonwebtoken');
+
+  function authedApp(router, mountPath) {
+    // Mirrors production: requestId runs before everything (server.js).
+    const app = express();
+    app.use(express.json());
+    app.use(requestIdMiddleware);
+    app.use(mountPath, router);
+    return app;
+  }
+
+  function signToken() {
+    return jwt.sign(
+      { userId: 'p0-07-user', name: 'P0 Seven', email: 'p0-07@example.com' },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+  }
+
+  it('auth errors carry { error, requestId } and no infra hints (DB down → 503)', async () => {
+    // No Mongo connection in tests → ensureDatabaseReady short-circuits.
+    const authRoute = require('../routes/auth');
+    const res = await request(authedApp(authRoute, '/api/auth'))
+      .post('/api/auth/signup/request-otp')
+      .send({ name: 'N', email: 'p0-07@example.com', password: 'secret123' });
+    assert.equal(res.status, 503);
+    assert.ok(typeof res.body.error === 'string' && res.body.error.length > 0);
+    assert.ok(typeof res.body.requestId === 'string' && res.body.requestId.length > 0);
+  });
+
+  it('execute 500 is generic with requestId (no Judge0 body forwarded)', async () => {
+    const executeRoute = require('../routes/execute');
+    const res = await request(authedApp(executeRoute, '/api'))
+      .post('/api/execute')
+      .set('Authorization', `Bearer ${signToken()}`)
+      .send({ source_code: 'print(1)', language_id: 71 });
+    assert.equal(res.status, 500);
+    assert.equal(res.body.error, 'Failed to execute code. Please try again.');
+    assert.ok(typeof res.body.requestId === 'string' && res.body.requestId.length > 0);
+    assert.ok(!('token' in res.body), 'upstream Judge0 fields must not leak');
+  });
+
+  it('AI errors carry { error, requestId } and no Groq body (DB down → 503)', async () => {
+    const aiRoute = require('../routes/ai');
+    const res = await request(authedApp(aiRoute, '/api/ai'))
+      .post('/api/ai/chat')
+      .set('Authorization', `Bearer ${signToken()}`)
+      .send({ message: 'hello' });
+    assert.equal(res.status, 503);
+    assert.ok(typeof res.body.error === 'string' && res.body.error.length > 0);
+    assert.ok(typeof res.body.requestId === 'string' && res.body.requestId.length > 0);
+  });
+
+  it('no infra hints or upstream forwarding remain (static check)', () => {
+    const authSrc = fs.readFileSync(path.join(__dirname, '..', 'routes', 'auth.js'), 'utf8');
+    assert.ok(!authSrc.includes('Render outbound'), 'auth must not mention Render networking');
+    assert.ok(!authSrc.includes('Gmail app password'), 'auth must not mention Gmail credentials');
+    assert.ok(!authSrc.includes('server/.env'), 'auth must not point at server files');
+
+    const executeSrc = fs.readFileSync(path.join(__dirname, '..', 'routes', 'execute.js'), 'utf8');
+    assert.ok(!executeSrc.includes('error.response?.data?.message'), 'execute must not forward Judge0 bodies');
+
+    const aiSrc = fs.readFileSync(path.join(__dirname, '..', 'routes', 'ai.js'), 'utf8');
+    assert.ok(!aiSrc.includes('upstreamMessage'), 'ai must not forward Groq bodies');
+    assert.ok(!aiSrc.includes('error.response?.data?.error'), 'ai must not forward Groq bodies');
   });
 });

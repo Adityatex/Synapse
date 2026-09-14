@@ -25,34 +25,24 @@ const router = express.Router();
 const OTP_EXPIRY_MINUTES = Number(process.env.OTP_EXPIRY_MINUTES || 10);
 const MAX_OTP_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS || 5);
 
-function ensureDatabaseReady(res) {
+function ensureDatabaseReady(req, res) {
   if (require('mongoose').connection.readyState === 1) {
     return true;
   }
 
   res.status(503).json({
     error: 'Authentication is temporarily unavailable because the database is disconnected. Please wait a few seconds and try again.',
+    requestId: req.id,
   });
   return false;
 }
 
-function getPublicAuthError(error, fallbackMessage) {
-  if (error?.code === 'EAUTH') {
-    return 'OTP email delivery is misconfigured on the server. Please update the Gmail app password in server/.env.';
-  }
-
-  if (error?.code === 'ETIMEDOUT') {
-    return 'OTP email delivery timed out connecting to Gmail. Check Render outbound network access and SMTP settings.';
-  }
-
-  if (error?.code === 'ENETUNREACH' || error?.code === 'EHOSTUNREACH' || error?.code === 'ESOCKET') {
-    return 'OTP email delivery could not reach Gmail from the server network. Check Render outbound SMTP access and IPv6/IPv4 routing.';
-  }
-
-  if (/BadCredentials|Username and Password not accepted/i.test(error?.message || '')) {
-    return 'OTP email delivery is misconfigured on the server. Please update the Gmail app password in server/.env.';
-  }
-
+// P0-07: public errors are generic by design. Infrastructure detail (SMTP
+// codes, hosts, credential hints) must never reach the client — the full
+// error is logged server-side with the request ID instead. The `error`
+// argument is intentionally unused; it is kept in the signature so call sites
+// still pass the caught error for logging.
+function getPublicAuthError(fallbackMessage) {
   return fallbackMessage;
 }
 
@@ -148,7 +138,7 @@ router.post(
   otpRequestByIpLimiter,
   async (req, res) => {
   try {
-    if (!ensureDatabaseReady(res)) {
+    if (!ensureDatabaseReady(req, res)) {
       return;
     }
 
@@ -158,18 +148,21 @@ router.post(
     if (!name?.trim() || !normalizedEmail || !password) {
       return res.status(400).json({
         error: 'Username, email, and password are required.',
+        requestId: req.id,
       });
     }
 
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
       return res.status(400).json({
         error: 'Please enter a valid email address.',
+        requestId: req.id,
       });
     }
 
     if (password.length < 6) {
       return res.status(400).json({
         error: 'Password must be at least 6 characters long.',
+        requestId: req.id,
       });
     }
 
@@ -177,6 +170,7 @@ router.post(
     if (existingUser) {
       return res.status(409).json({
         error: 'An account with this email already exists.',
+        requestId: req.id,
       });
     }
 
@@ -199,23 +193,25 @@ router.post(
     debugLog(`Signup OTP request error: ${err.message}`);
     debugLog(`Signup OTP request error name: ${err.name}`);
     debugLog(`Signup OTP request error stack: ${err.stack}`);
-    console.error('Signup OTP request error:', err.message);
+    console.error(`[${req.id}] Signup OTP request error:`, err);
 
     if (err.code === 11000) {
       return res.status(409).json({
         error: 'An account with this email already exists.',
+        requestId: req.id,
       });
     }
 
     res.status(500).json({
-      error: getPublicAuthError(err, 'Something went wrong. Please try again later.'),
+      error: getPublicAuthError('Something went wrong. Please try again later.'),
+      requestId: req.id,
     });
   }
 });
 
 router.post('/signup/verify-otp', otpVerifyLimiter, async (req, res) => {
   try {
-    if (!ensureDatabaseReady(res)) {
+    if (!ensureDatabaseReady(req, res)) {
       return;
     }
 
@@ -225,6 +221,7 @@ router.post('/signup/verify-otp', otpVerifyLimiter, async (req, res) => {
     if (!normalizedEmail || !otp) {
       return res.status(400).json({
         error: 'Email and OTP are required.',
+        requestId: req.id,
       });
     }
 
@@ -233,6 +230,7 @@ router.post('/signup/verify-otp', otpVerifyLimiter, async (req, res) => {
       await OtpVerification.deleteOne({ email: normalizedEmail, purpose: 'signup' });
       return res.status(409).json({
         error: 'An account with this email already exists.',
+        requestId: req.id,
       });
     }
 
@@ -243,13 +241,14 @@ router.post('/signup/verify-otp', otpVerifyLimiter, async (req, res) => {
     });
 
     if (otpResult.error) {
-      return res.status(400).json({ error: otpResult.error });
+      return res.status(400).json({ error: otpResult.error, requestId: req.id });
     }
 
     const pendingSignup = otpResult.record.pendingSignup;
     if (!pendingSignup?.name || !pendingSignup?.passwordHash) {
       return res.status(400).json({
         error: 'Signup session is invalid. Please start again.',
+        requestId: req.id,
       });
     }
 
@@ -267,9 +266,10 @@ router.post('/signup/verify-otp', otpVerifyLimiter, async (req, res) => {
       user: user.toSafeObject(),
     });
   } catch (err) {
-    console.error('Signup OTP verification error:', err);
+    console.error(`[${req.id}] Signup OTP verification error:`, err);
     res.status(500).json({
       error: 'Something went wrong. Please try again later.',
+      requestId: req.id,
     });
   }
 });
@@ -281,7 +281,7 @@ router.post(
   otpRequestByIpLimiter,
   async (req, res) => {
   try {
-    if (!ensureDatabaseReady(res)) {
+    if (!ensureDatabaseReady(req, res)) {
       return;
     }
 
@@ -291,6 +291,7 @@ router.post(
     if (!normalizedEmail || !password) {
       return res.status(400).json({
         error: 'Email and password are required.',
+        requestId: req.id,
       });
     }
 
@@ -299,6 +300,7 @@ router.post(
     if (!user) {
       return res.status(401).json({
         error: 'Invalid email or password.',
+        requestId: req.id,
       });
     }
 
@@ -306,6 +308,7 @@ router.post(
     if (!isMatch) {
       return res.status(401).json({
         error: 'Invalid email or password.',
+        requestId: req.id,
       });
     }
 
@@ -320,16 +323,17 @@ router.post(
       email: normalizedEmail,
     });
   } catch (err) {
-    console.error('Login OTP request error:', err);
+    console.error(`[${req.id}] Login OTP request error:`, err);
     res.status(500).json({
-      error: getPublicAuthError(err, 'Something went wrong. Please try again later.'),
+      error: getPublicAuthError('Something went wrong. Please try again later.'),
+      requestId: req.id,
     });
   }
 });
 
 router.post('/login/verify-otp', loginLimiter, otpVerifyLimiter, async (req, res) => {
   try {
-    if (!ensureDatabaseReady(res)) {
+    if (!ensureDatabaseReady(req, res)) {
       return;
     }
 
@@ -339,6 +343,7 @@ router.post('/login/verify-otp', loginLimiter, otpVerifyLimiter, async (req, res
     if (!normalizedEmail || !otp) {
       return res.status(400).json({
         error: 'Email and OTP are required.',
+        requestId: req.id,
       });
     }
 
@@ -349,13 +354,14 @@ router.post('/login/verify-otp', loginLimiter, otpVerifyLimiter, async (req, res
     });
 
     if (otpResult.error) {
-      return res.status(400).json({ error: otpResult.error });
+      return res.status(400).json({ error: otpResult.error, requestId: req.id });
     }
 
     const user = await User.findById(otpResult.record.loginUserId);
     if (!user || user.email !== normalizedEmail) {
       return res.status(401).json({
         error: 'Login session is invalid. Please start again.',
+        requestId: req.id,
       });
     }
 
@@ -369,9 +375,10 @@ router.post('/login/verify-otp', loginLimiter, otpVerifyLimiter, async (req, res
       user: user.toSafeObject(),
     });
   } catch (err) {
-    console.error('Login OTP verification error:', err);
+    console.error(`[${req.id}] Login OTP verification error:`, err);
     res.status(500).json({
       error: 'Something went wrong. Please try again later.',
+      requestId: req.id,
     });
   }
 });
@@ -383,6 +390,7 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({
         error: 'User not found.',
+        requestId: req.id,
       });
     }
 
@@ -390,9 +398,10 @@ router.get('/me', authMiddleware, async (req, res) => {
       user: user.toSafeObject(),
     });
   } catch (err) {
-    console.error('Get profile error:', err);
+    console.error(`[${req.id}] Get profile error:`, err);
     res.status(500).json({
       error: 'Something went wrong.',
+      requestId: req.id,
     });
   }
 });

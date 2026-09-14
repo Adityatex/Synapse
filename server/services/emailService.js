@@ -228,7 +228,7 @@ async function getSmtpTransporter() {
   return cachedSmtpTransporter;
 }
 
-async function sendViaResend({ email, subject, text, html, from }) {
+async function sendViaResend({ email, subject, text, html }) {
   const mailerConfig = getMailerConfig();
   const { resendApiKey } = mailerConfig;
   const resendFrom = getResendFromAddress(mailerConfig);
@@ -264,7 +264,7 @@ async function sendViaResend({ email, subject, text, html, from }) {
     throw new Error(response.data?.message || 'Resend API returned no message ID');
   } catch (error) {
     const message = error?.response?.data?.message || error?.message || 'Unknown Resend error';
-    throw new Error(`Resend delivery failed: ${message}`);
+    throw new Error(`Resend delivery failed: ${message}`, { cause: error });
   }
 }
 
@@ -309,7 +309,7 @@ async function sendViaBrevo({ email, subject, text, html }) {
     throw new Error('Brevo API returned no message ID');
   } catch (error) {
     const message = error?.response?.data?.message || error?.message || 'Unknown Brevo error';
-    throw new Error(`Brevo delivery failed: ${message}`);
+    throw new Error(`Brevo delivery failed: ${message}`, { cause: error });
   }
 }
 
@@ -345,7 +345,7 @@ async function sendOtpEmail({ email, otp, purpose }) {
   if (mailerConfig.resendApiKey) {
     providers.push({
       name: 'resend',
-      send: async () => sendViaResend({ email, subject, text, html, from }),
+      send: async () => sendViaResend({ email, subject, text, html }),
     });
   }
 

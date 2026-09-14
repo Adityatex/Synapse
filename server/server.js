@@ -9,14 +9,14 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 // P0-06: fail fast on bad config — exits(1) BEFORE listen() or DB connects.
 const { loadEnvOrExit } = require('./config/env');
+const logger = require('./config/logger');
+const { initSentry, captureError } = require('./config/sentry');
 
 loadEnvOrExit();
 
 // P0-10: error tracking (no-op without SENTRY_DSN).
 initSentry();
 
-const logger = require('./config/logger');
-const { initSentry, captureError } = require('./config/sentry');
 const executeRoute = require('./routes/execute');
 const aiRoute = require('./routes/ai');
 const authRoute = require('./routes/auth');

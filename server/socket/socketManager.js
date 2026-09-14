@@ -43,6 +43,7 @@ function verifySocketUser(socket, next) {
 
     return next();
   } catch (error) {
+    logger.debug({ err: error }, 'Socket auth failed');
     return next(new Error('Invalid or expired token.'));
   }
 }

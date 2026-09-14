@@ -45,7 +45,6 @@ function buildP0_05App() {
   app.use(express.json({ limit: '100kb' }));
   app.use('/api/auth/login', (req, res) => res.json({ ok: true }));
   // Body-parser error normalization (same as server.js).
-  // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
     if (err && err.type === 'entity.too.large') {
       return res.status(413).json({ error: 'Request body too large.', requestId: req.id });
@@ -100,7 +99,7 @@ describe('P0-05: helmet + body limits', () => {
 });
 
 describe('P0-06: boot-time env validation', () => {
-  const { validateEnv, loadEnvOrExit, logConfigTable } = require('../config/env');
+  const { validateEnv, logConfigTable } = require('../config/env');
   const LONG_SECRET = 'test-secret-that-is-long-enough-for-p0-06-1234567890';
 
   it('rejects a missing JWT_SECRET', () => {
@@ -141,7 +140,7 @@ describe('P0-06: boot-time env validation', () => {
     const childEnv = { ...process.env, NODE_ENV: 'test' };
     delete childEnv.JWT_SECRET;
 
-    let output = '';
+    let output;
     let status = 0;
     try {
       output = execFileSync(

@@ -201,3 +201,42 @@ describe('P0-10: Sentry error tracking', () => {
     assert.deepEqual(offenders, [], `hardcoded Sentry DSN in: ${offenders.join(', ')}`);
   });
 });
+
+describe('P0-11: CI pipeline', () => {
+  const REPO_ROOT = path.join(__dirname, '..', '..');
+  const WORKFLOW = path.join(REPO_ROOT, '.github', 'workflows', 'ci.yml');
+
+  it('defines install, lint, test and build checks', () => {
+    assert.ok(fs.existsSync(WORKFLOW), '.github/workflows/ci.yml must exist');
+    const workflow = fs.readFileSync(WORKFLOW, 'utf8');
+
+    assert.ok(workflow.includes('pull_request'), 'CI must run on every PR');
+    assert.ok(workflow.includes('node-version: 20'), 'CI must pin Node 20');
+    assert.ok(workflow.includes('npm ci'), 'CI must do clean installs');
+
+    // Server job: lint + test.
+    assert.ok(workflow.includes('npm run lint'), 'CI must lint');
+    assert.ok(workflow.includes('npm test'), 'CI must run server tests');
+
+    // Client job: build.
+    assert.ok(workflow.includes('npm run build'), 'CI must build the client');
+
+    // Both services are covered.
+    assert.ok(workflow.includes('working-directory: server'), 'CI must cover the server');
+    assert.ok(workflow.includes('working-directory: client'), 'CI must cover the client');
+  });
+
+  it('required npm scripts exist on both sides', () => {
+    const serverPkg = JSON.parse(
+      fs.readFileSync(path.join(REPO_ROOT, 'server', 'package.json'), 'utf8')
+    );
+    assert.ok(serverPkg.scripts.lint, 'server needs a lint script');
+    assert.ok(serverPkg.scripts.test, 'server needs a test script');
+
+    const clientPkg = JSON.parse(
+      fs.readFileSync(path.join(REPO_ROOT, 'client', 'package.json'), 'utf8')
+    );
+    assert.ok(clientPkg.scripts.lint, 'client needs a lint script');
+    assert.ok(clientPkg.scripts.build, 'client needs a build script');
+  });
+});

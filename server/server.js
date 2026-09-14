@@ -9,6 +9,7 @@ const executeRoute = require('./routes/execute');
 const aiRoute = require('./routes/ai');
 const authRoute = require('./routes/auth');
 const roomsRoute = require('./routes/rooms');
+const { globalLimiter } = require('./middleware/rateLimits');
 const { createSocketServer } = require('./socket/socketManager');
 
 const app = express();
@@ -41,6 +42,9 @@ app.use(
   })
 );
 app.use(express.json({ limit: '5mb' }));
+
+// P0-02: global per-IP guard (300/min). Specific routes add stricter limits.
+app.use(globalLimiter);
 
 app.use('/api', executeRoute);
 app.use('/api/ai', aiRoute);

@@ -1,6 +1,13 @@
 const express = require('express');
 const axios = require('axios');
+const authMiddleware = require('../middleware/auth');
+const { executeLimiter } = require('../middleware/rateLimits');
+
 const router = express.Router();
+
+// code execution costs money (Judge0 quota) — require authentication.
+// per-user quota (20/min) on top of auth.
+router.use(authMiddleware);
 
 const JUDGE0_API = `https://${process.env.JUDGE0_API_HOST}`;
 
@@ -14,7 +21,7 @@ const judge0Client = axios.create({
 });
 
 // Submit code and get result
-router.post('/execute', async (req, res) => {
+router.post('/execute', executeLimiter, async (req, res) => {
   try {
     const { source_code, language_id, stdin = '' } = req.body;
 

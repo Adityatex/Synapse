@@ -16,6 +16,12 @@ function normalizeRoomId(roomId) {
   return String(roomId || '').trim().toUpperCase();
 }
 
+// escape user input before $regex so patterns like ".*" or "(a+)+$"
+// are matched literally and cannot cause regex injection / ReDoS.
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function verifySocketUser(socket, next) {
   try {
     const token =
@@ -217,7 +223,9 @@ function createSocketServer(httpServer) {
   io.use(verifySocketUser);
 
   io.on('connection', (socket) => {
-    socket.on('join-room', async ({ roomId, username, userId }) => {
+    // P0-03: never trust userId/username from the payload — identity always
+    // comes from the verified JWT (socket.data.user).
+    socket.on('join-room', async ({ roomId } = {}) => {
       const normalizedRoomId = normalizeRoomId(roomId);
       let room = getRoom(normalizedRoomId);
 
@@ -243,8 +251,8 @@ function createSocketServer(httpServer) {
 
       const participant = {
         socketId: socket.id,
-        userId: userId || socket.data.user.userId,
-        username: username || socket.data.user.name,
+        userId: socket.data.user.userId,
+        username: socket.data.user.name,
         joinedAt: Date.now(),
       };
 
@@ -482,12 +490,14 @@ function createSocketServer(httpServer) {
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !query) return;
       try {
+        // P0-04: treat the query as literal text (cap length to bound regex work).
+        const safeQuery = escapeRegExp(String(query).slice(0, 200));
         const results = await MessageModel.find({
           roomId: activeRoomId,
           deleted: { $ne: true },
           $or: [
-            { content: { $regex: query, $options: 'i' } },
-            { senderName: { $regex: query, $options: 'i' } }
+            { content: { $regex: safeQuery, $options: 'i' } },
+            { senderName: { $regex: safeQuery, $options: 'i' } }
           ]
         }).sort({ timestamp: -1 }).limit(50);
         socket.emit('chat-search-results', results.reverse());
@@ -679,13 +689,14 @@ function createSocketServer(httpServer) {
       });
     });
 
-    socket.on('code-change', ({ roomId, fileId, changes, userId } = {}) => {
+    socket.on('code-change', ({ roomId, fileId, changes } = {}) => {
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !fileId || !changes) {
         return;
       }
 
-      const senderId = userId || socket.data.user.userId;
+      // P0-03: sender identity comes from the verified token only.
+      const senderId = socket.data.user.userId;
       const activeLock = roomLocks.get(activeRoomId)?.get(fileId);
       if (activeLock && activeLock.userId !== senderId) {
         socket.emit('lock-denied', {
@@ -756,15 +767,15 @@ function createSocketServer(httpServer) {
       });
     });
 
-    socket.on('cursor-move', ({ roomId, userId, username, position } = {}) => {
+    socket.on('cursor-move', ({ roomId, position } = {}) => {
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !position) {
         return;
       }
 
       socket.to(activeRoomId).emit('cursor-update', {
-        userId: userId || socket.data.user.userId,
-        username: username || socket.data.user.name,
+        userId: socket.data.user.userId,
+        username: socket.data.user.name,
         position,
         cursorColor: socket.data.participant?.cursorColor,
         avatarGlyph: socket.data.participant?.avatarGlyph,
@@ -772,15 +783,15 @@ function createSocketServer(httpServer) {
       });
     });
 
-    socket.on('selection-change', ({ roomId, userId, username, selectionRange } = {}) => {
+    socket.on('selection-change', ({ roomId, selectionRange } = {}) => {
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !selectionRange) {
         return;
       }
 
       socket.to(activeRoomId).emit('selection-update', {
-        userId: userId || socket.data.user.userId,
-        username: username || socket.data.user.name,
+        userId: socket.data.user.userId,
+        username: socket.data.user.name,
         selectionRange,
         cursorColor: socket.data.participant?.cursorColor,
         avatarGlyph: socket.data.participant?.avatarGlyph,
@@ -808,4 +819,4 @@ function createSocketServer(httpServer) {
   return io;
 }
 
-module.exports = { createSocketServer };
+module.exports = { createSocketServer, escapeRegExp };

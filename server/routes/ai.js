@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const authMiddleware = require('../middleware/auth');
+const { aiChatLimiter } = require('../middleware/rateLimits');
 const { requestGroqChat } = require('../services/groqService');
 const Conversation = require('../models/Conversation');
 const AIMessage = require('../models/AIMessage');
@@ -204,7 +205,7 @@ router.post('/message', async (req, res) => {
   }
 });
 
-router.post('/chat', async (req, res) => {
+router.post('/chat', aiChatLimiter, async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
       return;

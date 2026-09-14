@@ -218,6 +218,9 @@ function createSocketServer(httpServer) {
       methods: ['GET', 'POST'],
       credentials: true,
     },
+    // P0-05: room sync carries the whole file tree + contents (sync-room-state),
+    // so the socket budget matches the 2 MB HTTP budget for execute.
+    maxHttpBufferSize: 2e6,
   });
 
   io.use(verifySocketUser);

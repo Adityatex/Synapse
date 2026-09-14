@@ -5,9 +5,13 @@ const { executeLimiter } = require('../middleware/rateLimits');
 
 const router = express.Router();
 
-// code execution costs money (Judge0 quota) — require authentication.
-// per-user quota (20/min) on top of auth.
-router.use(authMiddleware);
+// P0-01: code execution costs money (Judge0 quota) — require authentication.
+// Auth is applied PER ROUTE (not router.use): this router is mounted at bare
+// `/api`, so a router-level auth would 401 every other API namespace
+// (/api/auth, /api/ai, /api/rooms) including public login/signup.
+// P0-02: per-user quota (20/min) on top of auth.
+// P0-05: 2 MB body budget for full source files + stdin, after auth so
+// unauthenticated callers get 401 without us parsing their bodies.
 
 const JUDGE0_API = `https://${process.env.JUDGE0_API_HOST}`;
 
@@ -21,7 +25,12 @@ const judge0Client = axios.create({
 });
 
 // Submit code and get result
-router.post('/execute', executeLimiter, async (req, res) => {
+router.post(
+  '/execute',
+  authMiddleware,
+  express.json({ limit: '2mb' }),
+  executeLimiter,
+  async (req, res) => {
   try {
     const { source_code, language_id, stdin = '' } = req.body;
 
@@ -86,7 +95,7 @@ router.post('/execute', executeLimiter, async (req, res) => {
 });
 
 // Get supported languages
-router.get('/languages', async (req, res) => {
+router.get('/languages', authMiddleware, async (req, res) => {
   try {
     const response = await judge0Client.get('/languages');
     res.json(response.data);

@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const helmet = require('helmet');
 const http = require('http');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
@@ -10,6 +11,7 @@ const aiRoute = require('./routes/ai');
 const authRoute = require('./routes/auth');
 const roomsRoute = require('./routes/rooms');
 const { globalLimiter } = require('./middleware/rateLimits');
+const requestIdMiddleware = require('./middleware/requestId');
 const { createSocketServer } = require('./socket/socketManager');
 
 const app = express();
@@ -29,6 +31,22 @@ let reconnectTimer = null;
 let connectInFlight = null;
 let shuttingDown = false;
 
+// P0-05: security headers. Two deliberate relaxations for a cross-origin
+// JSON API (documented, not accidental):
+// - contentSecurityPolicy off: we serve JSON, never HTML; CSP would be noise.
+// - CORP cross-origin: the web app lives on a different origin (Vercel) than
+//   the API (Render/Fly); same-origin CORP risks breaking legit API + polling loads.
+//   CORS allow-list below remains the real origin gate.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
+
+// P0-05/P0-07: correlation ID before anything that can reject (429/413/401).
+app.use(requestIdMiddleware);
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -41,15 +59,31 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: '5mb' }));
 
 // P0-02: global per-IP guard (300/min). Specific routes add stricter limits.
 app.use(globalLimiter);
 
+// P0-05: tight default body budget (100 kB), mounted per router. The execution
+// API declares its own 2 MB budget inside routes/execute.js (full source files
+// + stdin). A single global parser would force one budget on everything: either
+// too generous for auth (413 bypass) or too tight for execute.
+app.use('/api/ai', express.json({ limit: '100kb' }), aiRoute);
+app.use('/api/auth', express.json({ limit: '100kb' }), authRoute);
+app.use('/api/rooms', express.json({ limit: '100kb' }), roomsRoute);
 app.use('/api', executeRoute);
-app.use('/api/ai', aiRoute);
-app.use('/api/auth', authRoute);
-app.use('/api/rooms', roomsRoute);
+
+// P0-05: body-parser errors default to HTML — return JSON instead.
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Request body too large.', requestId: req.id });
+  }
+
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'Invalid JSON body.', requestId: req.id });
+  }
+
+  return next(err);
+});
 
 app.get('/api/health', (req, res) => {
   res.json({

@@ -1,7 +1,7 @@
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 /**
- * Centralized rate limits (memory store for now).
+ * P0-02 — Centralized rate limits (memory store for now).
  *
  * Roadmap limits:
  * - OTP request: 3 / 10 min per email + 10 / hour per IP
@@ -36,9 +36,15 @@ function userKeyGenerator(req) {
   return ipKeyGenerator(req.ip);
 }
 
-function tooManyRequestsMessage(retryMinutes) {
-  return {
-    error: `Too many requests. Please try again in ${retryMinutes}.`,
+// P0-07: rate-limit rejections use the same public envelope as every other
+// error ({ error, requestId }). RateLimit-*/Retry-After headers are still set
+// by express-rate-limit before this handler runs.
+function limitHandler(retryHint) {
+  return (req, res) => {
+    res.status(429).json({
+      error: `Too many requests. Please try again in ${retryHint}.`,
+      requestId: req.id,
+    });
   };
 }
 
@@ -48,7 +54,7 @@ const otpRequestByEmailLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: emailKeyGenerator,
-  message: tooManyRequestsMessage('10 minutes'),
+  handler: limitHandler('10 minutes'),
 });
 
 const otpRequestByIpLimiter = rateLimit({
@@ -57,7 +63,7 @@ const otpRequestByIpLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
-  message: tooManyRequestsMessage('an hour'),
+  handler: limitHandler('an hour'),
 });
 
 const otpVerifyLimiter = rateLimit({
@@ -68,7 +74,7 @@ const otpVerifyLimiter = rateLimit({
   // Key by email when present so brute-force against one account is capped,
   // otherwise fall back to IP.
   keyGenerator: emailKeyGenerator,
-  message: tooManyRequestsMessage('10 minutes'),
+  handler: limitHandler('10 minutes'),
 });
 
 const loginLimiter = rateLimit({
@@ -77,7 +83,7 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
-  message: tooManyRequestsMessage('15 minutes'),
+  handler: limitHandler('15 minutes'),
 });
 
 const executeLimiter = rateLimit({
@@ -86,7 +92,7 @@ const executeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: userKeyGenerator,
-  message: tooManyRequestsMessage('a minute'),
+  handler: limitHandler('a minute'),
 });
 
 const aiChatLimiter = rateLimit({
@@ -95,7 +101,7 @@ const aiChatLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: userKeyGenerator,
-  message: tooManyRequestsMessage('an hour'),
+  handler: limitHandler('an hour'),
 });
 
 const globalLimiter = rateLimit({
@@ -104,7 +110,7 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
-  message: tooManyRequestsMessage('a minute'),
+  handler: limitHandler('a minute'),
 });
 
 module.exports = {

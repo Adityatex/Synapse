@@ -75,13 +75,27 @@ describe('P0-01: /api/execute requires authentication', () => {
   it('authenticated POST /api/execute passes auth (not 401)', async () => {
     // Without Judge0 creds the handler fails downstream (500), but it must
     // NOT be rejected as unauthenticated — proving the authed client path works.
-    // (Languages shares the same router-level authMiddleware; its 401 test above
+    // (Languages shares the same per-route authMiddleware; its 401 test above
     // covers it without a second slow upstream call.)
     const res = await request(app)
       .post('/api/execute')
       .set('Authorization', `Bearer ${signTestToken()}`)
       .send({ source_code: 'print(1)', language_id: 71 });
     assert.notEqual(res.status, 401);
+  });
+
+  it('execute auth does not leak onto other /api namespaces (no router.use(auth))', async () => {
+    // executeRoute is mounted at bare /api in server.js. If it ever used
+    // router-level auth again, public routes like login/signup would 401.
+    const src = fs.readFileSync(path.join(__dirname, '..', 'routes', 'execute.js'), 'utf8');
+    assert.ok(!src.includes('router.use(authMiddleware)'), 'auth must be per-route, not router-level');
+
+    const mixed = express();
+    mixed.use(express.json());
+    mixed.use('/api', require('../routes/execute'));
+    mixed.post('/api/auth/ping', (req, res) => res.json({ ok: true }));
+    const res = await request(mixed).post('/api/auth/ping').send({});
+    assert.equal(res.status, 200, 'unrelated /api routes must pass through untouched');
   });
 });
 

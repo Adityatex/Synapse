@@ -2,6 +2,7 @@ const nodemailer = require('nodemailer');
 const dns = require('dns');
 const net = require('net');
 const axios = require('axios');
+const logger = require('../config/logger');
 
 let cachedSmtpTransporter = null;
 const isProduction = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
@@ -173,8 +174,9 @@ async function tryAlternateSmtpRoutes({ config, mailOptions, firstError, email }
         attempt.override
       );
       await transport.sendMail(mailOptions);
-      console.warn(
-        `WARNING: OTP SMTP fallback succeeded via ${attempt.label} after ${firstError?.code || 'unknown'} for ${email}.`
+      logger.warn(
+        { label: attempt.label, code: firstError?.code || 'unknown', email },
+        'OTP SMTP fallback succeeded after transient failure'
       );
       return { delivered: true, mocked: false, retriedWithFallbackRoute: attempt.label };
     } catch (attemptError) {
@@ -194,14 +196,15 @@ async function getSmtpTransporter() {
   const { isMocked, host } = config;
 
   if (isMocked) {
-    console.warn('WARNING: Email service not configured (GMAIL_USER/GMAIL_APP_PASSWORD missing). Falling back to logging OTPs to console.');
+    logger.warn('Email service not configured (GMAIL_USER/GMAIL_APP_PASSWORD missing). Falling back to logging OTPs.');
     cachedSmtpTransporter = {
       sendMail: async (mailOptions) => {
-        console.log('\n============== MOCK EMAIL =============');
-        console.log(`To: ${mailOptions.to}`);
-        console.log(`Subject: ${mailOptions.subject}`);
-        console.log(`Text: ${mailOptions.text}`);
-        console.log('=======================================\n');
+        // Dev-only mock path (pre-existing): prints the email so local login
+        // works without SMTP. Never enabled in production (see below).
+        logger.info(
+          { to: mailOptions.to, subject: mailOptions.subject, text: mailOptions.text },
+          'MOCK EMAIL'
+        );
         return true;
       },
     };
@@ -213,7 +216,7 @@ async function getSmtpTransporter() {
     const ipv4Addr = await resolveIpv4Host(host);
     if (ipv4Addr) {
       resolvedHost = ipv4Addr;
-      console.log(`Resolved SMTP host ${host} to IPv4: ${ipv4Addr}`);
+      logger.info({ host, ipv4Addr }, 'Resolved SMTP host to IPv4');
     }
   }
 
@@ -254,7 +257,7 @@ async function sendViaResend({ email, subject, text, html, from }) {
     );
 
     if (response.status === 200 && response.data?.id) {
-      console.log(`OTP email sent via Resend to ${email} (${response.data.id})`);
+      logger.info({ email, messageId: response.data.id }, 'OTP email sent via Resend');
       return { delivered: true, mocked: false, provider: 'resend' };
     }
 
@@ -299,7 +302,7 @@ async function sendViaBrevo({ email, subject, text, html }) {
     );
 
     if ((response.status === 200 || response.status === 201) && response.data?.messageId) {
-      console.log(`OTP email sent via Brevo to ${email} (${response.data.messageId})`);
+      logger.info({ email, messageId: response.data.messageId }, 'OTP email sent via Brevo');
       return { delivered: true, mocked: false, provider: 'brevo' };
     }
 
@@ -379,19 +382,23 @@ async function sendOtpEmail({ email, otp, purpose }) {
   for (const provider of providers) {
     try {
       const result = await provider.send();
-      console.log(`OTP email sent successfully via ${provider.name} to ${email}`);
+      logger.info({ provider: provider.name, email }, 'OTP email sent successfully');
       return result;
     } catch (error) {
-      console.warn(`OTP delivery failed via ${provider.name} for ${email}: ${error?.message || String(error)}`);
+      logger.warn(
+        { provider: provider.name, email, err: error?.message || String(error) },
+        'OTP delivery failed via provider'
+      );
       lastError = error;
     }
   }
 
   if (!isProduction && deliveryMode !== 'smtp') {
-    console.warn(
-      `WARNING: OTP email delivery failed for ${email} (${lastError?.code || lastError?.name || 'unknown error'}). Falling back to console logging because NODE_ENV is not production.`
+    logger.warn(
+      { email, code: lastError?.code || lastError?.name || 'unknown error' },
+      'OTP email delivery failed, falling back to console logging (non-production only)'
     );
-    console.log(`\n============== OTP FALLBACK ==============\nTo: ${email}\nPurpose: ${purpose}\nOTP: ${otp}\nExpires in: ${expiryMinutes} minutes\n==========================================\n`);
+    logger.info({ to: email, purpose, otp, expiryMinutes }, 'OTP FALLBACK');
     return {
       delivered: false,
       mocked: true,

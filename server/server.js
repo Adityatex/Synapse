@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
+const pinoHttp = require('pino-http');
 const http = require('http');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
@@ -11,6 +12,7 @@ const { loadEnvOrExit } = require('./config/env');
 
 loadEnvOrExit();
 
+const logger = require('./config/logger');
 const executeRoute = require('./routes/execute');
 const aiRoute = require('./routes/ai');
 const authRoute = require('./routes/auth');
@@ -51,6 +53,19 @@ app.use(
 
 // P0-05/P0-07: correlation ID before anything that can reject (429/413/401).
 app.use(requestIdMiddleware);
+
+// P0-09: structured HTTP logs. Reuses the correlation ID above so the access
+// log, the error body and the X-Request-Id header all carry the same value.
+app.use(
+  pinoHttp({
+    logger,
+    genReqId: (req) => req.id,
+    customProps: (req) => ({
+      requestId: req.id,
+      userId: req.user ? req.user.userId : undefined,
+    }),
+  })
+);
 
 app.use(
   cors({
@@ -107,7 +122,7 @@ function startServerIfNeeded() {
 
   serverStarted = true;
   server.listen(PORT, () => {
-    console.log(`Synapse server running on http://localhost:${PORT}`);
+    logger.info({ port: PORT }, 'Synapse server running');
   });
 }
 
@@ -123,14 +138,12 @@ function scheduleMongoReconnect(reason) {
     return;
   }
 
-  console.warn(
-    `MongoDB reconnect scheduled in ${MONGO_RETRY_DELAY_MS}ms${reason ? ` (${reason})` : ''}.`
-  );
+  logger.warn({ retryDelayMs: MONGO_RETRY_DELAY_MS, reason }, 'MongoDB reconnect scheduled');
 
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connectToMongoWithRetry().catch((retryErr) => {
-      console.error('MongoDB reconnect error:', retryErr.message);
+      logger.error({ err: retryErr }, 'MongoDB reconnect error');
       scheduleMongoReconnect('retry failed');
     });
   }, MONGO_RETRY_DELAY_MS);
@@ -138,7 +151,7 @@ function scheduleMongoReconnect(reason) {
 
 async function connectToMongoWithRetry() {
   if (!process.env.MONGODB_URI) {
-    console.error('MongoDB connection skipped: MONGODB_URI is not configured.');
+    logger.error('MongoDB connection skipped: MONGODB_URI is not configured.');
     startServerIfNeeded();
     return;
   }
@@ -163,11 +176,11 @@ async function connectToMongoWithRetry() {
     await connectInFlight;
     connectInFlight = null;
     clearReconnectTimer();
-    console.log('Connected to MongoDB (Synapse database)');
+    logger.info('Connected to MongoDB (Synapse database)');
     startServerIfNeeded();
   } catch (err) {
     connectInFlight = null;
-    console.error('MongoDB connection error:', err.message);
+    logger.error({ err }, 'MongoDB connection error');
     startServerIfNeeded();
     scheduleMongoReconnect('initial connect failed');
   }
@@ -178,19 +191,19 @@ mongoose.connection.on('disconnected', () => {
     return;
   }
 
-  console.warn('MongoDB disconnected.');
+  logger.warn('MongoDB disconnected.');
   scheduleMongoReconnect('disconnected');
 });
 
 mongoose.connection.on('error', (err) => {
-  console.error('MongoDB runtime error:', err.message);
+  logger.error({ err }, 'MongoDB runtime error');
   if (!shuttingDown) {
     scheduleMongoReconnect('runtime error');
   }
 });
 
 connectToMongoWithRetry().catch((err) => {
-  console.error('MongoDB bootstrap error:', err.message);
+  logger.error({ err }, 'MongoDB bootstrap error');
   startServerIfNeeded();
   scheduleMongoReconnect('bootstrap failed');
 });
@@ -202,12 +215,12 @@ async function shutdown(signal) {
 
   shuttingDown = true;
   clearReconnectTimer();
-  console.log(`${signal} received. Shutting down gracefully...`);
+  logger.info({ signal }, 'Shutting down gracefully...');
 
   try {
     await mongoose.connection.close();
   } catch (error) {
-    console.error('MongoDB close error during shutdown:', error.message);
+    logger.error({ err: error }, 'MongoDB close error during shutdown');
   }
 
   server.close(() => {
@@ -217,20 +230,20 @@ async function shutdown(signal) {
 
 process.on('SIGINT', () => {
   shutdown('SIGINT').catch((err) => {
-    console.error('SIGINT shutdown error:', err);
+    logger.error({ err }, 'SIGINT shutdown error');
     process.exit(1);
   });
 });
 
 process.on('SIGTERM', () => {
   shutdown('SIGTERM').catch((err) => {
-    console.error('SIGTERM shutdown error:', err);
+    logger.error({ err }, 'SIGTERM shutdown error');
     process.exit(1);
   });
 });
 
-process.on('exit', (code) => console.log('Process exit event with code:', code));
-process.on('uncaughtException', (err) => console.error('Uncaught Exception', err));
-process.on('unhandledRejection', (reason, promise) =>
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+process.on('exit', (code) => logger.info({ code }, 'Process exit event'));
+process.on('uncaughtException', (err) => logger.error({ err }, 'Uncaught Exception'));
+process.on('unhandledRejection', (reason) =>
+  logger.error({ reason }, 'Unhandled Rejection')
 );

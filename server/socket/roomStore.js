@@ -1,4 +1,5 @@
 const Y = require('yjs');
+const logger = require('../config/logger');
 const RoomModel = require('../models/Room');
 
 const ROOM_ID_LENGTH = 6;
@@ -196,7 +197,7 @@ async function createRoom(owner, roomName = 'Untitled Room') {
       createdAt: room.createdAt
     });
   } catch (err) {
-    console.error('Failed to save room to DB:', err);
+    logger.error({ err }, 'Failed to save room to DB');
   }
 
   return sanitizeRoom(room);
@@ -338,7 +339,7 @@ async function loadRoomFromDB(roomId) {
     rooms.set(roomId, room);
     return room;
   } catch (err) {
-    console.error('Failed to load room from DB', err);
+    logger.error({ err }, 'Failed to load room from DB');
     return null;
   }
 }

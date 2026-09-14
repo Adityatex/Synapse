@@ -1,5 +1,7 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { Server } = require('socket.io');
+const logger = require('../config/logger');
 const {
   getRoom,
   getRoomSnapshot,
@@ -43,6 +45,18 @@ function verifySocketUser(socket, next) {
   } catch (error) {
     return next(new Error('Invalid or expired token.'));
   }
+}
+
+// P0-09: every socket log carries { event, roomId, userId, requestId }.
+// Sockets have no HTTP request ID, so one is minted per connection.
+function socketLogContext(socket, event, extra) {
+  return {
+    event,
+    requestId: socket.data.requestId,
+    userId: socket.data.user ? socket.data.user.userId : undefined,
+    roomId: socket.data.roomId || (extra && extra.roomId) || undefined,
+    ...(extra || {}),
+  };
 }
 
 function emitParticipants(io, roomId) {
@@ -101,7 +115,7 @@ async function recordRoomMembership(roomId, participant) {
       }
     );
   } catch (error) {
-    console.error('Failed to record room membership:', error);
+    logger.error({ err: error }, 'Failed to record room membership');
   }
 }
 
@@ -226,6 +240,13 @@ function createSocketServer(httpServer) {
   io.use(verifySocketUser);
 
   io.on('connection', (socket) => {
+    // P0-09: mint a per-connection ID so socket logs correlate like HTTP logs.
+    socket.data.requestId = crypto.randomUUID();
+    logger.info(
+      socketLogContext(socket, 'socket-connected', { socketId: socket.id }),
+      'Socket connected'
+    );
+
     // P0-03: never trust userId/username from the payload — identity always
     // comes from the verified JWT (socket.data.user).
     socket.on('join-room', async ({ roomId } = {}) => {
@@ -237,6 +258,10 @@ function createSocketServer(httpServer) {
       }
 
       if (!normalizedRoomId || !room) {
+        logger.warn(
+          socketLogContext(socket, 'join-room', { roomId: normalizedRoomId }),
+          'Join room rejected: room not found'
+        );
         socket.emit('room-error', {
           message: 'Room not found. Check the invite code and try again.',
         });
@@ -266,6 +291,11 @@ function createSocketServer(httpServer) {
       socket.data.participant = currentParticipant;
 
       await recordRoomMembership(normalizedRoomId, currentParticipant);
+
+      logger.info(
+        socketLogContext(socket, 'join-room', { roomId: normalizedRoomId }),
+        'Socket joined room'
+      );
 
       socket.emit('room-joined', {
         room: {
@@ -299,7 +329,7 @@ function createSocketServer(httpServer) {
         });
         io.to(normalizedRoomId).emit('chat-message', sysMsg);
       } catch (err) {
-        console.error('Error creating system join message', err);
+        logger.error(socketLogContext(socket, 'system-join-message', { roomId: normalizedRoomId, err }), 'Error creating system join message');
       }
     });
 
@@ -315,6 +345,7 @@ function createSocketServer(httpServer) {
       socket.data.roomId = null;
       const removal = removeParticipant(roomId, socket.id);
       socket.data.participant = null;
+      logger.info(socketLogContext(socket, 'leave-room', { roomId }), 'Socket left room');
       socket.to(roomId).emit('user-left', {
         socketId: socket.id,
         userId: removal?.removedParticipant?.userId,
@@ -330,7 +361,7 @@ function createSocketServer(httpServer) {
           type: 'system',
           content: `${removal.removedParticipant.username} left the room.`
         }).then(sysMsg => io.to(roomId).emit('chat-message', sysMsg))
-          .catch(err => console.error('Error creating system leave message', err));
+          .catch(err => logger.error(socketLogContext(socket, 'system-leave-message', { roomId, err }), 'Error creating system leave message'));
       }
     });
 
@@ -358,7 +389,7 @@ function createSocketServer(httpServer) {
         const newMessage = await MessageModel.create(msgData);
         io.to(activeRoomId).emit('chat-message', newMessage);
       } catch (err) {
-        console.error('Error saving chat message:', err);
+        logger.error(socketLogContext(socket, 'send-chat-message', { roomId: activeRoomId, err }), 'Error saving chat message');
       }
     });
 
@@ -388,7 +419,7 @@ function createSocketServer(httpServer) {
         
         socket.emit('chat-history', history.reverse());
       } catch (err) {
-        console.error('Error fetching chat history:', err);
+        logger.error(socketLogContext(socket, 'request-chat-history', { roomId: activeRoomId, err }), 'Error fetching chat history');
       }
     });
 
@@ -408,7 +439,7 @@ function createSocketServer(httpServer) {
         await msg.save();
         io.to(activeRoomId).emit('chat-message-updated', msg);
       } catch (err) {
-        console.error('Error editing message:', err);
+        logger.error(socketLogContext(socket, 'edit-chat-message', { err }), 'Error editing message');
       }
     });
 
@@ -427,7 +458,7 @@ function createSocketServer(httpServer) {
         await msg.save();
         io.to(activeRoomId).emit('chat-message-updated', msg);
       } catch (err) {
-        console.error('Error deleting message:', err);
+        logger.error(socketLogContext(socket, 'delete-chat-message', { err }), 'Error deleting message');
       }
     });
 
@@ -454,7 +485,7 @@ function createSocketServer(httpServer) {
         });
         io.to(activeRoomId).emit('chat-message', sysMsg);
       } catch (err) {
-        console.error('Error pinning message:', err);
+        logger.error(socketLogContext(socket, 'pin-chat-message', { err }), 'Error pinning message');
       }
     });
 
@@ -483,7 +514,7 @@ function createSocketServer(httpServer) {
         await msg.save();
         io.to(activeRoomId).emit('chat-message-updated', msg);
       } catch (err) {
-        console.error('Error reacting to message:', err);
+        logger.error(socketLogContext(socket, 'react-chat-message', { err }), 'Error reacting to message');
       }
     });
 
@@ -505,7 +536,7 @@ function createSocketServer(httpServer) {
         }).sort({ timestamp: -1 }).limit(50);
         socket.emit('chat-search-results', results.reverse());
       } catch (err) {
-        console.error('Error searching messages:', err);
+        logger.error(socketLogContext(socket, 'search-chat-messages', { roomId: activeRoomId, err }), 'Error searching messages');
       }
     });
 
@@ -569,7 +600,7 @@ function createSocketServer(httpServer) {
           }
         );
       } catch (err) {
-        console.error('sync-room-state DB update error', err);
+        logger.error(socketLogContext(socket, 'sync-room-state', { roomId, err }), 'sync-room-state DB update error');
       }
 
       // Broadcast to ALL sockets in the room, including the sender.
@@ -600,7 +631,7 @@ function createSocketServer(httpServer) {
           }
         );
       } catch (err) {
-        console.error('Autosave Error:', err);
+        logger.error(socketLogContext(socket, 'autosave', { roomId: activeRoomId, fileId, err }), 'Autosave error');
       }
     });
 
@@ -622,7 +653,7 @@ function createSocketServer(httpServer) {
           }
         );
       } catch (err) {
-        console.error('Save Version Error:', err);
+        logger.error(socketLogContext(socket, 'save-version', { roomId: activeRoomId, fileId, err }), 'Save version error');
       }
     });
 
@@ -719,6 +750,12 @@ function createSocketServer(httpServer) {
         return;
       }
 
+      // P0-09: per-edit visibility at debug (too frequent for info).
+      logger.debug(
+        socketLogContext(socket, 'code-change', { roomId: activeRoomId, fileId }),
+        'Applied document update'
+      );
+
       const senderName = socket.data.user.name;
       const senderColor = socket.data.participant?.cursorColor;
       const senderAvatarGlyph = socket.data.participant?.avatarGlyph;
@@ -779,6 +816,7 @@ function createSocketServer(httpServer) {
     socket.on('disconnect', () => {
       const roomId = socket.data.roomId;
       releaseLocksForSocket(io, socket);
+      logger.info(socketLogContext(socket, 'socket-disconnected', { socketId: socket.id }), 'Socket disconnected');
       if (!roomId) {
         return;
       }
@@ -796,4 +834,4 @@ function createSocketServer(httpServer) {
   return io;
 }
 
-module.exports = { createSocketServer, escapeRegExp };
+module.exports = { createSocketServer, escapeRegExp, socketLogContext };

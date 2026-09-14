@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const authMiddleware = require('../middleware/auth');
+const logger = require('../config/logger');
 const { aiChatLimiter } = require('../middleware/rateLimits');
 const { requestGroqChat } = require('../services/groqService');
 const Conversation = require('../models/Conversation');
@@ -59,7 +60,7 @@ router.post('/new', async (req, res) => {
 
     return res.status(201).json(conversation);
   } catch (error) {
-    console.error(`[${req.id}] Create conversation error:`, error);
+    logger.error({ requestId: req.id, err: error }, 'Create conversation error');
     return res.status(500).json({
       error: 'Failed to create a new conversation.',
       requestId: req.id,
@@ -81,7 +82,7 @@ router.get('/history', async (req, res) => {
 
     return res.json(conversations);
   } catch (error) {
-    console.error(`[${req.id}] Fetch conversation history error:`, error);
+    logger.error({ requestId: req.id, err: error }, 'Fetch conversation history error');
     return res.status(500).json({
       error: 'Failed to load conversation history.',
       requestId: req.id,
@@ -116,7 +117,7 @@ router.get('/conversation/:conversationId', async (req, res) => {
       messages,
     });
   } catch (error) {
-    console.error(`[${req.id}] Load conversation error:`, error);
+    logger.error({ requestId: req.id, err: error }, 'Load conversation error');
     return res.status(500).json({
       error: 'Failed to load conversation messages.',
       requestId: req.id,
@@ -147,7 +148,7 @@ router.delete('/conversation/:conversationId', async (req, res) => {
 
     return res.json({ success: true });
   } catch (error) {
-    console.error(`[${req.id}] Delete conversation error:`, error);
+    logger.error({ requestId: req.id, err: error }, 'Delete conversation error');
     return res.status(500).json({
       error: 'Failed to delete conversation.',
       requestId: req.id,
@@ -208,7 +209,7 @@ router.post('/message', async (req, res) => {
       message,
     });
   } catch (error) {
-    console.error(`[${req.id}] Save conversation message error:`, error);
+    logger.error({ requestId: req.id, err: error }, 'Save conversation message error');
     return res.status(500).json({
       error: 'Failed to save the conversation message.',
       requestId: req.id,
@@ -296,7 +297,10 @@ router.post('/chat', aiChatLimiter, async (req, res) => {
   } catch (error) {
     // P0-07: full upstream detail stays in server logs; the client only gets
     // a generic message + correlation ID (never Groq response bodies).
-    console.error(`[${req.id}] AI chat error:`, error.response?.data || error.message);
+    logger.error(
+      { requestId: req.id, err: error.response?.data || error.message },
+      'AI chat error'
+    );
 
     return res.status(500).json({
       error: 'Failed to generate AI response.',

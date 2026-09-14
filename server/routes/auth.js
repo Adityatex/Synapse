@@ -13,6 +13,7 @@ const {
   loginLimiter,
 } = require('../middleware/rateLimits');
 const { sendOtpEmail } = require('../services/emailService');
+const logger = require('../config/logger');
 
 const router = express.Router();
 const OTP_EXPIRY_MINUTES = Number(process.env.OTP_EXPIRY_MINUTES || 10);
@@ -183,7 +184,7 @@ router.post(
       email: normalizedEmail,
     });
   } catch (err) {
-    console.error(`[${req.id}] Signup OTP request error:`, err);
+    logger.error({ requestId: req.id, err }, 'Signup OTP request error');
 
     if (err.code === 11000) {
       return res.status(409).json({
@@ -256,7 +257,7 @@ router.post('/signup/verify-otp', otpVerifyLimiter, async (req, res) => {
       user: user.toSafeObject(),
     });
   } catch (err) {
-    console.error(`[${req.id}] Signup OTP verification error:`, err);
+    logger.error({ requestId: req.id, err }, 'Signup OTP verification error');
     res.status(500).json({
       error: 'Something went wrong. Please try again later.',
       requestId: req.id,
@@ -313,7 +314,7 @@ router.post(
       email: normalizedEmail,
     });
   } catch (err) {
-    console.error(`[${req.id}] Login OTP request error:`, err);
+    logger.error({ requestId: req.id, err }, 'Login OTP request error');
     res.status(500).json({
       error: getPublicAuthError('Something went wrong. Please try again later.'),
       requestId: req.id,
@@ -365,7 +366,7 @@ router.post('/login/verify-otp', loginLimiter, otpVerifyLimiter, async (req, res
       user: user.toSafeObject(),
     });
   } catch (err) {
-    console.error(`[${req.id}] Login OTP verification error:`, err);
+    logger.error({ requestId: req.id, err }, 'Login OTP verification error');
     res.status(500).json({
       error: 'Something went wrong. Please try again later.',
       requestId: req.id,
@@ -388,7 +389,7 @@ router.get('/me', authMiddleware, async (req, res) => {
       user: user.toSafeObject(),
     });
   } catch (err) {
-    console.error(`[${req.id}] Get profile error:`, err);
+    logger.error({ requestId: req.id, err }, 'Get profile error');
     res.status(500).json({
       error: 'Something went wrong.',
       requestId: req.id,

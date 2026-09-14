@@ -1,6 +1,7 @@
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const Room = require('../models/Room');
+const logger = require('../config/logger');
 const { createRoom, getRoomSnapshot } = require('../socket/roomStore');
 
 const router = express.Router();
@@ -8,7 +9,7 @@ const router = express.Router();
 router.post('/', authMiddleware, async (req, res) => {
   const { roomName } = req.body;
   if (!roomName) {
-    return res.status(400).json({ error: 'Room name is required.' });
+    return res.status(400).json({ error: 'Room name is required.', requestId: req.id });
   }
 
   try {
@@ -23,14 +24,14 @@ router.post('/', authMiddleware, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Create room error:', error);
-    res.status(500).json({ error: 'Failed to create room.' });
+    logger.error({ requestId: req.id, userId: req.user.userId, err: error }, 'Create room error');
+    res.status(500).json({ error: 'Failed to create room.', requestId: req.id });
   }
 });
 
 router.get('/recent/:userId', authMiddleware, async (req, res) => {
   if (req.user.userId !== req.params.userId) {
-    return res.status(403).json({ error: 'You can only view your own rooms.' });
+    return res.status(403).json({ error: 'You can only view your own rooms.', requestId: req.id });
   }
 
   try {
@@ -39,14 +40,14 @@ router.get('/recent/:userId', authMiddleware, async (req, res) => {
                             .limit(20);
     res.json(rooms);
   } catch (error) {
-    console.error('Fetch recent rooms error:', error);
-    res.status(500).json({ error: 'Failed to fetch recent rooms.' });
+    logger.error({ requestId: req.id, userId: req.user.userId, err: error }, 'Fetch recent rooms error');
+    res.status(500).json({ error: 'Failed to fetch recent rooms.', requestId: req.id });
   }
 });
 
 router.get('/shared/:userId', authMiddleware, async (req, res) => {
   if (req.user.userId !== req.params.userId) {
-    return res.status(403).json({ error: 'You can only view rooms shared with you.' });
+    return res.status(403).json({ error: 'You can only view rooms shared with you.', requestId: req.id });
   }
 
   try {
@@ -59,17 +60,17 @@ router.get('/shared/:userId', authMiddleware, async (req, res) => {
 
     res.json(rooms);
   } catch (error) {
-    console.error('Fetch shared rooms error:', error);
-    res.status(500).json({ error: 'Failed to fetch shared rooms.' });
+    logger.error({ requestId: req.id, userId: req.user.userId, err: error }, 'Fetch shared rooms error');
+    res.status(500).json({ error: 'Failed to fetch shared rooms.', requestId: req.id });
   }
 });
 
 router.get('/:roomId', authMiddleware, async (req, res) => {
   const roomId = String(req.params.roomId || '').trim().toUpperCase();
-  
+
   // Try to find active in-memory room first
   let room = getRoomSnapshot(roomId);
-  
+
   // If not in memory, check database
   if (!room) {
     try {
@@ -87,7 +88,7 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
         });
       }
     } catch (e) {
-      console.error('DB fetch error:', e);
+      logger.error({ requestId: req.id, userId: req.user.userId, roomId, err: e }, 'DB fetch error');
     }
   } else {
     return res.json({
@@ -103,6 +104,7 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
 
   return res.status(404).json({
     error: 'Room not found.',
+    requestId: req.id,
   });
 });
 
@@ -113,19 +115,19 @@ router.delete('/:roomId', authMiddleware, async (req, res) => {
     const room = await Room.findOne({ roomId });
 
     if (!room) {
-      return res.status(404).json({ error: 'Room not found.' });
+      return res.status(404).json({ error: 'Room not found.', requestId: req.id });
     }
 
     // Only the creator can delete
     if (room.createdBy !== req.user.userId) {
-      return res.status(403).json({ error: 'Only the room creator can delete this room.' });
+      return res.status(403).json({ error: 'Only the room creator can delete this room.', requestId: req.id });
     }
 
     await Room.deleteOne({ roomId });
     res.json({ message: 'Room deleted successfully.' });
   } catch (error) {
-    console.error('Delete room error:', error);
-    res.status(500).json({ error: 'Failed to delete room.' });
+    logger.error({ requestId: req.id, userId: req.user.userId, roomId, err: error }, 'Delete room error');
+    res.status(500).json({ error: 'Failed to delete room.', requestId: req.id });
   }
 });
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const authMiddleware = require('../middleware/auth');
+const logger = require('../config/logger');
 const { executeLimiter } = require('../middleware/rateLimits');
 
 const router = express.Router();
@@ -91,7 +92,7 @@ router.post(
   } catch (error) {
     // P0-07: full upstream detail stays in server logs; the client only gets
     // a generic message + correlation ID (never Judge0 response bodies).
-    console.error(`[${req.id}] Execution error:`, error.response?.data || error.message);
+    logger.error({ requestId: req.id, err: error.response?.data || error.message }, 'Execution error');
     res.status(500).json({
       error: 'Failed to execute code. Please try again.',
       requestId: req.id,
@@ -105,7 +106,7 @@ router.get('/languages', authMiddleware, async (req, res) => {
     const response = await judge0Client.get('/languages');
     res.json(response.data);
   } catch (error) {
-    console.error(`[${req.id}] Languages error:`, error.message);
+    logger.error({ requestId: req.id, err: error.message }, 'Languages error');
     res.status(500).json({ error: 'Failed to fetch languages', requestId: req.id });
   }
 });

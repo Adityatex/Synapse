@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE } from '../config/apiConfig';
+import { getToken } from './authService';
 
 const apiClient = axios.create({
   baseURL: API_BASE,
@@ -7,6 +8,15 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+//api/execute now requires JWT — attach it like roomService/aiService do.
+apiClient.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 export const executeCode = async (source_code, language_id, stdin = '') => {

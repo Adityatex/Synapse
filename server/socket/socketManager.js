@@ -744,32 +744,6 @@ function createSocketServer(httpServer) {
       });
     });
 
-    socket.on('legacy-code-change', ({ fileId, content, updatedAt } = {}) => {
-      const roomId = socket.data.roomId;
-      if (!roomId || !fileId) {
-        return;
-      }
-
-      const nextUpdatedAt = updatedAt ?? Date.now();
-      updateRoomState(roomId, (room) => {
-        room.files = room.files.map((file) =>
-          file.id === fileId
-            ? {
-                ...file,
-                content: content ?? '',
-                updatedAt: nextUpdatedAt,
-              }
-            : file
-        );
-      });
-
-      socket.to(roomId).emit('code-change', {
-        fileId,
-        content: content ?? '',
-        updatedAt: nextUpdatedAt,
-      });
-    });
-
     socket.on('cursor-move', ({ roomId, position } = {}) => {
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !position) {

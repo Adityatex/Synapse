@@ -4,7 +4,7 @@ import throttle from 'lodash.throttle';
 import debounce from 'lodash.debounce';
 import { useCallback } from 'react';
 import { FileProvider, useFiles } from '../contexts/FileContext';
-import { useAuth } from '../context/useAuth';
+import { useAuth } from '../contexts/useAuth';
 import Sidebar from '../components/Sidebar';
 import TabBar from '../components/TabBar';
 import EditorPanel from '../components/EditorPanel';

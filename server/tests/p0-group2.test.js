@@ -266,3 +266,57 @@ describe('P0-07: sanitized error responses', () => {
     assert.ok(!aiSrc.includes('error.response?.data?.error'), 'ai must not forward Groq bodies');
   });
 });
+
+describe('P0-08: dead code removed, single context directory', () => {
+  const REPO_ROOT = path.join(__dirname, '..', '..');
+  const SERVER_ROOT = path.join(__dirname, '..');
+  const CLIENT_SRC = path.join(REPO_ROOT, 'client', 'src');
+
+  function walkFiles(dir, out = []) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules') continue;
+        walkFiles(full, out);
+      } else if (/\.(js|jsx)$/.test(entry.name)) {
+        out.push(full);
+      }
+    }
+    return out;
+  }
+
+  it('legacy-code-change handler and client emitter are gone', () => {
+    const socketSrc = fs.readFileSync(path.join(SERVER_ROOT, 'socket', 'socketManager.js'), 'utf8');
+    assert.ok(!socketSrc.includes('legacy-code-change'), 'server handler must be deleted');
+
+    const offenders = walkFiles(CLIENT_SRC).filter((file) =>
+      fs.readFileSync(file, 'utf8').includes('legacy-code-change')
+    );
+    assert.deepEqual(offenders, [], `client emitters must be deleted: ${offenders.join(', ')}`);
+  });
+
+  it('debugLog / debug.log are gone from the server', () => {
+    const authSrc = fs.readFileSync(path.join(SERVER_ROOT, 'routes', 'auth.js'), 'utf8');
+    assert.ok(!authSrc.includes('debugLog'), 'debugLog helper and calls must be deleted');
+    assert.ok(!authSrc.includes("require('fs')"), 'unused fs import must be deleted');
+    assert.ok(!authSrc.includes("require('path')"), 'unused path import must be deleted');
+    assert.ok(!fs.existsSync(path.join(SERVER_ROOT, 'debug.log')), 'debug.log must not exist');
+  });
+
+  it('client has exactly one context directory (contexts/)', () => {
+    assert.ok(!fs.existsSync(path.join(CLIENT_SRC, 'context')), 'client/src/context must be gone');
+    for (const file of ['AuthContext.jsx', 'useAuth.js', 'authContextInstance.js', 'FileContext.jsx']) {
+      assert.ok(
+        fs.existsSync(path.join(CLIENT_SRC, 'contexts', file)),
+        `client/src/contexts/${file} must exist`
+      );
+    }
+
+    const offenders = walkFiles(CLIENT_SRC).filter((file) => {
+      const src = fs.readFileSync(file, 'utf8');
+      // Matches singular context/ imports but not contexts/ ones.
+      return /from\s+['"][^'"]*\/context\//.test(src) && !/\/contexts\//.test(src);
+    });
+    assert.deepEqual(offenders, [], `stale context/ imports: ${offenders.join(', ')}`);
+  });
+});

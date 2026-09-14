@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Terminal, Code2, Heart, ExternalLink } from 'lucide-react';
-import { useAuth } from '../../context/useAuth';
+import { useAuth } from '../../contexts/useAuth';
 
 export default function CTAAndFooter() {
   const { isAuthenticated } = useAuth();

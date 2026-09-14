@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/useAuth';
+import { useAuth } from '../contexts/useAuth';
 import { requestLoginOtp } from '../services/authService';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, KeyRound } from 'lucide-react';
 import SynapseInteractiveBackground from '../components/SynapseInteractiveBackground';

@@ -15,7 +15,7 @@ import {
   UserRound,
   Zap,
 } from 'lucide-react';
-import { useAuth } from '../context/useAuth';
+import { useAuth } from '../contexts/useAuth';
 import { getAvatarStyle, getUserInitial } from '../utils/avatar';
 import SynapseLogo from '../components/SynapseLogo';
 

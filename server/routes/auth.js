@@ -2,8 +2,6 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 const otpGenerator = require('otp-generator');
 const User = require('../models/User');
 const OtpVerification = require('../models/OtpVerification');
@@ -15,11 +13,6 @@ const {
   loginLimiter,
 } = require('../middleware/rateLimits');
 const { sendOtpEmail } = require('../services/emailService');
-
-function debugLog(msg) {
-  const logFile = path.join(__dirname, '..', 'debug.log');
-  fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${msg}\n`);
-}
 
 const router = express.Router();
 const OTP_EXPIRY_MINUTES = Number(process.env.OTP_EXPIRY_MINUTES || 10);
@@ -190,9 +183,6 @@ router.post(
       email: normalizedEmail,
     });
   } catch (err) {
-    debugLog(`Signup OTP request error: ${err.message}`);
-    debugLog(`Signup OTP request error name: ${err.name}`);
-    debugLog(`Signup OTP request error stack: ${err.stack}`);
     console.error(`[${req.id}] Signup OTP request error:`, err);
 
     if (err.code === 11000) {

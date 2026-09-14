@@ -15,6 +15,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const express = require('express');
 const helmet = require('helmet');
 const request = require('supertest');
@@ -92,5 +93,104 @@ describe('P0-05: helmet + body limits', () => {
     assert.ok(executeSrc.includes("limit: '2mb'"), 'execute router must declare its 2 MB budget');
     const socketSrc = fs.readFileSync(path.join(__dirname, '..', 'socket', 'socketManager.js'), 'utf8');
     assert.ok(socketSrc.includes('maxHttpBufferSize'), 'socket server must bound its buffer (sync budget)');
+  });
+});
+
+describe('P0-06: boot-time env validation', () => {
+  const { validateEnv, loadEnvOrExit, logConfigTable } = require('../config/env');
+  const LONG_SECRET = 'test-secret-that-is-long-enough-for-p0-06-1234567890';
+
+  it('rejects a missing JWT_SECRET', () => {
+    const result = validateEnv({ NODE_ENV: 'test' });
+    assert.equal(result.success, false);
+    assert.ok(result.error.issues.some((i) => i.path.includes('JWT_SECRET')));
+  });
+
+  it('rejects a short JWT_SECRET (< 32 chars)', () => {
+    const result = validateEnv({ NODE_ENV: 'test', JWT_SECRET: 'too-short' });
+    assert.equal(result.success, false);
+    assert.ok(result.error.issues.some((i) => i.path.includes('JWT_SECRET')));
+  });
+
+  it('allows dev/test without MONGODB_URI or CORS_ORIGIN (warn-only)', () => {
+    const result = validateEnv({ NODE_ENV: 'test', JWT_SECRET: LONG_SECRET });
+    assert.equal(result.success, true);
+  });
+
+  it('requires MONGODB_URI and CORS_ORIGIN in production', () => {
+    const missingBoth = validateEnv({ NODE_ENV: 'production', JWT_SECRET: LONG_SECRET });
+    assert.equal(missingBoth.success, false);
+    const paths = missingBoth.error.issues.map((i) => i.path.join('.'));
+    assert.ok(paths.includes('MONGODB_URI'));
+    assert.ok(paths.includes('CORS_ORIGIN'));
+
+    const complete = validateEnv({
+      NODE_ENV: 'production',
+      JWT_SECRET: LONG_SECRET,
+      MONGODB_URI: 'mongodb://localhost:27017/synapse',
+      CORS_ORIGIN: 'https://app.example.com',
+    });
+    assert.equal(complete.success, true);
+  });
+
+  it('missing JWT_SECRET exits 1 with a clear message BEFORE listening', () => {
+    const serverDir = path.join(__dirname, '..');
+    const childEnv = { ...process.env, NODE_ENV: 'test' };
+    delete childEnv.JWT_SECRET;
+
+    let output = '';
+    let status = 0;
+    try {
+      output = execFileSync(
+        process.execPath,
+        ['-e', "require('./config/env').loadEnvOrExit()"],
+        { cwd: serverDir, env: childEnv, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+      );
+    } catch (err) {
+      status = err.status;
+      output = `${err.stdout || ''}${err.stderr || ''}`;
+    }
+
+    assert.equal(status, 1, 'must exit with code 1');
+    assert.ok(output.includes('JWT_SECRET'), 'message must name the missing variable');
+    assert.ok(!output.includes('Synapse server running'), 'must exit before listen()');
+  });
+
+  it('never prints secret values in the config log', () => {
+    const fakeSecret = `p0-06-supersecret-${Date.now()}`;
+    let captured = '';
+    const origLog = console.log;
+    const origTable = console.table;
+    const origWarn = console.warn;
+    console.log = (...args) => {
+      captured += `${args.join(' ')}\n`;
+    };
+    console.table = (rows) => {
+      captured += JSON.stringify(rows);
+    };
+    console.warn = () => {};
+    try {
+      logConfigTable({
+        NODE_ENV: 'test',
+        PORT: 5000,
+        JWT_SECRET: fakeSecret,
+        MONGODB_URI: 'mongodb://localhost:27017/synapse',
+        CORS_ORIGIN: 'https://app.example.com',
+      });
+    } finally {
+      console.log = origLog;
+      console.table = origTable;
+      console.warn = origWarn;
+    }
+    assert.ok(!captured.includes(fakeSecret), 'secret value must be redacted');
+    assert.ok(captured.includes('JWT_SECRET'), 'setting name must still be listed');
+  });
+
+  it('server.js validates env before anything else (static check)', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+    const validateAt = src.indexOf('loadEnvOrExit()');
+    const listenAt = src.indexOf('server.listen(');
+    assert.ok(validateAt > 0, 'server.js must call loadEnvOrExit');
+    assert.ok(validateAt < listenAt, 'validation must run before listen()');
   });
 });

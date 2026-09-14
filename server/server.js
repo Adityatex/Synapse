@@ -6,6 +6,11 @@ const http = require('http');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+// P0-06: fail fast on bad config — exits(1) BEFORE listen() or DB connects.
+const { loadEnvOrExit } = require('./config/env');
+
+loadEnvOrExit();
+
 const executeRoute = require('./routes/execute');
 const aiRoute = require('./routes/ai');
 const authRoute = require('./routes/auth');

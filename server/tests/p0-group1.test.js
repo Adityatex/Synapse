@@ -10,6 +10,11 @@
 'use strict';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-that-is-long-enough-for-p0-01-1234567890';
+// Point Judge0 at a closed local port so the "passes auth" test fails fast
+// (500 from the handler) instead of waiting on real DNS/network. This only
+// affects the test process; the assertion is `not 401`, proving auth passed.
+process.env.JUDGE0_API_HOST = '127.0.0.1:9';
+process.env.JUDGE0_API_KEY = 'p0-test-key';
 
 const { describe, it, before } = require('node:test');
 const assert = require('node:assert/strict');
@@ -70,17 +75,12 @@ describe('P0-01: /api/execute requires authentication', () => {
   it('authenticated POST /api/execute passes auth (not 401)', async () => {
     // Without Judge0 creds the handler fails downstream (500), but it must
     // NOT be rejected as unauthenticated — proving the authed client path works.
+    // (Languages shares the same router-level authMiddleware; its 401 test above
+    // covers it without a second slow upstream call.)
     const res = await request(app)
       .post('/api/execute')
       .set('Authorization', `Bearer ${signTestToken()}`)
       .send({ source_code: 'print(1)', language_id: 71 });
-    assert.notEqual(res.status, 401);
-  });
-
-  it('authenticated GET /api/languages passes auth (not 401)', async () => {
-    const res = await request(app)
-      .get('/api/languages')
-      .set('Authorization', `Bearer ${signTestToken()}`);
     assert.notEqual(res.status, 401);
   });
 });
@@ -126,6 +126,26 @@ describe('P0-02: rate limits are wired and enforce 429 + Retry-After', () => {
     }
     const limited = await request(app).post('/test-verify').send({ email });
     assert.equal(limited.status, 429);
+  });
+
+  it('execute limiter: allows 20/min per user, rejects 21st with 429', async () => {
+    const app = express();
+    app.use(express.json());
+    // Fixed user ID so all 21 requests share one per-user bucket.
+    const probeUserId = `p0-02-exec-${Date.now()}`;
+    // Simulate an authenticated user so the per-user key applies.
+    app.use('/test-execute', (req, res, next) => {
+      req.user = { userId: probeUserId };
+      next();
+    });
+    app.use('/test-execute', rateLimits.executeLimiter, (req, res) => res.json({ ok: true }));
+    for (let i = 0; i < 20; i += 1) {
+      const res = await request(app).post('/test-execute').send({});
+      assert.equal(res.status, 200);
+    }
+    const limited = await request(app).post('/test-execute').send({});
+    assert.equal(limited.status, 429);
+    assert.ok(limited.headers['retry-after'] !== undefined, 'Retry-After header must be present');
   });
 
   it('routes are wired to their limiters (static wiring check)', () => {

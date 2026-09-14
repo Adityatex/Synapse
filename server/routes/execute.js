@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const authMiddleware = require('../middleware/auth');
 const logger = require('../config/logger');
+const { captureError } = require('../config/sentry');
 const { executeLimiter } = require('../middleware/rateLimits');
 
 const router = express.Router();
@@ -92,7 +93,9 @@ router.post(
   } catch (error) {
     // P0-07: full upstream detail stays in server logs; the client only gets
     // a generic message + correlation ID (never Judge0 response bodies).
+    // P0-10: metered external — also report to Sentry with request context.
     logger.error({ requestId: req.id, err: error.response?.data || error.message }, 'Execution error');
+    captureError(error, { userId: req.user ? req.user.userId : undefined, requestId: req.id });
     res.status(500).json({
       error: 'Failed to execute code. Please try again.',
       requestId: req.id,

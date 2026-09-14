@@ -107,3 +107,97 @@ describe('P0-09: structured JSON logging with request IDs', () => {
     assert.deepEqual(offenders, [], `unstructured logging in: ${offenders.join(', ')}`);
   });
 });
+
+describe('P0-10: Sentry error tracking', () => {
+  const REPO_ROOT = path.join(__dirname, '..', '..');
+  const CLIENT_SRC = path.join(REPO_ROOT, 'client', 'src');
+
+  it('is a safe no-op without SENTRY_DSN', () => {
+    delete process.env.SENTRY_DSN;
+    const sentry = require('../config/sentry');
+    assert.equal(sentry.initSentry(), null);
+    assert.equal(sentry.isEnabled(), false);
+    // Must never throw when disabled.
+    sentry.captureError(new Error('boom'), { userId: 'u' });
+  });
+
+  it('captures a route-style error with release + user/request context', async () => {
+    const sentry = require('../config/sentry');
+    const captured = [];
+    process.env.SENTRY_RELEASE = 'p0-10-test-release';
+
+    try {
+      sentry.initSentry({
+        dsn: 'https://testkey@sentry.io/12345',
+        // Intercept offline: record the event, drop it (no network).
+        beforeSend: (event) => {
+          captured.push(event);
+          return null;
+        },
+      });
+      assert.equal(sentry.isEnabled(), true);
+
+      sentry.captureError(new Error('route boom'), {
+        userId: 'u-1',
+        roomId: 'ROOM1',
+        requestId: 'req-1',
+      });
+      await sentry.flushSentry(5000);
+
+      assert.equal(captured.length, 1);
+      const event = captured[0];
+      assert.equal(event.release, 'p0-10-test-release');
+      assert.equal(event.exception.values[0].value, 'route boom');
+      assert.equal(event.user.id, 'u-1');
+      assert.equal(event.tags.requestId, 'req-1');
+      assert.equal(event.tags.roomId, 'ROOM1');
+    } finally {
+      delete process.env.SENTRY_RELEASE;
+      await sentry.closeSentry();
+    }
+  });
+
+  it('server wires init + safety net (static check)', () => {
+    const serverSrc = fs.readFileSync(path.join(SERVER_ROOT, 'server.js'), 'utf8');
+    assert.ok(serverSrc.includes('initSentry()'), 'server must init Sentry at boot');
+    assert.ok(serverSrc.includes("require('./config/sentry')"), 'server must use config/sentry');
+    assert.ok(serverSrc.includes('captureError(err, {})'), 'process-level handlers must report');
+
+    const executeSrc = fs.readFileSync(path.join(SERVER_ROOT, 'routes', 'execute.js'), 'utf8');
+    assert.ok(executeSrc.includes('captureError(error'), 'execute 500 must report to Sentry');
+
+    const aiSrc = fs.readFileSync(path.join(SERVER_ROOT, 'routes', 'ai.js'), 'utf8');
+    assert.ok(aiSrc.includes('captureError(error'), 'AI chat 500 must report to Sentry');
+  });
+
+  it('client wires init, boundary and user context from env only (static check)', () => {
+    const mainSrc = fs.readFileSync(path.join(CLIENT_SRC, 'main.jsx'), 'utf8');
+    assert.ok(mainSrc.includes('initSentry'), 'main.jsx must init Sentry');
+
+    const appSrc = fs.readFileSync(path.join(CLIENT_SRC, 'App.jsx'), 'utf8');
+    assert.ok(appSrc.includes('ErrorBoundary'), 'App must wrap routes in an error boundary');
+
+    const authSrc = fs.readFileSync(path.join(CLIENT_SRC, 'contexts', 'AuthContext.jsx'), 'utf8');
+    assert.ok(authSrc.includes('setSentryUser'), 'auth must attach the user to reports');
+
+    const sentrySrc = fs.readFileSync(path.join(CLIENT_SRC, 'config', 'sentry.js'), 'utf8');
+    assert.ok(sentrySrc.includes('VITE_SENTRY_DSN'), 'DSN must come from env');
+    assert.ok(sentrySrc.includes('VITE_SENTRY_RELEASE'), 'release must come from env');
+
+    const offenders = [];
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+        } else if (/\.(js|jsx)$/.test(entry.name)) {
+          if (/sentry\.io/.test(fs.readFileSync(full, 'utf8'))) {
+            offenders.push(path.relative(CLIENT_SRC, full));
+          }
+        }
+      }
+    };
+    walk(CLIENT_SRC);
+    assert.deepEqual(offenders, [], `hardcoded Sentry DSN in: ${offenders.join(', ')}`);
+  });
+});

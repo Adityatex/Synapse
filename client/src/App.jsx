@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import { Sentry } from './config/sentry.js';
 import LandingPage from './pages/LandingPage';
 import EditorPage from './pages/EditorPage';
 import Signup from './pages/Signup';
@@ -34,7 +35,20 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        {/* P0-10: render errors reach Sentry with the release tag. */}
+        <Sentry.ErrorBoundary
+          fallback={
+            <div style={{ padding: 32, fontFamily: 'sans-serif' }}>
+              <h1>Something went wrong.</h1>
+              <p>Please reload the page. If the problem persists, contact support.</p>
+              <button type="button" onClick={() => window.location.reload()}>
+                Reload
+              </button>
+            </div>
+          }
+        >
+          <AppRoutes />
+        </Sentry.ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   );

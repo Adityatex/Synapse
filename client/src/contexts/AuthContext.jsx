@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { isAuthenticated, getAuthSession, getUserFromToken } from '../utils/auth';
 import * as authService from '../services/authService';
+import { setSentryUser } from '../config/sentry.js';
 import { AuthContext } from './authContextInstance';
 
 export function AuthProvider({ children }) {
@@ -16,6 +17,8 @@ export function AuthProvider({ children }) {
         const session = getAuthSession();
         const userData = session?.user || getUserFromToken();
         setUser(userData);
+        // P0-10: attach the user to error reports.
+        setSentryUser(userData);
       }
     } catch (err) {
       console.error('Auth initialization error:', err);
@@ -28,6 +31,7 @@ export function AuthProvider({ children }) {
     async (email, otp) => {
       const data = await authService.verifySignupOtp(email, otp);
       setUser(data.user);
+      setSentryUser(data.user);
       navigate('/dashboard');
       return data;
     },
@@ -38,6 +42,7 @@ export function AuthProvider({ children }) {
     async (email, otp) => {
       const data = await authService.verifyLoginOtp(email, otp);
       setUser(data.user);
+      setSentryUser(data.user);
       navigate('/dashboard');
       return data;
     },
@@ -47,6 +52,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     authService.logout();
     setUser(null);
+    setSentryUser(null);
     navigate('/login');
   }, [navigate]);
 

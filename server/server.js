@@ -12,7 +12,11 @@ const { loadEnvOrExit } = require('./config/env');
 
 loadEnvOrExit();
 
+// P0-10: error tracking (no-op without SENTRY_DSN).
+initSentry();
+
 const logger = require('./config/logger');
+const { initSentry, captureError } = require('./config/sentry');
 const executeRoute = require('./routes/execute');
 const aiRoute = require('./routes/ai');
 const authRoute = require('./routes/auth');
@@ -103,6 +107,19 @@ app.use((err, req, res, next) => {
   }
 
   return next(err);
+});
+
+// P0-10: safety net — anything escaping the routes above is reported with
+// request/user context, then answered with the standard error envelope.
+app.use((err, req, res, next) => {
+  captureError(err, { userId: req.user ? req.user.userId : undefined, requestId: req.id });
+  logger.error({ requestId: req.id, err }, 'Unhandled error');
+
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  res.status(err.status || 500).json({ error: 'Something went wrong.', requestId: req.id });
 });
 
 app.get('/api/health', (req, res) => {
@@ -243,7 +260,11 @@ process.on('SIGTERM', () => {
 });
 
 process.on('exit', (code) => logger.info({ code }, 'Process exit event'));
-process.on('uncaughtException', (err) => logger.error({ err }, 'Uncaught Exception'));
-process.on('unhandledRejection', (reason) =>
-  logger.error({ reason }, 'Unhandled Rejection')
-);
+process.on('uncaughtException', (err) => {
+  captureError(err, {});
+  logger.error({ err }, 'Uncaught Exception');
+});
+process.on('unhandledRejection', (reason) => {
+  captureError(reason instanceof Error ? reason : new Error(String(reason)), {});
+  logger.error({ reason }, 'Unhandled Rejection');
+});

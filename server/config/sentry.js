@@ -4,8 +4,8 @@ const logger = require('./logger');
  * P0-10 — Sentry error tracking (server).
  *
  * - Offline-safe: without SENTRY_DSN everything is a no-op (warn once).
- * - Release comes from SENTRY_RELEASE (CI/prod sets it to the git SHA;
- *   P0-14 documents it). Defaults to 'dev'.
+ * - Release comes from SENTRY_RELEASE, falling back to RENDER_GIT_COMMIT /
+ *   VERCEL_GIT_COMMIT_SHA on those platforms (P0-13/P0-14). Defaults to 'dev'.
  * - tracesSampleRate 0: errors only in P0, no performance tracing.
  * - Per-capture withScope() so concurrent requests never leak user/room
  *   context into each other's events.
@@ -15,7 +15,14 @@ let Sentry = null;
 let initialized = false;
 
 function getRelease() {
-  return process.env.SENTRY_RELEASE || 'dev';
+  // P0-13: on Render the deployed commit is available as RENDER_GIT_COMMIT,
+  // so error reports are tagged even when SENTRY_RELEASE is not set.
+  return (
+    process.env.SENTRY_RELEASE ||
+    process.env.RENDER_GIT_COMMIT ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    'dev'
+  );
 }
 
 function initSentry(overrides) {

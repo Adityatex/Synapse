@@ -1,0 +1,63 @@
+# P0-13 — Always-on backend (Render Starter).
+#
+# WHAT THIS DOES
+# - Declares the backend as a Render web service on the `starter` plan.
+#   Starter instances never sleep: no cold starts, no dropped WebSocket
+#   sessions from free-tier spin-down.
+# - `healthCheckPath: /api/health` enables Render's native health checks
+#   against the liveness endpoint (must return 200; see server.js).
+#
+# MANUAL STEPS (Render dashboard — cannot be done in code):
+# 1. Push this file to main, then Dashboard → New → Blueprint → select repo.
+# 2. If a `synapse-api` Free service already exists: Dashboard → service →
+#    Settings → Instance Type → Starter ($7/mo at time of writing) → Save.
+#    The Free service must be upgraded or deleted — a Free instance keeps
+#    sleeping regardless of this file.
+# 3. Fill every `sync: false` variable below (they hold secrets and are
+#    intentionally NOT committed). JWT_SECRET must be ≥ 32 random chars.
+# 4. After deploy: Settings → Health Checks shows green, and Logs show
+#    `Synapse server running` with no further restarts.
+#
+# VERIFICATION (acceptance)
+# - GET https://<service>.onrender.com/api/health → 200 `{status:"ok"}`.
+# - No cold starts over the observation window; socket sessions survive
+#   idle periods (Free-tier spin-down previously killed them after ~15 min).
+
+services:
+  - type: web
+    name: synapse-api
+    runtime: node
+    rootDir: server
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: LOG_LEVEL
+        value: info
+      # Secrets — set in the dashboard, never committed.
+      - key: JWT_SECRET
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: JUDGE0_API_HOST
+        sync: false
+      - key: JUDGE0_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        sync: false
+      - key: SENTRY_DSN
+        sync: false

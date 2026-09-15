@@ -29,12 +29,23 @@ async function request(path = '', options = {}) {
   return data;
 }
 
-export function createRoom(roomName) {
-  return request('', { method: 'POST', body: JSON.stringify({ roomName }) });
+export function createRoom(roomName, options = {}) {
+  return request('', {
+    method: 'POST',
+    body: JSON.stringify({ roomName, isInviteOnly: options.isInviteOnly === true }),
+  });
 }
 
 export function getRoom(roomId) {
   return request(`/${String(roomId).trim().toUpperCase()}`);
+}
+
+// P0-16: creator-only toggle for the invite-only room setting.
+export function updateRoomSettings(roomId, settings) {
+  return request(`/${encodeURIComponent(roomId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
+  });
 }
 
 export function getRecentRooms(userId) {

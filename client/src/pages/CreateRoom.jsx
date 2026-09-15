@@ -10,6 +10,7 @@ export default function CreateRoom() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [roomName, setRoomName] = useState('');
+  const [inviteOnly, setInviteOnly] = useState(false);
 
   useEffect(() => {
     document.body.style.backgroundColor = '#05070d';
@@ -20,7 +21,7 @@ export default function CreateRoom() {
     try {
       setLoading(true);
       setError('');
-      const { room } = await createRoom(roomName || 'System Design Practice');
+      const { room } = await createRoom(roomName || 'System Design Practice', { isInviteOnly: inviteOnly });
       navigate(`/room/${room.roomId}`);
     } catch (requestError) {
       setError(requestError.message);
@@ -70,6 +71,26 @@ export default function CreateRoom() {
               />
             </div>
           </div>
+
+          {/* P0-16: creator-controlled invite-only setting. */}
+          <label
+            htmlFor="inviteOnly"
+            style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', marginBottom: '1.5rem', width: '100%', textAlign: 'left' }}
+          >
+            <input
+              id="inviteOnly"
+              type="checkbox"
+              checked={inviteOnly}
+              onChange={(e) => setInviteOnly(e.target.checked)}
+              style={{ marginTop: '0.2rem', accentColor: '#7c3aed' }}
+            />
+            <span>
+              <span className="auth-label" style={{ marginBottom: '0.15rem', display: 'block' }}>Invite-only room</span>
+              <span className="auth-subtitle" style={{ fontSize: '0.85rem' }}>
+                Only you and members who already joined can enter. Anyone else gets an error.
+              </span>
+            </span>
+          </label>
 
           <button onClick={handleCreateRoom} className="auth-btn" disabled={loading}>
             {loading ? (

@@ -7,6 +7,7 @@ const {
   getRoomSnapshot,
   addParticipant,
   applyDocumentUpdate,
+  isInviteOnlyJoinAllowed,
   removeParticipant,
   updateRoomState,
   loadRoomFromDB,
@@ -267,6 +268,41 @@ function createSocketServer(httpServer) {
           message: 'Room not found. Check the invite code and try again.',
         });
         return;
+      }
+
+      // P0-16 (interim): invite-only rooms admit only the creator and
+      // recorded members. Membership is read from the DB (written by
+      // recordRoomMembership on every successful join); when it cannot be
+      // verified the join is denied unless the requester is the creator.
+      if (room.isInviteOnly === true) {
+        const joinerUserId = socket.data.user.userId;
+        let memberUserIds = null;
+
+        try {
+          const dbRoom = await RoomModel.findOne({ roomId: normalizedRoomId })
+            .select('members')
+            .lean();
+          memberUserIds = (dbRoom && Array.isArray(dbRoom.members) ? dbRoom.members : [])
+            .map((member) => String(member.userId));
+        } catch (err) {
+          logger.error(
+            socketLogContext(socket, 'join-room-guard', { roomId: normalizedRoomId, err }),
+            'Invite-only membership check failed'
+          );
+        }
+
+        const decision = isInviteOnlyJoinAllowed({ room, userId: joinerUserId, memberUserIds });
+
+        if (!decision.allowed) {
+          logger.warn(
+            socketLogContext(socket, 'join-room', { roomId: normalizedRoomId }),
+            'Join room rejected: invite-only room'
+          );
+          socket.emit('room-error', {
+            message: 'This room is invite-only. Ask the room creator to add you before joining.',
+          });
+          return;
+        }
       }
 
       if (socket.data.roomId && socket.data.roomId !== normalizedRoomId) {

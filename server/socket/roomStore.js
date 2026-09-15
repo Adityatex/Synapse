@@ -154,6 +154,7 @@ function sanitizeRoom(room) {
     roomName: room.roomName || 'Untitled Room',
     createdBy: room.createdBy,
     createdAt: room.createdAt,
+    isInviteOnly: room.isInviteOnly === true,
     files: cloneFiles(room.files),
     activeFileId: room.activeFileId,
     openTabs: [...room.openTabs],
@@ -162,7 +163,7 @@ function sanitizeRoom(room) {
   };
 }
 
-async function createRoom(owner, roomName = 'Untitled Room') {
+async function createRoom(owner, roomName = 'Untitled Room', options = {}) {
   let roomId = generateRoomId();
 
   while (rooms.has(roomId)) {
@@ -174,6 +175,8 @@ async function createRoom(owner, roomName = 'Untitled Room') {
     roomId,
     roomName,
     createdBy: owner.userId,
+    // P0-16: creator-controlled invite-only setting (default open).
+    isInviteOnly: options.isInviteOnly === true,
     createdAt: Date.now(),
     files: baseState.files,
     activeFileId: baseState.activeFileId,
@@ -192,6 +195,7 @@ async function createRoom(owner, roomName = 'Untitled Room') {
       roomId: room.roomId,
       roomName: room.roomName,
       createdBy: room.createdBy,
+      isInviteOnly: room.isInviteOnly,
       files: baseState.files.map(f => ({ id: f.id, name: f.name, content: f.content, updatedAt: f.updatedAt })),
       lastUpdated: room.createdAt,
       createdAt: room.createdAt
@@ -234,6 +238,34 @@ function addParticipant(roomId, participant) {
 
   room.participants.set(nextParticipant.socketId, nextParticipant);
   return sanitizeRoom(room);
+}
+
+/**
+ * P0-16 (interim) — decides whether `userId` may join `room`.
+ *
+ * - Open rooms (`isInviteOnly` falsy): everyone may join.
+ * - Invite-only rooms: only the creator and recorded members. `memberUserIds`
+ *   must be the persisted DB membership list; when it cannot be verified
+ *   (null/undefined, e.g. DB unreachable) the join is denied unless the
+ *   requester is the creator (fail closed). This is the interim Phase 0
+ *   guard, not the Phase 3 role system.
+ */
+function isInviteOnlyJoinAllowed({ room, userId, memberUserIds }) {
+  if (!room || room.isInviteOnly !== true) {
+    return { allowed: true };
+  }
+
+  const normalizedUserId = String(userId || '');
+
+  if (room.createdBy && String(room.createdBy) === normalizedUserId) {
+    return { allowed: true, via: 'creator' };
+  }
+
+  if (Array.isArray(memberUserIds) && memberUserIds.map(String).includes(normalizedUserId)) {
+    return { allowed: true, via: 'member' };
+  }
+
+  return { allowed: false };
 }
 
 function removeParticipant(roomId, socketId) {
@@ -325,6 +357,7 @@ async function loadRoomFromDB(roomId) {
       roomId: dbRoom.roomId,
       roomName: dbRoom.roomName || 'Untitled Room',
       createdBy: dbRoom.createdBy,
+      isInviteOnly: dbRoom.isInviteOnly === true,
       createdAt: dbRoom.createdAt ? new Date(dbRoom.createdAt).getTime() : Date.now(),
       files: files,
       activeFileId: files[0].id,
@@ -351,6 +384,7 @@ module.exports = {
   getDocumentState,
   getRoom,
   getRoomSnapshot,
+  isInviteOnlyJoinAllowed,
   removeParticipant,
   updateRoomState,
   loadRoomFromDB,

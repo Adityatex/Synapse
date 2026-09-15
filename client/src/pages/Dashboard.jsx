@@ -161,6 +161,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user?.userId) {
+      // Intentional reset-then-fetch on auth user change: synchronizes with
+      // the room service (external system). Not derivable during render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoadingRooms(true);
       Promise.all([getRecentRooms(user.userId), getSharedRooms(user.userId)])
         .then(([ownedRooms, joinedRooms]) => {
@@ -222,10 +225,6 @@ export default function Dashboard() {
       (room.roomId || '').toLowerCase().includes(q)
     );
   });
-
-  const joinedRoomCount = new Set(
-    [...recentRooms, ...sharedRooms].map((room) => room.roomId)
-  ).size;
 
   /* ---------- stats ---------- */
   const stats = useMemo(() => {

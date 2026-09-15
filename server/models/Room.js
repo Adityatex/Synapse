@@ -53,6 +53,13 @@ const roomSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // P0-16 (interim): when true, only the creator and recorded members may
+  // join via sockets. This is NOT the Phase 3 role system — just a guard
+  // against strangers who guess the room code. Defaults to open.
+  isInviteOnly: {
+    type: Boolean,
+    default: false,
+  },
   files: [fileSchema],
   versions: [versionSchema],
   members: {

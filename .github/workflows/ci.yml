@@ -41,6 +41,9 @@ jobs:
 
       - name: Test
         run: npm test
+        # P0-10: tag error reports with the commit SHA (no-op without SENTRY_DSN).
+        env:
+          SENTRY_RELEASE: ${{ github.sha }}
 
   client:
     name: client
@@ -67,3 +70,6 @@ jobs:
 
       - name: Build
         run: npm run build
+        # P0-10: tag client error reports with the commit SHA.
+        env:
+          VITE_SENTRY_RELEASE: ${{ github.sha }}

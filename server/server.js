@@ -46,11 +46,6 @@ app.use(express.json({ limit: '5mb' }));
 // P0-02: global per-IP guard (300/min). Specific routes add stricter limits.
 app.use(globalLimiter);
 
-app.use('/api', executeRoute);
-app.use('/api/ai', aiRoute);
-app.use('/api/auth', authRoute);
-app.use('/api/rooms', roomsRoute);
-
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -58,6 +53,11 @@ app.get('/api/health', (req, res) => {
     db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
   });
 });
+
+app.use('/api', executeRoute);
+app.use('/api/ai', aiRoute);
+app.use('/api/auth', authRoute);
+app.use('/api/rooms', roomsRoute);
 
 createSocketServer(server);
 

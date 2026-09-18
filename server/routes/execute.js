@@ -16,6 +16,14 @@ const judge0Client = axios.create({
   },
 });
 
+function decodeBase64Field(value) {
+  if (!value) {
+    return '';
+  }
+
+  return Buffer.from(value, 'base64').toString('utf-8');
+}
+
 // Submit code and get result
 // code execution costs money (Judge0 quota) — require authentication.
 // per-user quota (20/min) on top of auth.
@@ -29,14 +37,18 @@ router.post('/execute', authMiddleware, executeLimiter, async (req, res) => {
       });
     }
 
-    // Create submission
-    const submission = await judge0Client.post('/submissions', {
-      source_code,
-      language_id,
-      stdin,
-      base64_encoded: false,
-      wait: false,
-    });
+    // base64-encode source_code/stdin: Judge0 can't losslessly store raw UTF-8
+    // for some inputs (control chars, unusual unicode from pasted code) and
+    // rejects the submission with "cannot be converted to UTF-8" otherwise.
+    const submission = await judge0Client.post(
+      '/submissions',
+      {
+        source_code: Buffer.from(source_code, 'utf-8').toString('base64'),
+        language_id,
+        stdin: Buffer.from(stdin, 'utf-8').toString('base64'),
+      },
+      { params: { base64_encoded: true, wait: false } }
+    );
 
     const token = submission.data.token;
 
@@ -49,7 +61,7 @@ router.post('/execute', authMiddleware, executeLimiter, async (req, res) => {
       await delay(1000);
 
       const response = await judge0Client.get(`/submissions/${token}`, {
-        params: { base64_encoded: false, fields: '*' },
+        params: { base64_encoded: true, fields: '*' },
       });
 
       const status = response.data.status;
@@ -68,9 +80,9 @@ router.post('/execute', authMiddleware, executeLimiter, async (req, res) => {
     }
 
     res.json({
-      stdout: result.stdout || '',
-      stderr: result.stderr || '',
-      compile_output: result.compile_output || '',
+      stdout: decodeBase64Field(result.stdout),
+      stderr: decodeBase64Field(result.stderr),
+      compile_output: decodeBase64Field(result.compile_output),
       status: result.status,
       time: result.time,
       memory: result.memory,

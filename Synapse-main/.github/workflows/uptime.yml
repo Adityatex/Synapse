@@ -1,0 +1,31 @@
+name: Uptime check
+
+# P0-15: lightweight uptime monitor for the deployed backend + frontend.
+# For production paging use a dedicated monitor (UptimeRobot / Better Stack);
+# this workflow is the in-repo backstop and runs on a schedule + manual dispatch.
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check backend /api/health
+        run: |
+          URL="${BACKEND_URL:-https://synapse-backend.onrender.com}/api/health"
+          echo "Probing $URL"
+          CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 20 "$URL")
+          cat /tmp/health.json
+          test "$CODE" = "200"
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+      - name: Check frontend root
+        run: |
+          URL="${FRONTEND_URL:-https://synapse.vercel.app}/"
+          echo "Probing $URL"
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$URL")
+          test "$CODE" = "200"
+        env:
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}

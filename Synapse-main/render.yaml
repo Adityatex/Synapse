@@ -1,0 +1,23 @@
+# P0-13: always-on backend. Starter plan prevents Render free-tier sleep,
+# which was dropping Socket.IO rooms + OTP state. healthCheckPath keeps the
+# deploy green only when /api/health responds.
+services:
+  - type: web
+    name: synapse-backend
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: LOG_LEVEL
+        value: info
+      # Set these in the Render dashboard (never commit secrets):
+      # MONGODB_URI, JWT_SECRET, CORS_ORIGIN, JUDGE0_API_HOST,
+      # JUDGE0_API_KEY, GROQ_API_KEY, GMAIL_USER, GMAIL_APP_PASSWORD,
+      # EMAIL_FROM, BREVO_API_KEY, BREVO_SENDER_EMAIL, SENTRY_DSN, APP_RELEASE

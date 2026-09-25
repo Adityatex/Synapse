@@ -1,0 +1,64 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { isAuthenticated, getAuthSession, getUserFromToken } from '../utils/auth';
+import * as authService from '../services/authService';
+import { AuthContext } from './authContextInstance';
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  // Check for existing auth on mount
+  useEffect(() => {
+    try {
+      if (isAuthenticated()) {
+        const session = getAuthSession();
+        const userData = session?.user || getUserFromToken();
+        setUser(userData);
+      }
+    } catch (err) {
+      console.error('Auth initialization error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const completeSignup = useCallback(
+    async (email, otp) => {
+      const data = await authService.verifySignupOtp(email, otp);
+      setUser(data.user);
+      navigate('/dashboard');
+      return data;
+    },
+    [navigate]
+  );
+
+  const completeLogin = useCallback(
+    async (email, otp) => {
+      const data = await authService.verifyLoginOtp(email, otp);
+      setUser(data.user);
+      navigate('/dashboard');
+      return data;
+    },
+    [navigate]
+  );
+
+  const logout = useCallback(() => {
+    authService.logout();
+    setUser(null);
+    navigate('/login');
+  }, [navigate]);
+
+  const value = {
+    user,
+    setUser,
+    loading,
+    isAuthenticated: !!user,
+    completeSignup,
+    completeLogin,
+    logout,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}

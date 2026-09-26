@@ -8,6 +8,7 @@ const OtpVerification = require('../models/OtpVerification');
 const authMiddleware = require('../middleware/auth');
 const { logger } = require('../lib/logger');
 const { captureException } = require('../lib/sentry');
+const { validateBody } = require('../middleware/validate');
 const {
   otpRequestByEmailLimiter,
   otpRequestByIpLimiter,
@@ -141,6 +142,7 @@ router.post(
   '/signup/request-otp',
   otpRequestByEmailLimiter,
   otpRequestByIpLimiter,
+  validateBody('signupRequestOtpSchema'),
   async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
@@ -207,7 +209,7 @@ router.post(
   }
 });
 
-router.post('/signup/verify-otp', otpVerifyLimiter, async (req, res) => {
+router.post('/signup/verify-otp', otpVerifyLimiter, validateBody('signupVerifyOtpSchema'), async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
       return;
@@ -273,6 +275,7 @@ router.post(
   loginLimiter,
   otpRequestByEmailLimiter,
   otpRequestByIpLimiter,
+  validateBody('loginRequestOtpSchema'),
   async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
@@ -321,7 +324,7 @@ router.post(
   }
 });
 
-router.post('/login/verify-otp', loginLimiter, otpVerifyLimiter, async (req, res) => {
+router.post('/login/verify-otp', loginLimiter, otpVerifyLimiter, validateBody('loginVerifyOtpSchema'), async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
       return;

@@ -2,6 +2,7 @@ const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const { logger } = require('../lib/logger');
 const { captureException } = require('../lib/sentry');
+const { validateBody } = require('../middleware/validate');
 const Room = require('../models/Room');
 const User = require('../models/User');
 const { createRoom, getRoomSnapshot } = require('../socket/roomStore');
@@ -18,7 +19,7 @@ function isRoomMember(dbRoom, userId) {
   return dbRoom.members.some((m) => m.userId === userId);
 }
 
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, validateBody('createRoomSchema'), async (req, res) => {
   const { roomName } = req.body;
   if (!roomName) {
     return res.status(400).json({ error: 'Room name is required.', requestId: req.id });
@@ -79,7 +80,7 @@ router.get('/shared/:userId', authMiddleware, async (req, res) => {
 });
 
 // P0-16: creator/members-only invite endpoint. Only the creator can invite.
-router.post('/:roomId/invite', authMiddleware, async (req, res) => {
+router.post('/:roomId/invite', authMiddleware, validateBody('inviteMemberSchema'), async (req, res) => {
   const roomId = String(req.params.roomId || '').trim().toUpperCase();
   const { userId, email, username } = req.body || {};
 

@@ -3,6 +3,7 @@ const axios = require('axios');
 const authMiddleware = require('../middleware/auth');
 const { logger } = require('../lib/logger');
 const { captureException } = require('../lib/sentry');
+const { validateBody } = require('../middleware/validate');
 const { executeLimiter } = require('../middleware/rateLimits');
 
 const router = express.Router();
@@ -29,7 +30,7 @@ function decodeBase64Field(value) {
 // Submit code and get result
 // code execution costs money (Judge0 quota) — require authentication.
 // per-user quota (20/min) on top of auth.
-router.post('/execute', authMiddleware, executeLimiter, async (req, res) => {
+router.post('/execute', authMiddleware, executeLimiter, validateBody('executeSchema'), async (req, res) => {
   try {
     const { source_code, language_id, stdin = '' } = req.body;
 

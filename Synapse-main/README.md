@@ -84,9 +84,13 @@ Other users on the same network should open `http://YOUR_LAN_IP:5173` in their b
 From the project root, run:
 
 ```bash
-npm install
-npm run install:all
+pnpm install
+pnpm --filter @synapse/shared build
 ```
+
+Turbo tasks: `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint`.
+Legacy npm layout (`npm run install:all`) still works for the two apps,
+but pnpm workspaces are canonical (see `docs/CONTRIBUTING.md`).
 
 ## Start the app
 

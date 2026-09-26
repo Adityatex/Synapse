@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const authMiddleware = require('../middleware/auth');
 const { logger } = require('../lib/logger');
 const { captureException } = require('../lib/sentry');
+const { validateBody } = require('../middleware/validate');
 const { aiChatLimiter } = require('../middleware/rateLimits');
 const { requestGroqChat } = require('../services/groqService');
 const Conversation = require('../models/Conversation');
@@ -150,7 +151,7 @@ router.delete('/conversation/:conversationId', async (req, res) => {
   }
 });
 
-router.post('/message', async (req, res) => {
+router.post('/message', validateBody('aiSaveMessageSchema'), async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
       return;
@@ -207,7 +208,7 @@ router.post('/message', async (req, res) => {
   }
 });
 
-router.post('/chat', aiChatLimiter, async (req, res) => {
+router.post('/chat', aiChatLimiter, validateBody('aiChatSchema'), async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
       return;

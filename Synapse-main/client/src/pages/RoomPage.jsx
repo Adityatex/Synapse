@@ -5,6 +5,11 @@ import debounce from 'lodash.debounce';
 import { useCallback } from 'react';
 import { FileProvider, useFiles } from '../context/FileContext';
 import { useAuth } from '../context/useAuth';
+// P1-10: RoomPage chrome state lives in Zustand + hooks (see stores/roomUiStore).
+import { useRoomUiStore } from '../stores/roomUiStore';
+import { useRoomTheme } from '../hooks/useRoomTheme';
+import { useLockNotice } from '../hooks/useLockNotice';
+import { useInviteLink } from '../hooks/useInviteLink';
 import Sidebar from '../components/Sidebar';
 import TabBar from '../components/TabBar';
 import EditorPanel from '../components/EditorPanel';
@@ -16,8 +21,6 @@ import { getThemeClasses } from '../utils/theme';
 import { createCollaborationSocket } from '../services/socket';
 import { getRoom } from '../services/roomService';
 import { RoomYjsManager } from '../services/yjsRoom';
-import { copyText } from '../utils/clipboard';
-import { readStorage, writeStorage } from '../utils/storage';
 
 const FILE_LOCK_RENEW_INTERVAL_MS = 15000;
 
@@ -38,20 +41,22 @@ function RoomSession({ roomId }) {
   const { user, logout } = useAuth();
   const { files, activeFileId, openTabs, updateContent, replaceState, replaceSharedFiles } = useFiles();
   const prevFilesRef = useRef([]);
-  const [theme, setTheme] = useState(() => readStorage('synapse-theme') || 'dark');
-  const [output, setOutput] = useState({
-    stdout: '',
-    stderr: '',
-    compile_output: '',
-    status: null,
-    error: null,
-    running: false,
-  });
-  const [connectionState, setConnectionState] = useState('connecting');
-  const [loadingRoom, setLoadingRoom] = useState(true);
-  const [roomReady, setRoomReady] = useState(false);
-  const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
+  // P1-10: session chrome from the Zustand store + focused hooks.
+  const { theme, toggleTheme } = useRoomTheme();
+  const { lockNotice, showLockNotice } = useLockNotice();
+  const { copied, copyInvite: handleCopyInvite } = useInviteLink(roomId);
+  const output = useRoomUiStore((s) => s.output);
+  const setOutput = useRoomUiStore((s) => s.setOutput);
+  const connectionState = useRoomUiStore((s) => s.connectionState);
+  const setConnectionState = useRoomUiStore((s) => s.setConnectionState);
+  const loadingRoom = useRoomUiStore((s) => s.loadingRoom);
+  const setLoadingRoom = useRoomUiStore((s) => s.setLoadingRoom);
+  const roomReady = useRoomUiStore((s) => s.roomReady);
+  const setRoomReady = useRoomUiStore((s) => s.setRoomReady);
+  const error = useRoomUiStore((s) => s.error);
+  const setError = useRoomUiStore((s) => s.setError);
+  const roomName = useRoomUiStore((s) => s.roomName);
+  const setRoomName = useRoomUiStore((s) => s.setRoomName);
   const [presence, setPresence] = useState({});
   const [yjsManager, setYjsManager] = useState(null);
   const [, setYjsDocVersion] = useState(0);
@@ -59,12 +64,8 @@ function RoomSession({ roomId }) {
   const [chatMessages, setChatMessages] = useState([]);
   const [typingUsers, setTypingUsers] = useState({});
   const [fileLocks, setFileLocks] = useState({});
-  const [roomName, setRoomName] = useState('');
-  const [lockNotice, setLockNotice] = useState('');
   const socketRef = useRef(null);
   const suppressStructureSyncRef = useRef(null);
-  const copyTimerRef = useRef(null);
-  const lockNoticeTimerRef = useRef(null);
   const structureEmitterRef = useRef(null);
   const cursorEmitterRef = useRef(null);
   const selectionEmitterRef = useRef(null);
@@ -95,23 +96,9 @@ function RoomSession({ roomId }) {
     [fileLocks, user?.userId]
   );
 
-  const showLockNotice = useCallback((message) => {
-    setLockNotice(message);
-    clearTimeout(lockNoticeTimerRef.current);
-    lockNoticeTimerRef.current = setTimeout(() => {
-      setLockNotice('');
-    }, 3500);
-  }, []);
-
   useEffect(() => {
     canEditFileRef.current = canEditFile;
   }, [canEditFile]);
-
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-    writeStorage('synapse-theme', nextTheme);
-  };
 
   const structureSignature = useMemo(
     () =>
@@ -188,10 +175,9 @@ function RoomSession({ roomId }) {
     }, 120, { leading: true, trailing: true });
 
     const throttledCursorSync = throttle((position) => {
+      // P0-03/P1-04: identity comes from the JWT; only position is sent.
       socket.emit('cursor-move', {
         roomId,
-        userId: user.userId,
-        username: user.name,
         position,
       });
     }, 50, { leading: true, trailing: true });
@@ -199,8 +185,6 @@ function RoomSession({ roomId }) {
     const throttledSelectionSync = throttle((selectionRange) => {
       socket.emit('selection-change', {
         roomId,
-        userId: user.userId,
-        username: user.name,
         selectionRange,
       });
     }, 50, { leading: true, trailing: true });
@@ -212,11 +196,8 @@ function RoomSession({ roomId }) {
     const handleConnect = () => {
       setConnectionState('connected');
       setError('');
-      socket.emit('join-room', {
-        roomId,
-        username: user.name,
-        userId: user.userId,
-      });
+      // P0-03: identity comes from the JWT — only roomId is sent.
+      socket.emit('join-room', { roomId });
     };
 
     const handleDisconnect = () => {
@@ -438,8 +419,6 @@ function RoomSession({ roomId }) {
       structureEmitterRef.current = null;
       cursorEmitterRef.current = null;
       selectionEmitterRef.current = null;
-      clearTimeout(copyTimerRef.current);
-      clearTimeout(lockNoticeTimerRef.current);
       Object.values(editingTimersRef.current).forEach(clearTimeout);
       editingTimersRef.current = {};
       socket.off('file-locks-updated', handleFileLocksUpdated);
@@ -454,7 +433,7 @@ function RoomSession({ roomId }) {
       manager.destroy();
       setYjsManager(null);
     };
-  }, [logout, navigate, replaceSharedFiles, replaceState, roomId, showLockNotice, updateContent, user]);
+  }, [logout, navigate, replaceSharedFiles, replaceState, roomId, showLockNotice, updateContent, user, setConnectionState, setError, setLoadingRoom, setRoomName, setRoomReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -476,7 +455,7 @@ function RoomSession({ roomId }) {
     return () => {
       cancelled = true;
     };
-  }, [roomId]);
+  }, [roomId, setError, setLoadingRoom, setRoomReady]);
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -575,26 +554,6 @@ function RoomSession({ roomId }) {
       ...selectionRange,
       fileId: activeFileId,
     });
-  };
-
-  const handleCopyInvite = async () => {
-    const publicAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin).replace(
-      /\/+$/,
-      ''
-    );
-    const inviteLink = `${publicAppUrl}/room/${roomId}`;
-
-    try {
-      const didCopy = await copyText(inviteLink);
-      if (!didCopy) {
-        throw new Error('Copy failed');
-      }
-      setCopied(true);
-      clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setError('Could not copy the invite link from this browser.');
-    }
   };
 
   const handleExitRoom = useCallback(() => {

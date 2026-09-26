@@ -12,6 +12,16 @@ const {
 } = require('./roomStore');
 const RoomModel = require('../models/Room');
 const MessageModel = require('../models/Message');
+// P1-05: socket payload validation against @synapse/shared contracts.
+const { validateSocketPayload } = require('../middleware/validate');
+
+function denyInvalid(socket, event, result) {
+  socket.emit('room-error', {
+    message: result.error || 'Invalid payload.',
+    event,
+  });
+  return false;
+}
 
 function normalizeRoomId(roomId) {
   return String(roomId || '').trim().toUpperCase();
@@ -227,7 +237,13 @@ function createSocketServer(httpServer) {
     // P0-03: never trust userId/username from the payload — identity always
     // comes from the verified JWT (socket.data.user).
     socket.on('join-room', async ({ roomId } = {}) => {
-      const normalizedRoomId = normalizeRoomId(roomId);
+      // P1-05: validate shape before normalizing.
+      const joinCheck = validateSocketPayload('joinRoomSchema', { roomId });
+      if (!joinCheck.ok) {
+        denyInvalid(socket, 'join-room', joinCheck);
+        return;
+      }
+      const normalizedRoomId = normalizeRoomId(joinCheck.data.roomId);
       let room = getRoom(normalizedRoomId);
 
       if (!room) {
@@ -359,7 +375,10 @@ function createSocketServer(httpServer) {
 
     // ─── CHAT ROOM FEATURES ───────────────────────────────────────────────────
 
-    socket.on('send-chat-message', async ({ roomId, content, type = 'user', replyTo }) => {
+    socket.on('send-chat-message', async (payload = {}) => {
+      const check = validateSocketPayload('chatMessageSchema', payload);
+      if (!check.ok) return;
+      const { roomId, content, type = 'user', replyTo } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !content) return;
 
@@ -512,7 +531,10 @@ function createSocketServer(httpServer) {
 
     // ─── SEARCH MESSAGES ───────────────────────────────────────────────────────
 
-    socket.on('search-chat-messages', async ({ roomId, query }) => {
+    socket.on('search-chat-messages', async (payload = {}) => {
+      const check = validateSocketPayload('searchChatMessagesSchema', payload);
+      if (!check.ok) return;
+      const { roomId, query } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !query) return;
       try {
@@ -534,12 +556,16 @@ function createSocketServer(httpServer) {
 
     // ─────────────────────────────────────────────────────────────────────────
 
-    socket.on('sync-room-state', async (payload = {}) => {
+    socket.on('sync-room-state', async (rawPayload = {}) => {
       const roomId = socket.data.roomId;
       if (!roomId) {
         return;
       }
 
+      // P1-05: bound sync payloads; fall back to raw on shape drift (client
+      // versions may send extra fields — schema is permissive by design).
+      const syncCheck = validateSocketPayload('syncRoomStateSchema', rawPayload);
+      const payload = syncCheck.ok ? syncCheck.data : rawPayload;
       const snapshot = updateRoomState(roomId, (room) => {
         room.files = Array.isArray(payload.files)
           ? payload.files.map((file) => ({
@@ -607,7 +633,10 @@ function createSocketServer(httpServer) {
       });
     });
 
-    socket.on('autosave', async ({ roomId, fileId, content } = {}) => {
+    socket.on('autosave', async (payload = {}) => {
+      const check = validateSocketPayload('autosaveSchema', payload);
+      if (!check.ok) return;
+      const { roomId, fileId, content } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !fileId || content === undefined) return;
 
@@ -627,7 +656,10 @@ function createSocketServer(httpServer) {
       }
     });
 
-    socket.on('save-version', async ({ roomId, fileId, content } = {}) => {
+    socket.on('save-version', async (payload = {}) => {
+      const check = validateSocketPayload('saveVersionSchema', payload);
+      if (!check.ok) return;
+      const { roomId, fileId, content } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !fileId || content === undefined) return;
 
@@ -649,7 +681,10 @@ function createSocketServer(httpServer) {
       }
     });
 
-    socket.on('request-file-lock', ({ roomId, fileId } = {}) => {
+    socket.on('request-file-lock', (payload = {}) => {
+      const check = validateSocketPayload('fileLockSchema', payload);
+      if (!check.ok) return;
+      const { roomId, fileId } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       const participant = socket.data.participant;
       const ownerUserId = participant?.userId || socket.data.user?.userId;
@@ -715,7 +750,10 @@ function createSocketServer(httpServer) {
       });
     });
 
-    socket.on('code-change', ({ roomId, fileId, changes } = {}) => {
+    socket.on('code-change', (payload = {}) => {
+      const check = validateSocketPayload('codeChangeSchema', payload);
+      if (!check.ok) return;
+      const { roomId, fileId, changes } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !fileId || !changes) {
         return;
@@ -767,7 +805,10 @@ function createSocketServer(httpServer) {
       });
     });
 
-    socket.on('cursor-move', ({ roomId, position } = {}) => {
+    socket.on('cursor-move', (payload = {}) => {
+      const check = validateSocketPayload('cursorMoveSchema', payload);
+      if (!check.ok) return;
+      const { roomId, position } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !position) {
         return;
@@ -783,7 +824,10 @@ function createSocketServer(httpServer) {
       });
     });
 
-    socket.on('selection-change', ({ roomId, selectionRange } = {}) => {
+    socket.on('selection-change', (payload = {}) => {
+      const check = validateSocketPayload('selectionChangeSchema', payload);
+      if (!check.ok) return;
+      const { roomId, selectionRange } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !selectionRange) {
         return;

@@ -25,4 +25,4 @@ const aiMessageSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model('AIMessage', aiMessageSchema);
+module.exports = mongoose.models.AIMessage || mongoose.model('AIMessage', aiMessageSchema);

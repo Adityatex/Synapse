@@ -1,0 +1,36 @@
+name: Staging deploy
+
+# P1-07: auto-deploy staging from main. Staging = Fly.io app `synapse-staging`
+# (see fly.staging.toml). Railway alternative: connect the repo, set root to
+# `server`, same env vars — then enable this workflow's railway step instead.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  deploy-staging:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --config fly.staging.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Smoke-test staging health
+        run: |
+          URL="${STAGING_URL:-https://synapse-staging.fly.dev}/api/health"
+          echo "Probing $URL"
+          for i in 1 2 3 4 5 6; do
+            CODE=$(curl -s -o /tmp/staging-health.json -w "%{http_code}" --max-time 15 "$URL" || true)
+            if [ "$CODE" = "200" ]; then cat /tmp/staging-health.json; exit 0; fi
+            sleep 10
+          done
+          echo "staging health check failed"; cat /tmp/staging-health.json || true; exit 1
+        env:
+          STAGING_URL: ${{ secrets.STAGING_URL }}

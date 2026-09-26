@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import Editor from '@monaco-editor/react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+// P1-11: Monaco is the heaviest client dep (~1MB+) — lazy-load it so the
+// initial bundle stays lean; routes are code-split in App.jsx.
+const Editor = lazy(() => import('@monaco-editor/react'));
 import { MonacoBinding } from 'y-monaco';
 import { useFiles } from '../context/FileContext';
 import { getMonacoLanguage } from '../utils/languageMap';
@@ -314,6 +316,13 @@ export default function EditorPanel({
       <FileLockBanner activeFileLock={activeFileLock} isReadOnly={isReadOnly} lockNotice={lockNotice} />
 
       <div style={{ flex: 1, overflow: 'hidden' }}>
+        <Suspense
+          fallback={
+            <div className="flex-1 flex items-center justify-center h-full">
+              <Loader2 className="animate-spin" size={28} />
+            </div>
+          }
+        >
         <Editor
           key={activeFile.id}
           height="100%"
@@ -399,6 +408,7 @@ export default function EditorPanel({
             suggest: { showIcons: true, showStatusBar: true },
           }}
         />
+        </Suspense>
       </div>
     </div>
   );

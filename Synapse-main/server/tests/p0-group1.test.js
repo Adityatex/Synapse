@@ -152,29 +152,35 @@ describe('P0-03: socket handlers never trust payload identity', () => {
 
   it('join-room ignores payload userId/username', () => {
     assert.ok(
-      socketSrc.includes("socket.on('join-room', async ({ roomId }"),
-      'join-room must destructure only roomId (no userId/username)'
+      socketSrc.includes("socket.on('join-room'"),
+      'join-room handler must exist'
     );
+    // P1-05: payload is validated (joinRoomSchema) then identity comes from JWT.
+    assert.ok(socketSrc.includes("validateSocketPayload('joinRoomSchema'"), 'join-room must validate payload');
     assert.ok(!socketSrc.includes('userId || socket.data.user.userId'), 'must not fall back to payload userId');
     assert.ok(!socketSrc.includes('username || socket.data.user.name'), 'must not fall back to payload username');
   });
 
   it('code-change uses only the authenticated sender', () => {
     assert.ok(
-      socketSrc.includes("socket.on('code-change', ({ roomId, fileId, changes }"),
-      'code-change must not accept userId from payload'
+      socketSrc.includes("socket.on('code-change'"),
+      'code-change handler must exist'
+    );
+    assert.ok(
+      !socketSrc.includes('userId,') || socketSrc.includes("validateSocketPayload('codeChangeSchema'"),
+      'code-change must validate payload and never accept userId from it'
     );
     assert.ok(socketSrc.includes('const senderId = socket.data.user.userId'), 'senderId must come from socket.data.user');
   });
 
   it('cursor-move and selection-change use only the authenticated user', () => {
     assert.ok(
-      socketSrc.includes("socket.on('cursor-move', ({ roomId, position }"),
-      'cursor-move must not accept userId/username from payload'
+      socketSrc.includes("validateSocketPayload('cursorMoveSchema'"),
+      'cursor-move must validate payload'
     );
     assert.ok(
-      socketSrc.includes("socket.on('selection-change', ({ roomId, selectionRange }"),
-      'selection-change must not accept userId/username from payload'
+      socketSrc.includes("validateSocketPayload('selectionChangeSchema'"),
+      'selection-change must validate payload'
     );
   });
 

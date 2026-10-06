@@ -1,0 +1,10 @@
+# Keep host installs and build output out of the image: the Dockerfile runs its
+# own pnpm install, and host node_modules (Windows/npm) clobber its symlinks.
+**/node_modules
+**/dist
+**/.turbo
+.git
+**/.env
+**/.env.*
+!**/.env.example
+Synapse-main

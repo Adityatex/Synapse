@@ -1,3 +1,4 @@
+const { logger } = require('../lib/logger');
 const nodemailer = require('nodemailer');
 const dns = require('dns');
 const net = require('net');
@@ -173,7 +174,7 @@ async function tryAlternateSmtpRoutes({ config, mailOptions, firstError, email }
         attempt.override
       );
       await transport.sendMail(mailOptions);
-      console.warn(
+      logger.warn(
         `WARNING: OTP SMTP fallback succeeded via ${attempt.label} after ${firstError?.code || 'unknown'} for ${email}.`
       );
       return { delivered: true, mocked: false, retriedWithFallbackRoute: attempt.label };
@@ -194,14 +195,14 @@ async function getSmtpTransporter() {
   const { isMocked, host } = config;
 
   if (isMocked) {
-    console.warn('WARNING: Email service not configured (GMAIL_USER/GMAIL_APP_PASSWORD missing). Falling back to logging OTPs to console.');
+    logger.warn('WARNING: Email service not configured (GMAIL_USER/GMAIL_APP_PASSWORD missing). Falling back to logging OTPs to console.');
     cachedSmtpTransporter = {
       sendMail: async (mailOptions) => {
-        console.log('\n============== MOCK EMAIL =============');
-        console.log(`To: ${mailOptions.to}`);
-        console.log(`Subject: ${mailOptions.subject}`);
-        console.log(`Text: ${mailOptions.text}`);
-        console.log('=======================================\n');
+        logger.info('\n============== MOCK EMAIL =============');
+        logger.info(`To: ${mailOptions.to}`);
+        logger.info(`Subject: ${mailOptions.subject}`);
+        logger.info(`Text: ${mailOptions.text}`);
+        logger.info('=======================================\n');
         return true;
       },
     };
@@ -213,7 +214,7 @@ async function getSmtpTransporter() {
     const ipv4Addr = await resolveIpv4Host(host);
     if (ipv4Addr) {
       resolvedHost = ipv4Addr;
-      console.log(`Resolved SMTP host ${host} to IPv4: ${ipv4Addr}`);
+      logger.info(`Resolved SMTP host ${host} to IPv4: ${ipv4Addr}`);
     }
   }
 
@@ -254,7 +255,7 @@ async function sendViaResend({ email, subject, text, html, from }) {
     );
 
     if (response.status === 200 && response.data?.id) {
-      console.log(`OTP email sent via Resend to ${email} (${response.data.id})`);
+      logger.info(`OTP email sent via Resend to ${email} (${response.data.id})`);
       return { delivered: true, mocked: false, provider: 'resend' };
     }
 
@@ -299,7 +300,7 @@ async function sendViaBrevo({ email, subject, text, html }) {
     );
 
     if ((response.status === 200 || response.status === 201) && response.data?.messageId) {
-      console.log(`OTP email sent via Brevo to ${email} (${response.data.messageId})`);
+      logger.info(`OTP email sent via Brevo to ${email} (${response.data.messageId})`);
       return { delivered: true, mocked: false, provider: 'brevo' };
     }
 
@@ -379,19 +380,19 @@ async function sendOtpEmail({ email, otp, purpose }) {
   for (const provider of providers) {
     try {
       const result = await provider.send();
-      console.log(`OTP email sent successfully via ${provider.name} to ${email}`);
+      logger.info(`OTP email sent successfully via ${provider.name} to ${email}`);
       return result;
     } catch (error) {
-      console.warn(`OTP delivery failed via ${provider.name} for ${email}: ${error?.message || String(error)}`);
+      logger.warn(`OTP delivery failed via ${provider.name} for ${email}: ${error?.message || String(error)}`);
       lastError = error;
     }
   }
 
   if (!isProduction && deliveryMode !== 'smtp') {
-    console.warn(
+    logger.warn(
       `WARNING: OTP email delivery failed for ${email} (${lastError?.code || lastError?.name || 'unknown error'}). Falling back to console logging because NODE_ENV is not production.`
     );
-    console.log(`\n============== OTP FALLBACK ==============\nTo: ${email}\nPurpose: ${purpose}\nOTP: ${otp}\nExpires in: ${expiryMinutes} minutes\n==========================================\n`);
+    logger.info(`\n============== OTP FALLBACK ==============\nTo: ${email}\nPurpose: ${purpose}\nOTP: ${otp}\nExpires in: ${expiryMinutes} minutes\n==========================================\n`);
     return {
       delivered: false,
       mocked: true,

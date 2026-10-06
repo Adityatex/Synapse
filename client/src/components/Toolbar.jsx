@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { useFiles } from '../contexts/FileContext';
+import { useFiles } from '../context/FileContext';
 import { executeCode } from '../services/api';
 import { getThemeClasses } from '../utils/theme';
 import { LANGUAGES, getLanguageByExtension } from '../utils/languageMap';

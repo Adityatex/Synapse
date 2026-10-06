@@ -29,12 +29,6 @@ OTP_MAX_ATTEMPTS=5
 
 You can copy the template from `server/.env.example`.
 
-For Render deployment, set these additional server variables:
-
-```env
-CORS_ORIGIN=https://your-vercel-app.vercel.app
-```
-
 If port `5000` is already in use on a machine, change the backend port in `server/.env` and set matching client values in `client/.env`:
 
 ```env
@@ -45,14 +39,6 @@ VITE_SOCKET_URL=http://localhost:5001
 ```
 
 You can copy the template from `client/.env.example`.
-
-For Vercel deployment, set these production client variables:
-
-```env
-VITE_API_URL=https://your-render-service.onrender.com/api
-VITE_SOCKET_URL=https://your-render-service.onrender.com
-VITE_PUBLIC_APP_URL=https://your-vercel-app.vercel.app
-```
 
 For cross-machine local collaboration, all users must connect to the same machine running the backend. Do not have each user run their own backend if they need to join the same room.
 
@@ -84,9 +70,13 @@ Other users on the same network should open `http://YOUR_LAN_IP:5173` in their b
 From the project root, run:
 
 ```bash
-npm install
-npm run install:all
+pnpm install
+pnpm --filter @synapse/shared build
 ```
+
+Turbo tasks: `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint`.
+Legacy npm layout (`npm run install:all`) still works for the two apps,
+but pnpm workspaces are canonical (see `docs/CONTRIBUTING.md`).
 
 ## Start the app
 
@@ -118,6 +108,13 @@ start.bat
 
 ## Deployment
 
-- Render backend: set the root directory to `server`, build command to `npm install`, and start command to `npm start`.
-- Vercel frontend: set the root directory to `client`; the root `vercel.json` enables React Router deep links.
-- Keep the backend and frontend URLs in sync across Render and Vercel env vars so API calls and Socket.IO connect to the deployed backend.
+Hosting is paused: Synapse currently runs locally only (see `docs/CONTRIBUTING.md`
+→ Quick start). Render and Vercel were retired; at the deploy phase the backend
+moves to Fly.io (`fly.staging.toml` is kept as the starting point) and the
+deploy/uptime workflows get their triggers back.
+
+## Monitoring (P0-15)
+
+- Health: `GET /api/health` returns `{ status, db, release, uptimeSec, requestId }`.
+- In-repo backstop: `.github/workflows/uptime.yml` probes backend `/api/health` + frontend root (manual-only while hosting is paused; re-enable its schedule and set `BACKEND_URL` / `FRONTEND_URL` secrets when deployed).
+- Recommended: add an external monitor (UptimeRobot / Better Stack) on the same two URLs with alerting to email/Slack.

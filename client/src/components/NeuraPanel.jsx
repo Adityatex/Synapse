@@ -18,7 +18,7 @@ import {
   ChevronRight,
   LoaderCircle
 } from 'lucide-react';
-import { useFiles } from '../contexts/FileContext';
+import { useFiles } from '../context/FileContext';
 import { readStorage, writeStorage } from '../utils/storage';
 import {
   chatWithNeura,

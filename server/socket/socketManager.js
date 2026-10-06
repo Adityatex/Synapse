@@ -1,3 +1,4 @@
+const { logger } = require('../lib/logger');
 const jwt = require('jsonwebtoken');
 const { Server } = require('socket.io');
 const {
@@ -11,6 +12,16 @@ const {
 } = require('./roomStore');
 const RoomModel = require('../models/Room');
 const MessageModel = require('../models/Message');
+// P1-05: socket payload validation against @synapse/shared contracts.
+const { validateSocketPayload } = require('../middleware/validate');
+
+function denyInvalid(socket, event, result) {
+  socket.emit('room-error', {
+    message: result.error || 'Invalid payload.',
+    event,
+  });
+  return false;
+}
 
 function normalizeRoomId(roomId) {
   return String(roomId || '').trim().toUpperCase();
@@ -101,7 +112,7 @@ async function recordRoomMembership(roomId, participant) {
       }
     );
   } catch (error) {
-    console.error('Failed to record room membership:', error);
+    logger.error({ err: error.message || error }, 'Failed to record room membership:');
   }
 }
 
@@ -226,7 +237,13 @@ function createSocketServer(httpServer) {
     // P0-03: never trust userId/username from the payload — identity always
     // comes from the verified JWT (socket.data.user).
     socket.on('join-room', async ({ roomId } = {}) => {
-      const normalizedRoomId = normalizeRoomId(roomId);
+      // P1-05: validate shape before normalizing.
+      const joinCheck = validateSocketPayload('joinRoomSchema', { roomId });
+      if (!joinCheck.ok) {
+        denyInvalid(socket, 'join-room', joinCheck);
+        return;
+      }
+      const normalizedRoomId = normalizeRoomId(joinCheck.data.roomId);
       let room = getRoom(normalizedRoomId);
 
       if (!room) {
@@ -238,6 +255,31 @@ function createSocketServer(httpServer) {
           message: 'Room not found. Check the invite code and try again.',
         });
         return;
+      }
+
+      // P0-16: invite-only guard — only creator/members may join.
+      // Legacy rooms with an empty members list are grandfathered once.
+      try {
+        const dbRoom = await RoomModel.findOne({ roomId: normalizedRoomId }).select({
+          createdBy: 1,
+          members: 1,
+        });
+        if (dbRoom) {
+          const userId = socket.data.user.userId;
+          const isCreator = dbRoom.createdBy === userId;
+          const members = Array.isArray(dbRoom.members) ? dbRoom.members : [];
+          const isMember = members.some((m) => m.userId === userId);
+          if (!isCreator && members.length > 0 && !isMember) {
+            socket.emit('room-error', {
+              message: 'You are not a member of this room. Ask the creator for an invite.',
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        logger.error({ err: err.message || err }, 'Room join guard DB check failed');
+        // Fail open on DB error to avoid locking out users during outages;
+        // HTTP guard remains the enforcement point.
       }
 
       if (socket.data.roomId && socket.data.roomId !== normalizedRoomId) {
@@ -296,7 +338,7 @@ function createSocketServer(httpServer) {
         });
         io.to(normalizedRoomId).emit('chat-message', sysMsg);
       } catch (err) {
-        console.error('Error creating system join message', err);
+        logger.error({ err: err.message || err }, 'Error creating system join message');
       }
     });
 
@@ -327,13 +369,16 @@ function createSocketServer(httpServer) {
           type: 'system',
           content: `${removal.removedParticipant.username} left the room.`
         }).then(sysMsg => io.to(roomId).emit('chat-message', sysMsg))
-          .catch(err => console.error('Error creating system leave message', err));
+          .catch(err => logger.error({ err: err.message || err }, 'Error creating system leave message'));
       }
     });
 
     // ─── CHAT ROOM FEATURES ───────────────────────────────────────────────────
 
-    socket.on('send-chat-message', async ({ roomId, content, type = 'user', replyTo }) => {
+    socket.on('send-chat-message', async (payload = {}) => {
+      const check = validateSocketPayload('chatMessageSchema', payload);
+      if (!check.ok) return;
+      const { roomId, content, type = 'user', replyTo } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !content) return;
 
@@ -355,7 +400,7 @@ function createSocketServer(httpServer) {
         const newMessage = await MessageModel.create(msgData);
         io.to(activeRoomId).emit('chat-message', newMessage);
       } catch (err) {
-        console.error('Error saving chat message:', err);
+        logger.error({ err: err.message || err }, 'Error saving chat message:');
       }
     });
 
@@ -385,7 +430,7 @@ function createSocketServer(httpServer) {
         
         socket.emit('chat-history', history.reverse());
       } catch (err) {
-        console.error('Error fetching chat history:', err);
+        logger.error({ err: err.message || err }, 'Error fetching chat history:');
       }
     });
 
@@ -405,7 +450,7 @@ function createSocketServer(httpServer) {
         await msg.save();
         io.to(activeRoomId).emit('chat-message-updated', msg);
       } catch (err) {
-        console.error('Error editing message:', err);
+        logger.error({ err: err.message || err }, 'Error editing message:');
       }
     });
 
@@ -424,7 +469,7 @@ function createSocketServer(httpServer) {
         await msg.save();
         io.to(activeRoomId).emit('chat-message-updated', msg);
       } catch (err) {
-        console.error('Error deleting message:', err);
+        logger.error({ err: err.message || err }, 'Error deleting message:');
       }
     });
 
@@ -451,7 +496,7 @@ function createSocketServer(httpServer) {
         });
         io.to(activeRoomId).emit('chat-message', sysMsg);
       } catch (err) {
-        console.error('Error pinning message:', err);
+        logger.error({ err: err.message || err }, 'Error pinning message:');
       }
     });
 
@@ -480,13 +525,16 @@ function createSocketServer(httpServer) {
         await msg.save();
         io.to(activeRoomId).emit('chat-message-updated', msg);
       } catch (err) {
-        console.error('Error reacting to message:', err);
+        logger.error({ err: err.message || err }, 'Error reacting to message:');
       }
     });
 
     // ─── SEARCH MESSAGES ───────────────────────────────────────────────────────
 
-    socket.on('search-chat-messages', async ({ roomId, query }) => {
+    socket.on('search-chat-messages', async (payload = {}) => {
+      const check = validateSocketPayload('searchChatMessagesSchema', payload);
+      if (!check.ok) return;
+      const { roomId, query } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !query) return;
       try {
@@ -502,18 +550,22 @@ function createSocketServer(httpServer) {
         }).sort({ timestamp: -1 }).limit(50);
         socket.emit('chat-search-results', results.reverse());
       } catch (err) {
-        console.error('Error searching messages:', err);
+        logger.error({ err: err.message || err }, 'Error searching messages:');
       }
     });
 
     // ─────────────────────────────────────────────────────────────────────────
 
-    socket.on('sync-room-state', async (payload = {}) => {
+    socket.on('sync-room-state', async (rawPayload = {}) => {
       const roomId = socket.data.roomId;
       if (!roomId) {
         return;
       }
 
+      // P1-05: bound sync payloads; fall back to raw on shape drift (client
+      // versions may send extra fields — schema is permissive by design).
+      const syncCheck = validateSocketPayload('syncRoomStateSchema', rawPayload);
+      const payload = syncCheck.ok ? syncCheck.data : rawPayload;
       const snapshot = updateRoomState(roomId, (room) => {
         room.files = Array.isArray(payload.files)
           ? payload.files.map((file) => ({
@@ -566,7 +618,7 @@ function createSocketServer(httpServer) {
           }
         );
       } catch (err) {
-        console.error('sync-room-state DB update error', err);
+        logger.error({ err: err.message || err }, 'sync-room-state DB update error');
       }
 
       // Broadcast to ALL sockets in the room, including the sender.
@@ -581,7 +633,10 @@ function createSocketServer(httpServer) {
       });
     });
 
-    socket.on('autosave', async ({ roomId, fileId, content } = {}) => {
+    socket.on('autosave', async (payload = {}) => {
+      const check = validateSocketPayload('autosaveSchema', payload);
+      if (!check.ok) return;
+      const { roomId, fileId, content } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !fileId || content === undefined) return;
 
@@ -597,11 +652,14 @@ function createSocketServer(httpServer) {
           }
         );
       } catch (err) {
-        console.error('Autosave Error:', err);
+        logger.error({ err: err.message || err }, 'Autosave Error:');
       }
     });
 
-    socket.on('save-version', async ({ roomId, fileId, content } = {}) => {
+    socket.on('save-version', async (payload = {}) => {
+      const check = validateSocketPayload('saveVersionSchema', payload);
+      if (!check.ok) return;
+      const { roomId, fileId, content } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !fileId || content === undefined) return;
 
@@ -619,11 +677,14 @@ function createSocketServer(httpServer) {
           }
         );
       } catch (err) {
-        console.error('Save Version Error:', err);
+        logger.error({ err: err.message || err }, 'Save Version Error:');
       }
     });
 
-    socket.on('request-file-lock', ({ roomId, fileId } = {}) => {
+    socket.on('request-file-lock', (payload = {}) => {
+      const check = validateSocketPayload('fileLockSchema', payload);
+      if (!check.ok) return;
+      const { roomId, fileId } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       const participant = socket.data.participant;
       const ownerUserId = participant?.userId || socket.data.user?.userId;
@@ -689,7 +750,10 @@ function createSocketServer(httpServer) {
       });
     });
 
-    socket.on('code-change', ({ roomId, fileId, changes } = {}) => {
+    socket.on('code-change', (payload = {}) => {
+      const check = validateSocketPayload('codeChangeSchema', payload);
+      if (!check.ok) return;
+      const { roomId, fileId, changes } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !fileId || !changes) {
         return;
@@ -741,33 +805,10 @@ function createSocketServer(httpServer) {
       });
     });
 
-    socket.on('legacy-code-change', ({ fileId, content, updatedAt } = {}) => {
-      const roomId = socket.data.roomId;
-      if (!roomId || !fileId) {
-        return;
-      }
-
-      const nextUpdatedAt = updatedAt ?? Date.now();
-      updateRoomState(roomId, (room) => {
-        room.files = room.files.map((file) =>
-          file.id === fileId
-            ? {
-                ...file,
-                content: content ?? '',
-                updatedAt: nextUpdatedAt,
-              }
-            : file
-        );
-      });
-
-      socket.to(roomId).emit('code-change', {
-        fileId,
-        content: content ?? '',
-        updatedAt: nextUpdatedAt,
-      });
-    });
-
-    socket.on('cursor-move', ({ roomId, position } = {}) => {
+    socket.on('cursor-move', (payload = {}) => {
+      const check = validateSocketPayload('cursorMoveSchema', payload);
+      if (!check.ok) return;
+      const { roomId, position } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !position) {
         return;
@@ -783,7 +824,10 @@ function createSocketServer(httpServer) {
       });
     });
 
-    socket.on('selection-change', ({ roomId, selectionRange } = {}) => {
+    socket.on('selection-change', (payload = {}) => {
+      const check = validateSocketPayload('selectionChangeSchema', payload);
+      if (!check.ok) return;
+      const { roomId, selectionRange } = check.data;
       const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
       if (!activeRoomId || !selectionRange) {
         return;

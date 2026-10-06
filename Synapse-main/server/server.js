@@ -5,7 +5,22 @@ const helmet = require('helmet');
 const pinoHttp = require('pino-http');
 const http = require('http');
 const path = require('path');
+const dns = require('dns');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+// Configure DNS resolution before anything connects (helps prevent Atlas SRV
+// ENOTFOUND issues in cloud environments).
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder(process.env.DNS_RESULT_ORDER || 'ipv4first');
+}
+if (process.env.DNS_SERVERS) {
+  try {
+    dns.setServers(process.env.DNS_SERVERS.split(',').map((s) => s.trim()));
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('Failed to set custom DNS servers:', err.message);
+  }
+}
 
 // P0-06: fail fast on invalid env (JWT_SECRET, MONGODB_URI, CORS_ORIGIN).
 const { validateEnv } = require('./config/env');

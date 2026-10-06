@@ -36,6 +36,11 @@ services:
     volumes:
       - ./server:/app/server
       - ./packages/shared:/app/packages/shared
+      # Anonymous volumes keep the image's pnpm installs and built shared/dist
+      # from being hidden by the bind mounts above (host node_modules differ).
+      - /app/server/node_modules
+      - /app/packages/shared/node_modules
+      - /app/packages/shared/dist
     command: pnpm dev
 
   mongo:

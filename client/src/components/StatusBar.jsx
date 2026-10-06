@@ -1,5 +1,5 @@
 import { Lock, Users, Check } from 'lucide-react';
-import { useFiles } from '../contexts/FileContext';
+import { useFiles } from '../context/FileContext';
 import { LANGUAGES, getLanguageByExtension } from '../utils/languageMap';
 
 export default function StatusBar({ peersCount = 0, activeFileLock = null, currentUserId }) {

@@ -2,12 +2,13 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 const otpGenerator = require('otp-generator');
 const User = require('../models/User');
 const OtpVerification = require('../models/OtpVerification');
 const authMiddleware = require('../middleware/auth');
+const { logger } = require('../lib/logger');
+const { captureException } = require('../lib/sentry');
+const { validateBody } = require('../middleware/validate');
 const {
   otpRequestByEmailLimiter,
   otpRequestByIpLimiter,
@@ -15,11 +16,6 @@ const {
   loginLimiter,
 } = require('../middleware/rateLimits');
 const { sendOtpEmail } = require('../services/emailService');
-
-function debugLog(msg) {
-  const logFile = path.join(__dirname, '..', 'debug.log');
-  fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${msg}\n`);
-}
 
 const router = express.Router();
 const OTP_EXPIRY_MINUTES = Number(process.env.OTP_EXPIRY_MINUTES || 10);
@@ -32,7 +28,7 @@ function ensureDatabaseReady(res) {
 
   res.status(503).json({
     error: 'Authentication is temporarily unavailable because the database is disconnected. Please wait a few seconds and try again.',
-  });
+   requestId: req.id, });
   return false;
 }
 
@@ -146,6 +142,7 @@ router.post(
   '/signup/request-otp',
   otpRequestByEmailLimiter,
   otpRequestByIpLimiter,
+  validateBody('signupRequestOtpSchema'),
   async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
@@ -158,26 +155,26 @@ router.post(
     if (!name?.trim() || !normalizedEmail || !password) {
       return res.status(400).json({
         error: 'Username, email, and password are required.',
-      });
+       requestId: req.id, });
     }
 
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
       return res.status(400).json({
         error: 'Please enter a valid email address.',
-      });
+       requestId: req.id, });
     }
 
     if (password.length < 6) {
       return res.status(400).json({
         error: 'Password must be at least 6 characters long.',
-      });
+       requestId: req.id, });
     }
 
     const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(409).json({
         error: 'An account with this email already exists.',
-      });
+       requestId: req.id, });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
@@ -196,24 +193,23 @@ router.post(
       email: normalizedEmail,
     });
   } catch (err) {
-    debugLog(`Signup OTP request error: ${err.message}`);
-    debugLog(`Signup OTP request error name: ${err.name}`);
-    debugLog(`Signup OTP request error stack: ${err.stack}`);
-    console.error('Signup OTP request error:', err.message);
+    logger.error({ err: err.message, requestId: req.id }, 'Signup OTP request error');
 
     if (err.code === 11000) {
       return res.status(409).json({
         error: 'An account with this email already exists.',
+        requestId: req.id,
       });
     }
 
     res.status(500).json({
       error: getPublicAuthError(err, 'Something went wrong. Please try again later.'),
+      requestId: req.id,
     });
   }
 });
 
-router.post('/signup/verify-otp', otpVerifyLimiter, async (req, res) => {
+router.post('/signup/verify-otp', otpVerifyLimiter, validateBody('signupVerifyOtpSchema'), async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
       return;
@@ -225,7 +221,7 @@ router.post('/signup/verify-otp', otpVerifyLimiter, async (req, res) => {
     if (!normalizedEmail || !otp) {
       return res.status(400).json({
         error: 'Email and OTP are required.',
-      });
+       requestId: req.id, });
     }
 
     const existingUser = await User.findOne({ email: normalizedEmail });
@@ -233,7 +229,7 @@ router.post('/signup/verify-otp', otpVerifyLimiter, async (req, res) => {
       await OtpVerification.deleteOne({ email: normalizedEmail, purpose: 'signup' });
       return res.status(409).json({
         error: 'An account with this email already exists.',
-      });
+       requestId: req.id, });
     }
 
     const otpResult = await consumeValidOtp({
@@ -243,14 +239,14 @@ router.post('/signup/verify-otp', otpVerifyLimiter, async (req, res) => {
     });
 
     if (otpResult.error) {
-      return res.status(400).json({ error: otpResult.error });
+      return res.status(400).json({ error: otpResult.error , requestId: req.id, });
     }
 
     const pendingSignup = otpResult.record.pendingSignup;
     if (!pendingSignup?.name || !pendingSignup?.passwordHash) {
       return res.status(400).json({
         error: 'Signup session is invalid. Please start again.',
-      });
+       requestId: req.id, });
     }
 
     const user = new User({
@@ -267,10 +263,10 @@ router.post('/signup/verify-otp', otpVerifyLimiter, async (req, res) => {
       user: user.toSafeObject(),
     });
   } catch (err) {
-    console.error('Signup OTP verification error:', err);
+    logger.error({ err: err.message, requestId: req.id }, 'Signup OTP verification error:');
     res.status(500).json({
       error: 'Something went wrong. Please try again later.',
-    });
+     requestId: req.id, });
   }
 });
 
@@ -279,6 +275,7 @@ router.post(
   loginLimiter,
   otpRequestByEmailLimiter,
   otpRequestByIpLimiter,
+  validateBody('loginRequestOtpSchema'),
   async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
@@ -291,7 +288,7 @@ router.post(
     if (!normalizedEmail || !password) {
       return res.status(400).json({
         error: 'Email and password are required.',
-      });
+       requestId: req.id, });
     }
 
     const user = await User.findOne({ email: normalizedEmail }).select('+password');
@@ -299,14 +296,14 @@ router.post(
     if (!user) {
       return res.status(401).json({
         error: 'Invalid email or password.',
-      });
+       requestId: req.id, });
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({
         error: 'Invalid email or password.',
-      });
+       requestId: req.id, });
     }
 
     await createAndSendOtp({
@@ -320,14 +317,14 @@ router.post(
       email: normalizedEmail,
     });
   } catch (err) {
-    console.error('Login OTP request error:', err);
+    logger.error({ err: err.message, requestId: req.id }, 'Login OTP request error:');
     res.status(500).json({
       error: getPublicAuthError(err, 'Something went wrong. Please try again later.'),
-    });
+     requestId: req.id, });
   }
 });
 
-router.post('/login/verify-otp', loginLimiter, otpVerifyLimiter, async (req, res) => {
+router.post('/login/verify-otp', loginLimiter, otpVerifyLimiter, validateBody('loginVerifyOtpSchema'), async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
       return;
@@ -339,7 +336,7 @@ router.post('/login/verify-otp', loginLimiter, otpVerifyLimiter, async (req, res
     if (!normalizedEmail || !otp) {
       return res.status(400).json({
         error: 'Email and OTP are required.',
-      });
+       requestId: req.id, });
     }
 
     const otpResult = await consumeValidOtp({
@@ -349,14 +346,14 @@ router.post('/login/verify-otp', loginLimiter, otpVerifyLimiter, async (req, res
     });
 
     if (otpResult.error) {
-      return res.status(400).json({ error: otpResult.error });
+      return res.status(400).json({ error: otpResult.error , requestId: req.id, });
     }
 
     const user = await User.findById(otpResult.record.loginUserId);
     if (!user || user.email !== normalizedEmail) {
       return res.status(401).json({
         error: 'Login session is invalid. Please start again.',
-      });
+       requestId: req.id, });
     }
 
     user.lastActive = new Date();
@@ -369,10 +366,10 @@ router.post('/login/verify-otp', loginLimiter, otpVerifyLimiter, async (req, res
       user: user.toSafeObject(),
     });
   } catch (err) {
-    console.error('Login OTP verification error:', err);
+    logger.error({ err: err.message, requestId: req.id }, 'Login OTP verification error:');
     res.status(500).json({
       error: 'Something went wrong. Please try again later.',
-    });
+     requestId: req.id, });
   }
 });
 
@@ -383,18 +380,24 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({
         error: 'User not found.',
-      });
+       requestId: req.id, });
     }
 
     res.json({
       user: user.toSafeObject(),
     });
   } catch (err) {
-    console.error('Get profile error:', err);
+    logger.error({ err: err.message, requestId: req.id }, 'Get profile error:');
     res.status(500).json({
       error: 'Something went wrong.',
-    });
+     requestId: req.id, });
   }
 });
 
 module.exports = router;
+// P0-12: export pure OTP helpers for unit tests (no DB required).
+module.exports.hashOtp = hashOtp;
+module.exports.generateOtpCode = generateOtpCode;
+module.exports.normalizeEmail = normalizeEmail;
+module.exports.MAX_OTP_ATTEMPTS = MAX_OTP_ATTEMPTS;
+module.exports.OTP_EXPIRY_MINUTES = OTP_EXPIRY_MINUTES;

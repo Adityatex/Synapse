@@ -49,4 +49,4 @@ const otpVerificationSchema = new mongoose.Schema(
 
 otpVerificationSchema.index({ email: 1, purpose: 1 }, { unique: true });
 
-module.exports = mongoose.model('OtpVerification', otpVerificationSchema);
+module.exports = mongoose.models.OtpVerification || mongoose.model('OtpVerification', otpVerificationSchema);

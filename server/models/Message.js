@@ -63,4 +63,4 @@ const messageSchema = new mongoose.Schema({
 // Text index for search
 messageSchema.index({ content: 'text', senderName: 'text' });
 
-module.exports = mongoose.model('Message', messageSchema);
+module.exports = mongoose.models.Message || mongoose.model('Message', messageSchema);

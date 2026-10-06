@@ -11,6 +11,7 @@ function authMiddleware(req, res, next) {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         error: 'Access denied. No token provided.',
+        requestId: req.id,
       });
     }
 
@@ -19,6 +20,7 @@ function authMiddleware(req, res, next) {
     if (!token) {
       return res.status(401).json({
         error: 'Access denied. Invalid token format.',
+        requestId: req.id,
       });
     }
 
@@ -29,17 +31,20 @@ function authMiddleware(req, res, next) {
     if (err.name === 'TokenExpiredError') {
       return res.status(401).json({
         error: 'Token has expired. Please log in again.',
+        requestId: req.id,
       });
     }
 
     if (err.name === 'JsonWebTokenError') {
       return res.status(401).json({
         error: 'Invalid token. Please log in again.',
+        requestId: req.id,
       });
     }
 
     return res.status(500).json({
       error: 'Authentication failed.',
+      requestId: req.id,
     });
   }
 }

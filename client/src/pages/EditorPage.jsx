@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileProvider } from '../contexts/FileContext';
+import { FileProvider } from '../context/FileContext';
 import { useAuth } from '../context/useAuth';
 import Sidebar from '../components/Sidebar';
 import TabBar from '../components/TabBar';

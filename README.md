@@ -84,9 +84,13 @@ Other users on the same network should open `http://YOUR_LAN_IP:5173` in their b
 From the project root, run:
 
 ```bash
-npm install
-npm run install:all
+pnpm install
+pnpm --filter @synapse/shared build
 ```
+
+Turbo tasks: `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint`.
+Legacy npm layout (`npm run install:all`) still works for the two apps,
+but pnpm workspaces are canonical (see `docs/CONTRIBUTING.md`).
 
 ## Start the app
 
@@ -118,6 +122,12 @@ start.bat
 
 ## Deployment
 
-- Render backend: set the root directory to `server`, build command to `npm install`, and start command to `npm start`.
+- Render backend: `render.yaml` pins the **Starter** plan (always-on, P0-13) with `healthCheckPath: /api/health`. Root directory `server`, build `npm install`, start `npm start`. Set all secrets from `server/.env.example` in the Render dashboard.
 - Vercel frontend: set the root directory to `client`; the root `vercel.json` enables React Router deep links.
 - Keep the backend and frontend URLs in sync across Render and Vercel env vars so API calls and Socket.IO connect to the deployed backend.
+
+## Monitoring (P0-15)
+
+- Health: `GET /api/health` returns `{ status, db, release, uptimeSec, requestId }`.
+- In-repo backstop: `.github/workflows/uptime.yml` probes backend `/api/health` + frontend root every 15 min (configure `BACKEND_URL` / `FRONTEND_URL` secrets).
+- Recommended: add an external monitor (UptimeRobot / Better Stack) on the same two URLs with alerting to email/Slack.

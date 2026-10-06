@@ -146,7 +146,9 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [recentRooms, setRecentRooms] = useState([]);
   const [sharedRooms, setSharedRooms] = useState([]);
-  const [loadingRooms, setLoadingRooms] = useState(true);
+  // userId the room lists were last loaded for; loading until it matches.
+  const [roomsLoadedFor, setRoomsLoadedFor] = useState(null);
+  const loadingRooms = roomsLoadedFor !== user?.userId;
   const [roomToDelete, setRoomToDelete] = useState(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -160,15 +162,15 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (user?.userId) {
-      setLoadingRooms(true);
-      Promise.all([getRecentRooms(user.userId), getSharedRooms(user.userId)])
+    const userId = user?.userId;
+    if (userId) {
+      Promise.all([getRecentRooms(userId), getSharedRooms(userId)])
         .then(([ownedRooms, joinedRooms]) => {
           setRecentRooms(ownedRooms);
           setSharedRooms(joinedRooms);
         })
         .catch(console.error)
-        .finally(() => setLoadingRooms(false));
+        .finally(() => setRoomsLoadedFor(userId));
     }
   }, [user?.userId]);
 
@@ -223,9 +225,6 @@ export default function Dashboard() {
     );
   });
 
-  const joinedRoomCount = new Set(
-    [...recentRooms, ...sharedRooms].map((room) => room.roomId)
-  ).size;
 
   /* ---------- stats ---------- */
   const stats = useMemo(() => {

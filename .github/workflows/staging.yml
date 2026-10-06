@@ -3,9 +3,13 @@ name: Staging deploy
 # P1-07: auto-deploy staging from main. Staging = Fly.io app `synapse-staging`
 # (see fly.staging.toml). Railway alternative: connect the repo, set root to
 # `server`, same env vars — then enable this workflow's railway step instead.
+#
+# Hosting is paused: the team runs everything locally (docker compose + vite)
+# until the deploy phase. Re-add the push trigger once the Fly app and the
+# FLY_API_TOKEN secret exist:
+#   push:
+#     branches: [main]
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:

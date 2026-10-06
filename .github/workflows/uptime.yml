@@ -3,9 +3,12 @@ name: Uptime check
 # P0-15: lightweight uptime monitor for the deployed backend + frontend.
 # For production paging use a dedicated monitor (UptimeRobot / Better Stack);
 # this workflow is the in-repo backstop and runs on a schedule + manual dispatch.
+#
+# Paused with hosting: nothing is deployed right now. Re-enable the schedule
+# (and set BACKEND_URL / FRONTEND_URL secrets) when there is a deployment:
+#   schedule:
+#     - cron: '*/15 * * * *'
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 jobs:

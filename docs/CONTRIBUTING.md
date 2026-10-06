@@ -2,19 +2,20 @@
 
 ## Prereqs
 
-- Node 20+, `pnpm@10` (`npm i -g pnpm@10`), Docker (for compose), MongoDB URI for non-Docker runs.
+- Node 22.12+ (vitest 5 requires it), `pnpm@10` (`npm i -g pnpm@10`), Docker Desktop (for compose), MongoDB URI for non-Docker runs.
 
 ## Quick start
 
 ```bash
 pnpm install
 pnpm --filter @synapse/shared build
-# local dev (turbo): api + client with hot reload
-pnpm dev
-# …or full local stack (api + mongo + redis + mailpit):
-docker compose up
+# recommended: backend stack in Docker (api + mongo + redis + mailpit)…
+docker compose up -d
+# …and the client on the host with hot reload
+pnpm --filter client dev
 # client: http://localhost:5173  api health: http://localhost:5000/api/health
 # mailpit UI (OTP catcher): http://localhost:8025
+# alternative without Docker (needs a MongoDB URI in server/.env): pnpm dev
 ```
 
 Copy env templates first: `server/.env.example → server/.env`,
@@ -63,5 +64,5 @@ invites locally: create room as A, `POST /api/rooms/:id/invite`
 ## CI / staging
 
 - PRs run CI (build + typecheck + all tests). Keep it green.
-- `main` auto-deploys to staging (`fly.staging.toml`, workflow
-  `staging.yml`) after CI passes + health smoke test.
+- Hosting is paused; nothing auto-deploys. `staging.yml` (Fly, after CI +
+  health smoke test) is manual-only until the deploy phase.

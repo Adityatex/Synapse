@@ -97,11 +97,12 @@ Monaco (P1-11).
 | Env | Backend | Frontend | DB |
 |---|---|---|---|
 | local (compose) | `api:5000` | vite `:5173` | `mongo:27017/synapse`, redis, mailpit `:8025` |
-| staging (auto from `main`) | `synapse-staging.fly.dev` | Vercel preview | Atlas staging |
-| prod | Render Starter (always-on) | Vercel | Atlas |
+| staging | _paused_ — planned `synapse-staging.fly.dev` | — | Atlas staging |
+| prod | _paused_ — planned Fly.io | — | Atlas |
 
-Staging deploys only after CI (`test` job) passes; post-deploy smoke test
-hits `/api/health` (P1-07). Uptime backstop: `uptime.yml` every 15 min.
+Hosting is paused: only the local compose stack runs. Render and Vercel were
+retired. At the deploy phase, `staging.yml` (deploys only after CI passes,
+then smoke-tests `/api/health`) and `uptime.yml` get their triggers back.
 
 ## 8. Testing (P1-09)
 

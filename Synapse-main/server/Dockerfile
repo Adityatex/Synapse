@@ -1,6 +1,6 @@
 # P1-06: local dev image for the API. Installs workspace deps via pnpm
 # (needs the monorepo context) and runs the plain-JS server with hot reload.
-FROM node:20-slim
+FROM node:22-slim
 RUN corepack enable
 WORKDIR /app
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./

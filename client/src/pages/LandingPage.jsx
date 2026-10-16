@@ -262,27 +262,10 @@ export default function LandingPage() {
   const { heroRef, reelRef } = useHeroReel(4);
   const [roomName, setRoomName] = useState('DSA practice');
   const [activeNote, setActiveNote] = useState(null);
-  const caretRef = useRef(null);
-  const measureRef = useRef(null);
   useReveal(rootRef);
-
-  // Keep the block caret right after the typed text (re-measured once the
-  // display face has loaded and on resize, since the width depends on both).
-  useEffect(() => {
-    const place = () => {
-      if (measureRef.current && caretRef.current) {
-        caretRef.current.style.left = `${measureRef.current.offsetWidth + 4}px`;
-      }
-    };
-    place();
-    let alive = true;
-    document.fonts?.ready.then(() => alive && place());
-    window.addEventListener('resize', place);
-    return () => {
-      alive = false;
-      window.removeEventListener('resize', place);
-    };
-  }, [roomName]);
+  // Display size shrinks as the name grows so it always fits on one line
+  // (Jost caps average about 0.66em wide).
+  const trySize = `min(var(--step-display), calc((100vw - 2 * var(--margin)) / ${(Math.max(roomName.length, 10) * 0.66).toFixed(2)}))`;
 
   function startRoom(e) {
     e.preventDefault();
@@ -347,7 +330,12 @@ export default function LandingPage() {
 
         <section className="lp-try" aria-labelledby="try-label" data-reveal>
           <p id="try-label" className="lp-try-label">Name a room</p>
-          <div className="lp-try-field">
+          <div className="lp-try-field" style={{ '--try-size': trySize }}>
+            {/* The visible line: the text plus a caret set inline on its baseline. */}
+            <span className="lp-try-mirror" aria-hidden="true">
+              {roomName}
+              <span className="lp-try-caret" />
+            </span>
             <input
               className="lp-try-input"
               aria-labelledby="try-label"
@@ -356,10 +344,6 @@ export default function LandingPage() {
               spellCheck={false}
               onChange={(e) => setRoomName(e.target.value)}
             />
-            <span ref={measureRef} className="lp-try-input" aria-hidden="true" style={{ position: 'absolute', visibility: 'hidden', width: 'auto', whiteSpace: 'pre' }}>
-              {roomName}
-            </span>
-            <span ref={caretRef} className="lp-try-caret" aria-hidden="true" />
           </div>
           <div className="lp-try-answer">
             <RoomBarFragment name={roomName} />

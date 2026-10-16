@@ -253,36 +253,52 @@
 
 .lp-try-field {
   position: relative;
-  display: flex;
-  align-items: baseline;
+  font-size: var(--try-size, var(--step-display));
 }
 
+/* Mirror and input share every metric, so the input's (transparent) text
+   lies exactly over the visible mirror. */
+.lp-try-mirror,
 .lp-try-input {
-  width: 100%;
+  display: block;
+  margin: 0;
   padding: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: var(--step-display);
+  font-family: var(--font-sans);
+  font-size: 1em;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: -0.03em;
-  line-height: 1;
+  line-height: 1.05;
+  white-space: pre;
+}
+
+.lp-try-mirror {
+  min-height: 1.05em;
+  color: var(--ink);
+  pointer-events: none;
+}
+
+.lp-try-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: transparent;
   caret-color: transparent;
 }
 
-.lp-try-input:focus-visible { outline: none; }
+.lp-try-input::selection { background: var(--accent); color: transparent; }
 
+/* Cap height of Jost, sitting on the baseline right after the last letter. */
 .lp-try-caret {
-  position: absolute;
-  top: 0.08em;
+  display: inline-block;
   width: 0.08em;
-  height: 0.84em;
+  height: 0.7em;
+  margin-left: 0.06em;
+  vertical-align: baseline;
   background: var(--ink);
-  font-size: var(--step-display);
-  pointer-events: none;
   animation: lp-blink 1.1s steps(1) infinite;
 }
 
@@ -327,7 +343,7 @@
 .lp-try-example:hover { color: var(--muted); }
 
 @media (max-width: 640px) {
-  .lp-try-input, .lp-try-caret { font-size: 11vw; }
+  .lp-try-field { font-size: min(11vw, var(--try-size)); }
   .lp-try-answer { margin-top: 28px; }
   .lp-try-examples { gap: 8px; }
   .lp-try-example {

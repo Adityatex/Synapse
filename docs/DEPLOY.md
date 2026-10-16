@@ -17,13 +17,16 @@ that every restart or deploy drops open rooms. Don't deploy during a demo.
 ## A. Public demo via Cloudflare Tunnel
 
 ```bash
-docker compose -f docker-compose.demo.yml up -d --build
-docker compose -f docker-compose.demo.yml logs tunnel | grep trycloudflare.com
+npm run demo        # builds this checkout, starts app + tunnel, prints the public URL
+npm run demo:url    # print the current public URL again
+npm run demo:down   # stop
 ```
 
-Open the printed `https://….trycloudflare.com` URL. That's the link to share.
+The printed `https://….trycloudflare.com` URL is the link to share.
 
-- Stop: `docker compose -f docker-compose.demo.yml down`.
+- Frozen build: `npm run demo:eval` starts the image tagged `synapse:eval-2` without
+  rebuilding, so work in progress can't reach the demo. Freeze a new one with
+  `docker tag synapse:prod synapse:eval-2` after `npm run demo` passes the smoke test.
 - Restart only the tunnel (new URL): `docker compose -f docker-compose.demo.yml restart tunnel`.
 - Logs: `docker compose -f docker-compose.demo.yml logs -f app`.
 - The tunnel uses HTTP/2 (`--protocol http2`) because QUIC/UDP is often blocked
@@ -64,7 +67,7 @@ fly status                            # expect 1 machine, state "started"
 
 ## Demo day
 
-- Start the stack **≥30 min early**, run the smoke test, then don't touch it.
+- Start the stack **≥30 min early** (`npm run demo:eval`), run the smoke test, then don't touch it.
 - Fallbacks, in order:
   1. Tunnel URL dies → `restart tunnel`, share the new URL.
   2. Venue blocks tunnels → present from the laptop at `http://localhost:8080`.

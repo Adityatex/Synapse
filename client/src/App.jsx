@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import RoomInviteGate from './components/RoomInviteGate';
 
 // P1-11: route-level code splitting — each page is its own chunk.
 // Landing stays eager-adjacent (first paint); app pages lazy-load.
@@ -39,7 +40,14 @@ function AppRoutes() {
           <Route path="/editor" element={<EditorPage />} />
           <Route path="/create-room" element={<CreateRoom />} />
           <Route path="/join-room" element={<JoinRoom />} />
-          <Route path="/room/:roomId" element={<RoomPage />} />
+          <Route
+            path="/room/:roomId"
+            element={
+              <RoomInviteGate>
+                <RoomPage />
+              </RoomInviteGate>
+            }
+          />
         </Route>
       </Routes>
     </Suspense>

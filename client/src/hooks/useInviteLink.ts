@@ -1,6 +1,7 @@
 // P1-10: invite-link hook (copy + transient "copied" flag).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { copyText } from '../utils/clipboard';
+import { createInviteLink } from '../services/roomService';
 import { useRoomUiStore } from '../stores/roomUiStore';
 
 export function useInviteLink(roomId: string) {
@@ -12,16 +13,21 @@ export function useInviteLink(roomId: string) {
 
   const copyInvite = useCallback(async () => {
     const publicAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin).replace(/\/+$/, '');
-    const inviteLink = `${publicAppUrl}/room/${roomId}`;
     try {
+      // Signed link: opening it makes the holder a room member (P0-16 guard).
+      const { inviteToken } = await createInviteLink(roomId);
+      const inviteLink = `${publicAppUrl}/room/${roomId}?invite=${encodeURIComponent(inviteToken)}`;
       const didCopy = await copyText(inviteLink);
       if (!didCopy) throw new Error('Copy failed');
       setCopied(true);
       setInviteError('');
       if (timerRef.current) window.clearTimeout(timerRef.current);
       timerRef.current = window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      const msg = 'Could not copy the invite link from this browser.';
+    } catch (err) {
+      const msg =
+        err instanceof Error && err.message !== 'Copy failed'
+          ? err.message
+          : 'Could not copy the invite link from this browser.';
       setInviteError(msg);
       setError(msg);
     }

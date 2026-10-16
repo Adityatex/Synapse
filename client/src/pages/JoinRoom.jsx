@@ -19,7 +19,15 @@ export default function JoinRoom() {
   const handleJoinRoom = async (event) => {
     event.preventDefault();
 
-    const normalizedRoomId = roomId.trim().toUpperCase();
+    // A pasted invite link carries the token that grants membership.
+    const pasted = roomId.trim();
+    const linkMatch = pasted.match(/\/room\/([A-Za-z0-9]+)(\?[^#\s]*)?/);
+    if (linkMatch && /[?&]invite=/.test(linkMatch[2] || '')) {
+      navigate(`/room/${linkMatch[1].toUpperCase()}${linkMatch[2]}`);
+      return;
+    }
+
+    const normalizedRoomId = (linkMatch ? linkMatch[1] : pasted).toUpperCase();
     if (!normalizedRoomId) {
       setError('Enter a room code to continue.');
       return;

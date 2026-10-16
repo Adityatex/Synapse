@@ -33,6 +33,17 @@ export function createRoom(roomName) {
   return request('', { method: 'POST', body: JSON.stringify({ roomName }) });
 }
 
+export function createInviteLink(roomId) {
+  return request(`/${String(roomId).trim().toUpperCase()}/invite-link`, { method: 'POST' });
+}
+
+export function joinRoomWithInvite(roomId, inviteToken) {
+  return request(`/${String(roomId).trim().toUpperCase()}/join`, {
+    method: 'POST',
+    body: JSON.stringify({ inviteToken }),
+  });
+}
+
 export function getRoom(roomId) {
   return request(`/${String(roomId).trim().toUpperCase()}`);
 }

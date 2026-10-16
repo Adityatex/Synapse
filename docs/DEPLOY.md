@@ -56,7 +56,8 @@ fly status                            # expect 1 machine, state "started"
 
 1. `GET /api/health` → `{"status":"ok","db":"connected"}`.
 2. Sign up with a real inbox → OTP email arrives → logged in.
-3. Create a room, open the invite link in a second browser (incognito) and join.
+3. Create a room, click **Invite** (copies a signed link, valid 7 days), open it in
+   an incognito window and log in as a **second account**. You land in the room.
 4. Type in one window, see it in the other. Cursors and presence show.
 5. Run code (default file is Python: `print("hello")`). Output appears.
 6. Ask Neura (AI panel) a question. A reply appears.

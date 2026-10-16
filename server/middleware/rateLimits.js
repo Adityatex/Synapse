@@ -16,6 +16,13 @@ const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
  * Will move to Redis in Phase 2 (P2-02).
  */
 
+// Per-IP ceilings can be raised where many people share one public IP
+// (a campus network in front of a demo); per-email and per-user limits stay.
+function envLimit(name, fallback) {
+  const value = Number.parseInt(process.env[name], 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 function normalizeEmail(value) {
   return String(value || '').toLowerCase().trim();
 }
@@ -64,7 +71,7 @@ const otpRequestByEmailLimiter = rateLimit({
 
 const otpRequestByIpLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  limit: 10,
+  limit: envLimit('RATE_LIMIT_OTP_IP_PER_HOUR', 10),
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
@@ -86,7 +93,7 @@ const otpVerifyLimiter = rateLimit({
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 10,
+  limit: envLimit('RATE_LIMIT_LOGIN_IP_PER_15MIN', 10),
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
@@ -116,7 +123,7 @@ const aiChatLimiter = rateLimit({
 
 const globalLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  limit: 300,
+  limit: envLimit('RATE_LIMIT_GLOBAL_IP_PER_MIN', 300),
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),

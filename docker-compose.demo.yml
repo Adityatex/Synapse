@@ -19,6 +19,11 @@ services:
       # Required in production; same-origin requests through the tunnel are
       # always allowed, so this only matters for other origins.
       CORS_ORIGIN: http://localhost:8080
+      # Everyone on the venue network shares one public IP through the tunnel,
+      # so lift the per-IP ceilings (per-email and per-user limits still apply).
+      RATE_LIMIT_OTP_IP_PER_HOUR: 200
+      RATE_LIMIT_LOGIN_IP_PER_15MIN: 300
+      RATE_LIMIT_GLOBAL_IP_PER_MIN: 3000
     ports:
       - '8080:8080'
     restart: unless-stopped

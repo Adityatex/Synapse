@@ -41,17 +41,19 @@ export default function EditorFragment({ className = '' }) {
           2 in this room
         </span>
       </div>
-      <div className="frag-code">
-        {LINES.map((parts, i) => (
-          <div key={i} className={`frag-line ${i === 3 ? 'frag-line--active' : ''}`}>
-            <span className="frag-ln">{i + 1}</span>
-            <span>{parts}</span>
-          </div>
-        ))}
-      </div>
+      <pre className="frag-code">
+        <code>
+          {LINES.map((parts, i) => (
+            <span key={i} className={`frag-line ${i === 3 ? 'frag-line--active' : ''}`}>
+              <span className="frag-ln">{i + 1}</span>
+              <span>{parts}</span>
+            </span>
+          ))}
+        </code>
+      </pre>
       <div className="frag-output">
         <span className="frag-output-label">Output</span>
-        <span className="frag-output-value">[0, 1]</span>
+        <code className="frag-output-value">[0, 1]</code>
       </div>
     </div>
   );

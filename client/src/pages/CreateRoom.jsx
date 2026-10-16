@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { createRoom } from '../services/roomService';
 import SynapseLogo from '../components/SynapseLogo';
@@ -8,7 +8,9 @@ export default function CreateRoom() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [roomName, setRoomName] = useState('');
+  const [searchParams] = useSearchParams();
+  // The landing page passes the name typed there (?name=…).
+  const [roomName, setRoomName] = useState(() => (searchParams.get('name') || '').slice(0, 120));
 
   useEffect(() => {
     document.body.style.backgroundColor = '#0b1410';

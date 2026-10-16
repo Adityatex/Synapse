@@ -648,7 +648,7 @@ code, pre, kbd, samp {
   background: #0d1712;
   overflow: hidden;
   font-size: 13px;
-  color: var(--ink);
+  color: #eef3ef;
 }
 
 .frag-tabs {
@@ -667,13 +667,13 @@ code, pre, kbd, samp {
   height: 30px;
   padding: 0 12px;
   border-radius: 6px 6px 0 0;
-  color: var(--muted);
+  color: #84948b;
   font-size: 13px;
 }
 
 .frag-tab--active {
   background: #0d1712;
-  color: var(--ink);
+  color: #eef3ef;
 }
 
 .frag-peers {
@@ -681,7 +681,7 @@ code, pre, kbd, samp {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--ink-soft);
+  color: #b9c6be;
   font-size: 12.5px;
 }
 
@@ -696,6 +696,7 @@ code, pre, kbd, samp {
 }
 
 .frag-code {
+  margin: 0;
   padding: 14px 0 18px;
   font-family: var(--font-mono);
   font-size: 13px;
@@ -761,12 +762,12 @@ code, pre, kbd, samp {
 }
 
 .frag-output-label {
-  color: var(--muted);
+  color: #84948b;
 }
 
 .frag-output-value {
   font-family: var(--font-mono);
-  color: var(--success);
+  color: #5bd68a;
 }
 
 /* ═══════════════════════════════════════════════════════════════

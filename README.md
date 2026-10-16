@@ -108,10 +108,10 @@ start.bat
 
 ## Deployment
 
-Hosting is paused: Synapse currently runs locally only (see `docs/CONTRIBUTING.md`
-→ Quick start). Render and Vercel were retired; at the deploy phase the backend
-moves to Fly.io (`fly.staging.toml` is kept as the starting point) and the
-deploy/uptime workflows get their triggers back.
+See `docs/DEPLOY.md`. One production image (root `Dockerfile`) serves the API,
+Socket.IO and the built client. It runs as a public demo from a laptop through a
+Cloudflare quick tunnel (`docker-compose.demo.yml`) or on Fly.io (`fly.toml`).
+Render and Vercel were retired.
 
 ## Monitoring (P0-15)
 

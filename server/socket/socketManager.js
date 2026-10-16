@@ -11,6 +11,7 @@ const {
   loadRoomFromDB,
 } = require('./roomStore');
 const RoomModel = require('../models/Room');
+const { recordRoomMembership } = require('../lib/roomMembership');
 const MessageModel = require('../models/Message');
 // P1-05: socket payload validation against @synapse/shared contracts.
 const { validateSocketPayload } = require('../middleware/validate');
@@ -67,54 +68,6 @@ function emitParticipants(io, roomId) {
 
 const FILE_LOCK_TIMEOUT_MS = 45000;
 const roomLocks = new Map();
-
-async function recordRoomMembership(roomId, participant) {
-  const userId = String(participant?.userId || '').trim();
-  if (!roomId || !userId) {
-    return;
-  }
-
-  const username = String(participant?.username || '').trim();
-  const now = new Date();
-
-  try {
-    const updateResult = await RoomModel.updateOne(
-      {
-        roomId,
-        'members.userId': userId,
-      },
-      {
-        $set: {
-          'members.$.username': username,
-          'members.$.lastVisitedAt': now,
-        },
-      }
-    );
-
-    if (updateResult.matchedCount > 0) {
-      return;
-    }
-
-    await RoomModel.updateOne(
-      {
-        roomId,
-        'members.userId': { $ne: userId },
-      },
-      {
-        $push: {
-          members: {
-            userId,
-            username,
-            joinedAt: now,
-            lastVisitedAt: now,
-          },
-        },
-      }
-    );
-  } catch (error) {
-    logger.error({ err: error.message || error }, 'Failed to record room membership:');
-  }
-}
 
 function serializeRoomLocks(roomId) {
   const locks = roomLocks.get(roomId);

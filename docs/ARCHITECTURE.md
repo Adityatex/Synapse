@@ -97,8 +97,9 @@ Monaco (P1-11).
 | Env | Backend | Frontend | DB |
 |---|---|---|---|
 | local (compose) | `api:5000` | vite `:5173` | `mongo:27017/synapse`, redis, mailpit `:8025` |
+| demo (`docker-compose.demo.yml`) | prod image `:8080` + Cloudflare quick tunnel | served by the API | Atlas |
 | staging | _paused_ — planned `synapse-staging.fly.dev` | — | Atlas staging |
-| prod | _paused_ — planned Fly.io | — | Atlas |
+| prod | Fly.io (`fly.toml`, ready, not yet created) | served by the API | Atlas |
 
 Hosting is paused: only the local compose stack runs. Render and Vercel were
 retired. At the deploy phase, `staging.yml` (deploys only after CI passes,

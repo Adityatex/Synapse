@@ -78,3 +78,8 @@ export const inviteMemberSchema = z
   })
   .refine((v) => v.userId || v.email, { message: 'userId or email is required' });
 export type InviteMemberRequest = z.infer<typeof inviteMemberSchema>;
+
+export const joinRoomInviteSchema = z.object({
+  inviteToken: z.string().trim().min(16).max(2048),
+});
+export type JoinRoomInviteRequest = z.infer<typeof joinRoomInviteSchema>;

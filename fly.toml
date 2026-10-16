@@ -1,0 +1,36 @@
+# Production on Fly.io — same image as the tunnel demo (root Dockerfile).
+# First time: rename `app` (names are global), keep CORS_ORIGIN in sync, then
+#   fly apps create <app>  &&  bash scripts/fly-secrets.sh <app>  &&  fly deploy --ha=false
+# See docs/DEPLOY.md.
+app = 'synapse-app'
+primary_region = 'bom'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  NODE_ENV = 'production'
+  PORT = '8080'
+  LOG_LEVEL = 'info'
+  CORS_ORIGIN = 'https://synapse-app.fly.dev'
+
+# Rooms, presence and locks live in server memory until Phase 2, so this app
+# must run exactly ONE always-on machine: a second machine splits rooms, and
+# auto-stop wipes them. Deploy with --ha=false and never `fly scale count` >1.
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = '20s'
+    interval = '30s'
+    method = 'GET'
+    path = '/api/health'
+    timeout = '5s'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'

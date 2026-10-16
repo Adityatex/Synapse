@@ -1,0 +1,32 @@
+# Public demo from this machine: production image + Cloudflare quick tunnel.
+#   docker compose -f docker-compose.demo.yml up -d --build
+#   docker compose -f docker-compose.demo.yml logs tunnel | grep trycloudflare.com
+# Uses the real services in server/.env (Atlas, Gmail SMTP, Judge0, Groq).
+# The public https://<random>.trycloudflare.com URL changes on every tunnel
+# restart; the app allows its own origin, so no config change is needed.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: synapse:prod
+    env_file:
+      - ./server/.env
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      # Required in production; same-origin requests through the tunnel are
+      # always allowed, so this only matters for other origins.
+      CORS_ORIGIN: http://localhost:8080
+    ports:
+      - '8080:8080'
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    # http2 instead of the default QUIC: many campus/office networks block UDP.
+    command: tunnel --no-autoupdate --protocol http2 --url http://app:8080
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped

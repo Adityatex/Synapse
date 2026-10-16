@@ -54,7 +54,7 @@ function EditorPage() {
         />
 
         {/* Main content area */}
-        <div className={`flex flex-1 overflow-hidden p-2 gap-2 ${theme === 'dark' ? 'bg-[#030509]' : 'bg-slate-200/60'}`}>
+        <div className={`flex flex-1 overflow-hidden p-2 gap-2 ${theme === 'dark' ? 'bg-[#0b1410]' : 'bg-slate-200/60'}`}>
           {/* Sidebar */}
           <Sidebar theme={theme} />
 

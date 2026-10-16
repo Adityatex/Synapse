@@ -1,6 +1,6 @@
 export default function SynapseLogo({
   size = 100,
-  color = '#3b82f6',
+  color = '#0d2a1c',
   nodeColor = '#ffffff',
   className = '',
 }) {

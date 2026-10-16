@@ -21,7 +21,7 @@ export default function OutputPanel({ theme, output }) {
   const displayContent = () => {
     if (isRunning) {
       return (
-        <div className="flex items-center gap-2 p-4 text-indigo-500">
+        <div className="flex items-center gap-2 p-4 text-accent-fg">
           <Loader2 size={16} className="animate-spin" />
           <span className="text-sm">Executing code...</span>
         </div>
@@ -83,7 +83,7 @@ export default function OutputPanel({ theme, output }) {
             <button 
               key={tab}
               onClick={() => { setActiveTab(tab); setIsOutputExpanded(true); }}
-              className={`text-[11px] font-bold uppercase tracking-widest h-full flex items-center gap-2 border-b-2 transition-all cursor-pointer ${activeTab === tab && isOutputExpanded ? 'border-indigo-500 text-indigo-500' : `border-transparent ${t.textMuted} hover:text-indigo-500`}`}
+              className={`text-[11px] font-bold uppercase tracking-widest h-full flex items-center gap-2 border-b-2 transition-all cursor-pointer ${activeTab === tab && isOutputExpanded ? 'border-accent/50 text-accent-fg' : `border-transparent ${t.textMuted} hover:text-accent-fg`}`}
             >
               {tab === 'output' && <Terminal size={12} />}
               {tab === 'errors' && <AlertCircle size={12} />}
@@ -105,7 +105,7 @@ export default function OutputPanel({ theme, output }) {
           {/* Collapse Toggle */}
           <button 
             onClick={() => setIsOutputExpanded(!isOutputExpanded)}
-            className={`${t.textMuted} hover:text-indigo-500 transition-colors cursor-pointer ml-2`}
+            className={`${t.textMuted} hover:text-accent-fg transition-colors cursor-pointer ml-2`}
           >
             <ChevronRight size={14} className={isOutputExpanded ? 'rotate-90' : '-rotate-90'} />
           </button>
@@ -113,7 +113,7 @@ export default function OutputPanel({ theme, output }) {
       </div>
       
       {isOutputExpanded && (
-        <div className={`flex-1 overflow-auto p-4 font-mono text-xs ${theme === 'dark' ? 'bg-[#0d1117]/50' : 'bg-slate-50'} custom-scrollbar`}>
+        <div className={`flex-1 overflow-auto p-4 font-mono text-xs ${theme === 'dark' ? 'bg-[#0d1712]/50' : 'bg-slate-50'} custom-scrollbar`}>
           {displayContent()}
         </div>
       )}

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { requestLoginOtp } from '../services/authService';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, KeyRound } from 'lucide-react';
-import SynapseInteractiveBackground from '../components/SynapseInteractiveBackground';
+import EditorFragment from '../components/EditorFragment';
 import SynapseLogo from '../components/SynapseLogo';
 
 export default function Login() {
@@ -118,14 +118,13 @@ export default function Login() {
   }
 
   return (
-    <div className="auth-page">
-      <SynapseInteractiveBackground />
+    <div className="auth-page auth-page--split">
 
       <div className="auth-container">
         {/* Logo */}
         <Link to="/" className="auth-logo-link">
           <div className="auth-logo-icon">
-            <SynapseLogo size={24} color="#ffffff" nodeColor="#ffffff" />
+            <SynapseLogo size={24} color="#0d2a1c" nodeColor="#0d2a1c" />
           </div>
           <span className="auth-logo-text">Synapse</span>
         </Link>
@@ -313,6 +312,14 @@ export default function Login() {
           {otpStep ? 'JWT session starts only after OTP verification succeeds.' : 'Secure login powered by password + email OTP'}
         </p>
       </div>
+
+      <aside className="auth-showcase" aria-label="What Synapse looks like">
+        <EditorFragment />
+        <p className="auth-showcase-line">One link puts your whole team in the same file.</p>
+        <p className="auth-showcase-note">
+          Everyone sees each other&apos;s cursor, runs the code in the browser and reads the same output.
+        </p>
+      </aside>
     </div>
   );
 }

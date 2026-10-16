@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Loader2, PlusCircle } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { createRoom } from '../services/roomService';
-import SynapseInteractiveBackground from '../components/SynapseInteractiveBackground';
 import SynapseLogo from '../components/SynapseLogo';
 
 export default function CreateRoom() {
@@ -12,7 +11,7 @@ export default function CreateRoom() {
   const [roomName, setRoomName] = useState('');
 
   useEffect(() => {
-    document.body.style.backgroundColor = '#05070d';
+    document.body.style.backgroundColor = '#0b1410';
     return () => { document.body.style.backgroundColor = ''; };
   }, []);
 
@@ -31,37 +30,33 @@ export default function CreateRoom() {
 
   return (
     <div className="auth-page">
-      <SynapseInteractiveBackground />
 
       <div className="auth-container">
         <Link to="/dashboard" className="auth-logo-link">
           <div className="auth-logo-icon">
-            <SynapseLogo size={24} color="#ffffff" nodeColor="#ffffff" />
+            <SynapseLogo size={24} color="#0d2a1c" nodeColor="#0d2a1c" />
           </div>
           <span className="auth-logo-text">Synapse</span>
         </Link>
 
         <div className="auth-card">
           <div className="auth-card-header">
-            <div className="dashboard-welcome-icon" style={{ margin: '0 auto 1rem' }}>
-              <PlusCircle size={24} />
-            </div>
-            <h1 className="auth-title">Create a collaboration room</h1>
+            <h1 className="auth-title">Create a room</h1>
             <p className="auth-subtitle">
-              Generate a shared workspace, invite your teammates, and start editing code in real time.
+              Name it after what you&apos;re working on. Once you&apos;re inside, the Invite button copies a link for your teammates.
             </p>
           </div>
 
           {error ? <div className="auth-error-banner">{error}</div> : null}
 
-          <div className="auth-form" style={{ marginBottom: '1.5rem', width: '100%', textAlign: 'left' }}>
-            <label className="auth-label" htmlFor="roomName">Room Name</label>
+          <div className="auth-field" style={{ marginBottom: '1.25rem' }}>
+            <label className="auth-label" htmlFor="roomName">Room name</label>
             <div className="auth-input-wrapper">
               <input
                 id="roomName"
                 type="text"
                 className="auth-input"
-                placeholder="e.g. System Design Practice"
+                placeholder="DSA practice"
                 value={roomName}
                 onChange={(e) => setRoomName(e.target.value)}
                 onKeyDown={(e) => {
@@ -86,7 +81,7 @@ export default function CreateRoom() {
           </button>
 
           <div className="auth-card-footer">
-            Prefer joining an existing session? <Link to="/join-room" className="auth-link">Use a room code</Link>
+            Have an invite link? <Link to="/join-room" className="auth-link">Join a room</Link>
           </div>
         </div>
       </div>

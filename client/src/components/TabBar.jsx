@@ -1,4 +1,4 @@
-import { useFiles } from '../contexts/FileContext';
+import { useFiles } from '../context/FileContext';
 import { getThemeClasses } from '../utils/theme';
 import { X, FileCode, ChevronRight, Lock } from 'lucide-react';
 

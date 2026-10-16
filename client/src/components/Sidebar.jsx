@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useFiles } from '../contexts/FileContext';
+import { useFiles } from '../context/FileContext';
 import { getThemeClasses } from '../utils/theme';
 import { readStorage, writeStorage } from '../utils/storage';
 import {

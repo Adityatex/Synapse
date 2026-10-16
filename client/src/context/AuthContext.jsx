@@ -1,28 +1,27 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { isAuthenticated, getAuthSession, getUserFromToken } from '../utils/auth';
 import * as authService from '../services/authService';
 import { AuthContext } from './authContextInstance';
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
-
-  // Check for existing auth on mount
-  useEffect(() => {
-    try {
-      if (isAuthenticated()) {
-        const session = getAuthSession();
-        const userData = session?.user || getUserFromToken();
-        setUser(userData);
-      }
-    } catch (err) {
-      console.error('Auth initialization error:', err);
-    } finally {
-      setLoading(false);
+// Read any existing session synchronously so the first render already knows
+// who the user is (no setState-in-effect, no logged-out flash).
+function readInitialUser() {
+  try {
+    if (isAuthenticated()) {
+      const session = getAuthSession();
+      return session?.user || getUserFromToken();
     }
-  }, []);
+  } catch (err) {
+    console.error('Auth initialization error:', err);
+  }
+  return null;
+}
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(readInitialUser);
+  const loading = false;
+  const navigate = useNavigate();
 
   const completeSignup = useCallback(
     async (email, otp) => {

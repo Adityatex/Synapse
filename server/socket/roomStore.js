@@ -1,3 +1,4 @@
+const { logger } = require('../lib/logger');
 const Y = require('yjs');
 const RoomModel = require('../models/Room');
 
@@ -191,12 +192,21 @@ async function createRoom(owner, roomName = 'Untitled Room') {
       roomId: room.roomId,
       roomName: room.roomName,
       createdBy: room.createdBy,
+      // P0-16: creator is the first member so invite-only checks pass.
+      members: [
+        {
+          userId: room.createdBy,
+          username: owner.name || '',
+          joinedAt: new Date(room.createdAt),
+          lastVisitedAt: new Date(room.createdAt),
+        },
+      ],
       files: baseState.files.map(f => ({ id: f.id, name: f.name, content: f.content, updatedAt: f.updatedAt })),
       lastUpdated: room.createdAt,
       createdAt: room.createdAt
     });
   } catch (err) {
-    console.error('Failed to save room to DB:', err);
+    logger.error({ err: err.message || err }, 'Failed to save room to DB');
   }
 
   return sanitizeRoom(room);
@@ -338,7 +348,7 @@ async function loadRoomFromDB(roomId) {
     rooms.set(roomId, room);
     return room;
   } catch (err) {
-    console.error('Failed to load room from DB', err);
+    logger.error({ err: err.message || err }, 'Failed to load room from DB');
     return null;
   }
 }

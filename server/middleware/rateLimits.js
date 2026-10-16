@@ -42,6 +42,16 @@ function tooManyRequestsMessage(retryMinutes) {
   };
 }
 
+// P0-07: include correlation ID on 429s when available.
+function rateLimitHandler(retryMinutes) {
+  return (req, res) => {
+    res.status(429).json({
+      ...tooManyRequestsMessage(retryMinutes),
+      ...(req.id ? { requestId: req.id } : {}),
+    });
+  };
+}
+
 const otpRequestByEmailLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
   limit: 3,
@@ -49,6 +59,7 @@ const otpRequestByEmailLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: emailKeyGenerator,
   message: tooManyRequestsMessage('10 minutes'),
+  handler: rateLimitHandler('10 minutes'),
 });
 
 const otpRequestByIpLimiter = rateLimit({
@@ -58,6 +69,7 @@ const otpRequestByIpLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
   message: tooManyRequestsMessage('an hour'),
+  handler: rateLimitHandler('an hour'),
 });
 
 const otpVerifyLimiter = rateLimit({
@@ -69,6 +81,7 @@ const otpVerifyLimiter = rateLimit({
   // otherwise fall back to IP.
   keyGenerator: emailKeyGenerator,
   message: tooManyRequestsMessage('10 minutes'),
+  handler: rateLimitHandler('10 minutes'),
 });
 
 const loginLimiter = rateLimit({
@@ -78,6 +91,7 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
   message: tooManyRequestsMessage('15 minutes'),
+  handler: rateLimitHandler('15 minutes'),
 });
 
 const executeLimiter = rateLimit({
@@ -87,6 +101,7 @@ const executeLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: userKeyGenerator,
   message: tooManyRequestsMessage('a minute'),
+  handler: rateLimitHandler('a minute'),
 });
 
 const aiChatLimiter = rateLimit({
@@ -96,6 +111,7 @@ const aiChatLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: userKeyGenerator,
   message: tooManyRequestsMessage('an hour'),
+  handler: rateLimitHandler('an hour'),
 });
 
 const globalLimiter = rateLimit({
@@ -105,6 +121,7 @@ const globalLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
   message: tooManyRequestsMessage('a minute'),
+  handler: rateLimitHandler('a minute'),
 });
 
 module.exports = {

@@ -1,6 +1,9 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const authMiddleware = require('../middleware/auth');
+const { logger } = require('../lib/logger');
+const { captureException } = require('../lib/sentry');
+const { validateBody } = require('../middleware/validate');
 const { aiChatLimiter } = require('../middleware/rateLimits');
 const { requestGroqChat } = require('../services/groqService');
 const Conversation = require('../models/Conversation');
@@ -15,7 +18,7 @@ function ensureDatabaseReady(res) {
 
   res.status(503).json({
     error: 'AI chat is temporarily unavailable because the database is disconnected.',
-  });
+   requestId: req.id, });
   return false;
 }
 
@@ -58,10 +61,10 @@ router.post('/new', async (req, res) => {
 
     return res.status(201).json(conversation);
   } catch (error) {
-    console.error('Create conversation error:', error);
+    logger.error({ err: error.message || error, requestId: req.id }, 'Create conversation error:');
     return res.status(500).json({
       error: 'Failed to create a new conversation.',
-    });
+     requestId: req.id, });
   }
 });
 
@@ -79,10 +82,10 @@ router.get('/history', async (req, res) => {
 
     return res.json(conversations);
   } catch (error) {
-    console.error('Fetch conversation history error:', error);
+    logger.error({ err: error.message || error, requestId: req.id }, 'Fetch conversation history error:');
     return res.status(500).json({
       error: 'Failed to load conversation history.',
-    });
+     requestId: req.id, });
   }
 });
 
@@ -100,7 +103,7 @@ router.get('/conversation/:conversationId', async (req, res) => {
     if (!conversation) {
       return res.status(404).json({
         error: 'Conversation not found.',
-      });
+       requestId: req.id, });
     }
 
     const messages = await AIMessage.find({
@@ -112,10 +115,10 @@ router.get('/conversation/:conversationId', async (req, res) => {
       messages,
     });
   } catch (error) {
-    console.error('Load conversation error:', error);
+    logger.error({ err: error.message || error, requestId: req.id }, 'Load conversation error:');
     return res.status(500).json({
       error: 'Failed to load conversation messages.',
-    });
+     requestId: req.id, });
   }
 });
 
@@ -133,7 +136,7 @@ router.delete('/conversation/:conversationId', async (req, res) => {
     if (!conversation) {
       return res.status(404).json({
         error: 'Conversation not found.',
-      });
+       requestId: req.id, });
     }
 
     await AIMessage.deleteMany({ conversationId: conversation._id });
@@ -141,14 +144,14 @@ router.delete('/conversation/:conversationId', async (req, res) => {
 
     return res.json({ success: true });
   } catch (error) {
-    console.error('Delete conversation error:', error);
+    logger.error({ err: error.message || error, requestId: req.id }, 'Delete conversation error:');
     return res.status(500).json({
       error: 'Failed to delete conversation.',
-    });
+     requestId: req.id, });
   }
 });
 
-router.post('/message', async (req, res) => {
+router.post('/message', validateBody('aiSaveMessageSchema'), async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
       return;
@@ -160,20 +163,20 @@ router.post('/message', async (req, res) => {
     if (!normalizedContent) {
       return res.status(400).json({
         error: 'Message content is required.',
-      });
+       requestId: req.id, });
     }
 
     if (!['user', 'assistant', 'system'].includes(role)) {
       return res.status(400).json({
         error: 'A valid message role is required.',
-      });
+       requestId: req.id, });
     }
 
     const conversation = await getOwnedConversation(conversationId, req.user.userId);
     if (!conversation) {
       return res.status(404).json({
         error: 'Conversation not found.',
-      });
+       requestId: req.id, });
     }
 
     const existingMessageCount = await AIMessage.countDocuments({
@@ -198,14 +201,14 @@ router.post('/message', async (req, res) => {
       message,
     });
   } catch (error) {
-    console.error('Save conversation message error:', error);
+    logger.error({ err: error.message || error, requestId: req.id }, 'Save conversation message error:');
     return res.status(500).json({
       error: 'Failed to save the conversation message.',
-    });
+     requestId: req.id, });
   }
 });
 
-router.post('/chat', aiChatLimiter, async (req, res) => {
+router.post('/chat', aiChatLimiter, validateBody('aiChatSchema'), async (req, res) => {
   try {
     if (!ensureDatabaseReady(res)) {
       return;
@@ -217,7 +220,7 @@ router.post('/chat', aiChatLimiter, async (req, res) => {
     if (!normalizedMessage) {
       return res.status(400).json({
         error: 'A message is required.',
-      });
+       requestId: req.id, });
     }
 
     let conversation = null;
@@ -228,7 +231,7 @@ router.post('/chat', aiChatLimiter, async (req, res) => {
       if (!conversation) {
         return res.status(404).json({
           error: 'Conversation not found.',
-        });
+         requestId: req.id, });
       }
     } else {
       conversation = await Conversation.create({
@@ -281,20 +284,13 @@ router.post('/chat', aiChatLimiter, async (req, res) => {
       assistantMessage,
     });
   } catch (error) {
-    console.error('AI chat error:', error.response?.data || error.message);
+    logger.error({ err: error.message || error, requestId: req.id }, 'AI chat error');
+    captureException(error, { extra: { requestId: req.id } });
 
-    const upstreamMessage =
-      error.response?.data?.error?.message ||
-      error.response?.data?.message ||
-      error.message;
-
-    const statusCode =
-      error.response?.status && error.response.status >= 400 && error.response.status < 600
-        ? error.response.status
-        : 500;
-
-    return res.status(statusCode).json({
-      error: upstreamMessage || 'Failed to generate AI response.',
+    // P0-07: never leak upstream provider details; generic message + correlation ID.
+    return res.status(500).json({
+      error: 'Failed to generate AI response. Please try again later.',
+      requestId: req.id,
     });
   }
 });

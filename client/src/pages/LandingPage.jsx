@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import SynapseLogo from '../components/SynapseLogo';
+import TopNav from '../components/TopNav';
 import EditorFragment from '../components/EditorFragment';
 import roomCollabShot from '../assets/landing/room-collab.jpg';
 import roomRunShot from '../assets/landing/room-run.jpg';
@@ -262,6 +263,11 @@ export default function LandingPage() {
   const { heroRef, reelRef } = useHeroReel(4);
   const [roomName, setRoomName] = useState('DSA practice');
   const [activeNote, setActiveNote] = useState(null);
+  useEffect(() => {
+    document.body.style.backgroundColor = '#f7f7f7';
+    return () => { document.body.style.backgroundColor = ''; };
+  }, []);
+
   useReveal(rootRef);
   // Display size shrinks as the name grows so it always fits on one line
   // (Jost caps average about 0.66em wide).
@@ -279,21 +285,13 @@ export default function LandingPage() {
 
   return (
     <div className="lp" data-theme="light" ref={rootRef}>
-      <header className="lp-nav">
-        <Link to="/" className="brand-link" aria-label="Synapse home">
-          <span className="brand-mark">
-            <SynapseLogo size={22} color="#0d2a1c" nodeColor="#0d2a1c" />
-          </span>
-          <span className="brand-name">Synapse</span>
-        </Link>
-        <nav className="lp-nav-links" aria-label="Main">
-          <a href="#features" className="lp-link lp-hide-sm">Features</a>
-          <a href="#how" className="lp-link lp-hide-sm">How it works</a>
-          <a href="#faq" className="lp-link lp-hide-sm">Questions</a>
-          {!isAuthenticated && <Link to="/login" className="lp-link">Log in</Link>}
-          <Link to={primaryAction.to} className="lp-btn">{primaryAction.label}</Link>
-        </nav>
-      </header>
+      <TopNav overlay>
+        <a href="#features" className="lp-link lp-hide-sm">Features</a>
+        <a href="#how" className="lp-link lp-hide-sm">How it works</a>
+        <a href="#faq" className="lp-link lp-hide-sm">Questions</a>
+        {!isAuthenticated && <Link to="/login" className="lp-link">Log in</Link>}
+        <Link to={primaryAction.to} className="lp-btn">{primaryAction.label}</Link>
+      </TopNav>
 
       <main>
         <section className="lp-hero" ref={heroRef} aria-label="Synapse">
@@ -304,7 +302,7 @@ export default function LandingPage() {
             </h1>
             <div className="lp-reel" ref={reelRef}>
               <div className="lp-frame">
-                <EditorFragment />
+                <EditorFragment live interactive />
               </div>
               <figure className="lp-frame">
                 <img src={roomCollabShot} width="2048" height="1536" alt="Arjun’s view of a room: Riya Sharma is editing main.py, a binary search, and the file is view-only for him." />
@@ -329,7 +327,7 @@ export default function LandingPage() {
         </section>
 
         <section className="lp-try" aria-labelledby="try-label" data-reveal>
-          <p id="try-label" className="lp-try-label">Name a room</p>
+          <p id="try-label" className="sr-only">Name a room</p>
           <div className="lp-try-field" style={{ '--try-size': trySize }}>
             {/* The visible line: the text plus a caret set inline on its baseline. */}
             <span className="lp-try-mirror" aria-hidden="true">
@@ -348,7 +346,7 @@ export default function LandingPage() {
           <div className="lp-try-answer">
             <RoomBarFragment name={roomName} />
             <p className="lp-try-note">
-              That’s the top of your room. Run is the one yellow button; Invite copies the link you send.
+              Type a name above and that’s the top of your room. Run is the one yellow button; Invite copies the link you send.
             </p>
           </div>
           <div className="lp-try-examples" role="group" aria-label="Example room names">

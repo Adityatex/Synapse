@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { getRoom } from '../services/roomService';
-import SynapseLogo from '../components/SynapseLogo';
+import { parseRoomTarget } from '../utils/roomLinks';
+import TopNav from '../components/TopNav';
+import './landing.css';
 
 export default function JoinRoom() {
   const navigate = useNavigate();
@@ -11,7 +13,7 @@ export default function JoinRoom() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    document.body.style.backgroundColor = '#0b1410';
+    document.body.style.backgroundColor = '#f7f7f7';
     return () => { document.body.style.backgroundColor = ''; };
   }, []);
 
@@ -19,18 +21,16 @@ export default function JoinRoom() {
     event.preventDefault();
 
     // A pasted invite link carries the token that grants membership.
-    const pasted = roomId.trim();
-    const linkMatch = pasted.match(/\/room\/([A-Za-z0-9]+)(\?[^#\s]*)?/);
-    if (linkMatch && /[?&]invite=/.test(linkMatch[2] || '')) {
-      navigate(`/room/${linkMatch[1].toUpperCase()}${linkMatch[2]}`);
+    const target = parseRoomTarget(roomId);
+    if (!target) {
+      setError('Paste an invite link or enter a room code.');
       return;
     }
-
-    const normalizedRoomId = (linkMatch ? linkMatch[1] : pasted).toUpperCase();
-    if (!normalizedRoomId) {
-      setError('Enter a room code to continue.');
+    if (target.hasInvite) {
+      navigate(target.path);
       return;
     }
+    const normalizedRoomId = target.roomId;
 
     try {
       setLoading(true);
@@ -45,15 +45,12 @@ export default function JoinRoom() {
   };
 
   return (
-    <div className="auth-page">
+    <div className="lp auth-page" data-theme="light">
+      <TopNav label="Rooms">
+        <Link to="/dashboard" className="lp-link">Dashboard</Link>
+      </TopNav>
 
       <div className="auth-container">
-        <Link to="/dashboard" className="auth-logo-link">
-          <div className="auth-logo-icon">
-            <SynapseLogo size={24} color="#0d2a1c" nodeColor="#0d2a1c" />
-          </div>
-          <span className="auth-logo-text">Synapse</span>
-        </Link>
 
         <div className="auth-card">
           <div className="auth-card-header">

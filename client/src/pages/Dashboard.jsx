@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
-import { Plus, LogIn, Code2, LogOut, Search, Trash2 } from 'lucide-react';
-import { getRecentRooms, getSharedRooms, deleteRoom } from '../services/roomService';
+import { ChevronDown, Search, Trash2 } from 'lucide-react';
+import { createRoom, deleteRoom, getRecentRooms, getRoom, getSharedRooms } from '../services/roomService';
 import { getAvatarStyle, getUserInitial } from '../utils/avatar';
-import SynapseLogo from '../components/SynapseLogo';
+import { parseRoomTarget } from '../utils/roomLinks';
+import TopNav from '../components/TopNav';
+import CommandPalette from '../components/CommandPalette';
+import RoomPeek from '../components/RoomPeek';
+import './landing.css';
+import './dashboard.css';
+
+const PRESENCE_REFRESH_MS = 20000;
 
 function countLines(content = '') {
   return String(content)
@@ -32,6 +39,19 @@ function timeAgo(dateStr, currentTime) {
   return `${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
 }
 
+function LiveFaces({ live }) {
+  if (!live?.length) return null;
+  return (
+    <span className="dash-faces" aria-hidden="true">
+      {live.slice(0, 3).map((p) => (
+        <span key={p.userId} className="dash-face" style={getAvatarStyle({ userId: p.userId }, p.color)}>
+          {getUserInitial(p.username)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -45,6 +65,16 @@ export default function Dashboard() {
   const [roomToDelete, setRoomToDelete] = useState(null);
   const [deleteError, setDeleteError] = useState('');
   const [now, setNow] = useState(() => Date.now());
+  const [peekId, setPeekId] = useState(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const [newName, setNewName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [joinText, setJoinText] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState('');
+  const createInputRef = useRef(null);
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'there';
   const firstName = displayName.split(' ')[0];
@@ -52,25 +82,96 @@ export default function Dashboard() {
   const avatarStyle = getAvatarStyle(user);
 
   useEffect(() => {
-    const userId = user?.userId;
-    if (userId) {
-      Promise.all([getRecentRooms(userId), getSharedRooms(userId)])
-        .then(([ownedRooms, joinedRooms]) => {
-          setRecentRooms(ownedRooms);
-          setSharedRooms(joinedRooms);
-        })
-        .catch(console.error)
-        .finally(() => setRoomsLoadedFor(userId));
-    }
-  }, [user?.userId]);
+    document.body.style.backgroundColor = '#f7f7f7';
+    return () => { document.body.style.backgroundColor = ''; };
+  }, []);
+
+  const loadRooms = useCallback((userId) => {
+    return Promise.all([getRecentRooms(userId), getSharedRooms(userId)])
+      .then(([ownedRooms, joinedRooms]) => {
+        setRecentRooms(ownedRooms);
+        setSharedRooms(joinedRooms);
+      })
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
+    const userId = user?.userId;
+    if (!userId) return undefined;
+    loadRooms(userId).finally(() => setRoomsLoadedFor(userId));
+    // Presence changes while you look at the page; refresh it quietly.
     const timer = window.setInterval(() => {
-      setNow(Date.now());
-    }, 60000);
+      if (document.visibilityState === 'visible') loadRooms(userId);
+    }, PRESENCE_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [user?.userId, loadRooms]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => window.clearInterval(timer);
   }, []);
+
+  // Ctrl/Cmd+K anywhere, or "/" when not typing, opens the palette.
+  useEffect(() => {
+    const onKey = (e) => {
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
+      if ((e.key === 'k' || e.key === 'K') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      } else if (e.key === '/' && !typing) {
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const openRoom = useCallback((roomId) => navigate(`/room/${roomId}`), [navigate]);
+
+  const startCreate = useCallback(
+    async (name) => {
+      const trimmed = String(name || '').trim();
+      if (!trimmed) {
+        createInputRef.current?.focus();
+        createInputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      try {
+        setCreating(true);
+        setCreateError('');
+        const { room } = await createRoom(trimmed);
+        navigate(`/room/${room.roomId}`);
+      } catch (err) {
+        setCreateError(err.message || 'Could not create the room. Try again.');
+        setCreating(false);
+      }
+    },
+    [navigate]
+  );
+
+  const startJoin = useCallback(
+    async (target) => {
+      if (!target) {
+        setJoinError('Paste an invite link or enter a room code.');
+        return;
+      }
+      if (target.hasInvite) {
+        navigate(target.path);
+        return;
+      }
+      try {
+        setJoining(true);
+        setJoinError('');
+        await getRoom(target.roomId);
+        navigate(target.path);
+      } catch (err) {
+        setJoinError(err.message || 'Could not open that room.');
+        setJoining(false);
+      }
+    },
+    [navigate]
+  );
 
   function handleDeleteClick(e, room) {
     e.preventDefault();
@@ -92,14 +193,15 @@ export default function Dashboard() {
   }
 
   const visibleRooms = activeTab === 'shared' ? sharedRooms : recentRooms;
-
   const filteredRooms = visibleRooms.filter((room) => {
     const q = searchQuery.toLowerCase();
-    return (
-      (room.roomName || '').toLowerCase().includes(q) ||
-      (room.roomId || '').toLowerCase().includes(q)
-    );
+    return (room.roomName || '').toLowerCase().includes(q) || (room.roomId || '').toLowerCase().includes(q);
   });
+  const allRooms = useMemo(() => {
+    const seen = new Set();
+    return [...recentRooms, ...sharedRooms].filter((r) => (seen.has(r.roomId) ? false : seen.add(r.roomId)));
+  }, [recentRooms, sharedRooms]);
+  const liveCount = allRooms.filter((r) => r.live?.length).length;
 
   const summary = useMemo(() => {
     const lines = recentRooms.reduce((total, room) => {
@@ -116,175 +218,257 @@ export default function Dashboard() {
   }, [recentRooms, sharedRooms]);
 
   return (
-    <div className="db-page">
-      <nav className="db-nav">
-        <div className="db-nav-inner">
-          <Link to="/" className="brand-link">
-            <span className="brand-mark">
-              <SynapseLogo size={22} color="#0d2a1c" nodeColor="#0d2a1c" />
-            </span>
-            <span className="brand-name">Synapse</span>
-          </Link>
+    <div className="lp dash" data-theme="light">
+      <TopNav label="Dashboard">
+        <button type="button" className="lp-link dash-search-btn" onClick={() => setPaletteOpen(true)}>
+          <Search size={16} aria-hidden="true" />
+          <span className="lp-hide-sm">Search</span>
+          <kbd className="lp-hide-sm">Ctrl K</kbd>
+        </button>
+        <span className="dash-user">
+          <span className="dash-user-avatar" style={avatarStyle}>{avatarInitial}</span>
+          <span className="lp-hide-sm">{displayName}</span>
+        </span>
+        <button type="button" className="lp-link" onClick={logout}>Log out</button>
+        <button type="button" className="lp-btn" onClick={() => startCreate(newName)}>New room</button>
+      </TopNav>
 
-          <div className="db-nav-right">
-            <label className="db-search-wrapper">
-              <Search size={16} aria-hidden="true" />
-              <span className="sr-only">Search rooms</span>
-              <input
-                type="search"
-                placeholder="Search rooms"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="db-search-input"
-              />
-            </label>
-
-            <div className="db-user-badge">
-              <div className="db-user-avatar" style={avatarStyle}>{avatarInitial}</div>
-              <span className="db-user-name">{displayName}</span>
-            </div>
-
-            <button onClick={logout} className="db-icon-btn" title="Log out" aria-label="Log out">
-              <LogOut size={18} />
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      <main className="db-main">
-        <header className="db-hero">
-          <div>
-            <h1 className="db-hero-title">Welcome back, {firstName}</h1>
-            <p className="db-hero-subtitle">{loadingRooms ? 'Loading your rooms…' : summary}</p>
-          </div>
-
-          <div className="db-actions">
-            <Link to="/create-room" className="db-btn db-btn-primary">
-              <Plus size={18} /> New room
-            </Link>
-            <Link to="/join-room" className="db-btn db-btn-secondary">
-              <LogIn size={18} /> Join a room
-            </Link>
-            <Link to="/editor" className="db-btn db-btn-ghost">
-              <Code2 size={18} /> Solo editor
-            </Link>
-          </div>
+      <main className="dash-main">
+        <header className="dash-hero">
+          <h1
+            className="lp-head dash-title"
+            style={{
+              '--dash-title-size': `min(var(--step-display), calc((100vw - 2 * var(--margin)) / ${(`Welcome back, ${firstName}`.length * 0.66).toFixed(2)}))`,
+            }}
+          >
+            Welcome back, {firstName}
+          </h1>
+          <p className="dash-summary">
+            {loadingRooms ? 'Loading your rooms…' : summary}
+            {liveCount > 0 && (
+              <span className="dash-summary-live">
+                <span className="dash-live-dot" aria-hidden="true" />
+                {plural(liveCount, 'room')} active right now
+              </span>
+            )}
+          </p>
         </header>
 
-        <section aria-labelledby="rooms-heading">
-          <div className="db-section-head">
-            <h2 id="rooms-heading" className="db-section-title">Rooms</h2>
-            <div className="db-tab-group" role="tablist" aria-label="Which rooms">
-              <button
-                role="tab"
-                aria-selected={activeTab === 'recent'}
-                onClick={() => setActiveTab('recent')}
-                className={`db-tab ${activeTab === 'recent' ? 'db-tab-active' : ''}`}
-              >
-                Yours
+        <section className="dash-tiles" aria-label="Start working">
+          <form
+            className="dash-tile dash-tile--create"
+            onSubmit={(e) => {
+              e.preventDefault();
+              startCreate(newName);
+            }}
+          >
+            <h2 className="dash-tile-title">New room</h2>
+            <p className="dash-tile-text">Name it after what you’re working on. You’ll get an invite link inside.</p>
+            <div className="dash-inline">
+              <label htmlFor="new-room-name" className="sr-only">Room name</label>
+              <input
+                id="new-room-name"
+                ref={createInputRef}
+                className="dash-input"
+                placeholder="DSA practice"
+                value={newName}
+                maxLength={120}
+                onChange={(e) => setNewName(e.target.value)}
+              />
+              <button type="submit" className="lp-btn lp-btn--ink" disabled={creating}>
+                {creating ? 'Creating…' : 'Create'}
               </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === 'shared'}
-                onClick={() => setActiveTab('shared')}
-                className={`db-tab ${activeTab === 'shared' ? 'db-tab-active' : ''}`}
-              >
-                Shared with you
+            </div>
+            {createError && <p className="dash-error">{createError}</p>}
+          </form>
+
+          <form
+            className="dash-tile dash-tile--join"
+            onSubmit={(e) => {
+              e.preventDefault();
+              startJoin(parseRoomTarget(joinText));
+            }}
+          >
+            <h2 className="dash-tile-title">Join a room</h2>
+            <p className="dash-tile-text">Paste the invite link someone sent you. Members can use the room code.</p>
+            <div className="dash-inline">
+              <label htmlFor="join-room-link" className="sr-only">Invite link or room code</label>
+              <input
+                id="join-room-link"
+                className="dash-input"
+                placeholder="Invite link or code"
+                value={joinText}
+                spellCheck={false}
+                onChange={(e) => setJoinText(e.target.value)}
+              />
+              <button type="submit" className="lp-btn lp-btn--ink" disabled={joining}>
+                {joining ? 'Joining…' : 'Join'}
               </button>
+            </div>
+            {joinError && <p className="dash-error">{joinError}</p>}
+          </form>
+
+          <Link to="/editor" className="dash-tile dash-tile--solo">
+            <h2 className="dash-tile-title">Solo editor</h2>
+            <p className="dash-tile-text">A private editor that runs code, no room needed.</p>
+            <svg className="dash-tile-arrow" width="36" height="36" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+              <path d="M10 30 L30 10 M14 10 H30 V26" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </Link>
+        </section>
+
+        <section className="dash-rooms" aria-labelledby="rooms-heading">
+          <div className="dash-rooms-head">
+            <h2 id="rooms-heading" className="lp-head dash-rooms-title">Rooms</h2>
+            <div className="dash-rooms-tools">
+              <label className="dash-filter">
+                <Search size={16} aria-hidden="true" />
+                <span className="sr-only">Filter rooms</span>
+                <input
+                  type="search"
+                  placeholder="Filter by name or code"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </label>
+              <div className="dash-tabs" role="tablist" aria-label="Which rooms">
+                <button
+                  role="tab"
+                  aria-selected={activeTab === 'recent'}
+                  onClick={() => setActiveTab('recent')}
+                  className={`dash-tab ${activeTab === 'recent' ? 'is-active' : ''}`}
+                >
+                  Yours <span>{recentRooms.length}</span>
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={activeTab === 'shared'}
+                  onClick={() => setActiveTab('shared')}
+                  className={`dash-tab ${activeTab === 'shared' ? 'is-active' : ''}`}
+                >
+                  Shared with you <span>{sharedRooms.length}</span>
+                </button>
+              </div>
             </div>
           </div>
 
           {loadingRooms ? (
-            <div className="db-room-list" aria-busy="true">
-              <div className="db-skeleton-row" />
-              <div className="db-skeleton-row" />
-              <div className="db-skeleton-row" />
+            <div className="dash-list" aria-busy="true">
+              <div className="dash-skeleton" />
+              <div className="dash-skeleton" />
+              <div className="dash-skeleton" />
             </div>
           ) : filteredRooms.length > 0 ? (
             <>
-              <div className="db-room-cols" aria-hidden="true">
+              <div className="dash-cols" aria-hidden="true">
                 <span>Name</span>
+                <span>Activity</span>
                 <span>Code</span>
                 <span>Files</span>
-                <span>Last edited</span>
                 <span />
               </div>
-              <ul className="db-room-list">
+              <ul className="dash-list">
                 {filteredRooms.map((room) => {
-                  const fileCount = Array.isArray(room.files)
-                    ? room.files.filter((f) => f.type === 'file').length
-                    : 0;
+                  const fileCount = Array.isArray(room.files) ? room.files.filter((f) => f.type === 'file').length : 0;
                   const canDeleteRoom = room.createdBy === user?.userId;
-                  const open = () => navigate(`/room/${room.roomId}`);
+                  const isPeek = peekId === room.roomId;
+                  const live = room.live || [];
                   return (
-                    <li
-                      key={room.roomId}
-                      className="db-room-row"
-                      tabIndex={0}
-                      onClick={open}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') open();
-                      }}
-                    >
-                      <span className="db-room-name">
-                        <span className="db-room-avatar" style={avatarStyle} aria-hidden="true">
-                          {avatarInitial}
+                    <li key={room.roomId} className={`dash-item ${isPeek ? 'is-open' : ''}`}>
+                      <div
+                        className="dash-row"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openRoom(room.roomId)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') openRoom(room.roomId);
+                        }}
+                      >
+                        <span className="dash-row-name">
+                          {live.length > 0 && <span className="dash-live-dot" aria-hidden="true" />}
+                          <span>{room.roomName || 'Untitled room'}</span>
                         </span>
-                        <span>{room.roomName || 'Untitled room'}</span>
-                      </span>
-                      <span className="db-room-code">{room.roomId}</span>
-                      <span className="db-room-meta db-room-files">{plural(fileCount, 'file')}</span>
-                      <span className="db-room-meta">{timeAgo(room.lastUpdated, now)}</span>
-                      {canDeleteRoom ? (
-                        <button
-                          className="db-room-delete-btn"
-                          title="Delete room"
-                          aria-label={`Delete ${room.roomName || room.roomId}`}
-                          onClick={(e) => handleDeleteClick(e, { roomId: room.roomId, roomName: room.roomName })}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      ) : (
-                        <span />
-                      )}
+                        <span className={`dash-row-activity ${live.length ? 'is-live' : ''}`}>
+                          {live.length ? (
+                            <>
+                              <LiveFaces live={live} />
+                              {live.length} here now
+                            </>
+                          ) : (
+                            `Edited ${timeAgo(room.lastUpdated, now).toLowerCase()}`
+                          )}
+                        </span>
+                        <span className="dash-row-code">{room.roomId}</span>
+                        <span className="dash-row-files">{plural(fileCount, 'file')}</span>
+                        <span className="dash-row-actions">
+                          <button
+                            type="button"
+                            className="dash-icon-btn"
+                            aria-expanded={isPeek}
+                            aria-label={`${isPeek ? 'Hide' : 'Show'} what’s inside ${room.roomName || room.roomId}`}
+                            title="Peek inside"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPeekId(isPeek ? null : room.roomId);
+                            }}
+                          >
+                            <ChevronDown size={18} className="dash-chevron" />
+                          </button>
+                          {canDeleteRoom ? (
+                            <button
+                              type="button"
+                              className="dash-icon-btn dash-icon-btn--danger"
+                              title="Delete room"
+                              aria-label={`Delete ${room.roomName || room.roomId}`}
+                              onClick={(e) => handleDeleteClick(e, { roomId: room.roomId, roomName: room.roomName })}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          ) : (
+                            <span className="dash-icon-spacer" />
+                          )}
+                        </span>
+                      </div>
+                      {isPeek && <RoomPeek room={room} />}
                     </li>
                   );
                 })}
               </ul>
             </>
-          ) : searchQuery ? (
-            <div className="db-empty-state">
-              <p className="db-empty-title">No rooms match “{searchQuery}”</p>
-              <p className="db-empty-text">Search looks at room names and codes.</p>
-            </div>
-          ) : activeTab === 'shared' ? (
-            <div className="db-empty-state">
-              <p className="db-empty-title">Nothing shared with you yet</p>
-              <p className="db-empty-text">
-                When someone sends you an invite link and you open it, the room shows up here.
-              </p>
-              <div className="db-actions">
-                <Link to="/join-room" className="db-btn db-btn-secondary">
-                  <LogIn size={18} /> Paste an invite link
-                </Link>
-              </div>
-            </div>
           ) : (
-            <div className="db-empty-state">
-              <p className="db-empty-title">Start your first room</p>
-              <p className="db-empty-text">
-                A room is a shared workspace: create one, copy its invite link from the editor, and anyone you send it to
-                can edit and run code with you.
-              </p>
-              <div className="db-actions">
-                <Link to="/create-room" className="db-btn db-btn-primary">
-                  <Plus size={18} /> New room
-                </Link>
-              </div>
+            <div className="dash-empty">
+              {searchQuery ? (
+                <>
+                  <p className="dash-empty-title">No rooms match “{searchQuery}”</p>
+                  <p className="dash-empty-text">The filter looks at room names and codes.</p>
+                </>
+              ) : activeTab === 'shared' ? (
+                <>
+                  <p className="dash-empty-title">Nothing shared with you yet</p>
+                  <p className="dash-empty-text">When someone sends you an invite link and you open it, the room appears here.</p>
+                </>
+              ) : (
+                <>
+                  <p className="dash-empty-title">Your first room is one name away</p>
+                  <p className="dash-empty-text">Type a name in the yellow tile above and press Create.</p>
+                </>
+              )}
             </div>
           )}
         </section>
       </main>
+
+      {paletteOpen && (
+      <CommandPalette
+        onClose={() => setPaletteOpen(false)}
+        rooms={allRooms}
+        onOpenRoom={openRoom}
+        onCreate={startCreate}
+        onJoin={startJoin}
+        onSolo={() => navigate('/editor')}
+        onLogout={logout}
+      />
+      )}
 
       {roomToDelete && (
         <div className="db-modal-overlay" role="presentation" onClick={() => setRoomToDelete(null)}>
@@ -300,12 +484,12 @@ export default function Dashboard() {
               <strong>{roomToDelete.roomName || roomToDelete.roomId}</strong> and its files will be deleted for everyone in
               it. This can&apos;t be undone.
             </p>
-            {deleteError ? <p className="auth-field-error" style={{ marginTop: 12 }}>{deleteError}</p> : null}
+            {deleteError ? <p className="dash-error">{deleteError}</p> : null}
             <div className="db-modal-actions">
-              <button className="db-btn db-btn-secondary" onClick={() => setRoomToDelete(null)}>
+              <button className="lp-btn dash-btn-quiet" onClick={() => setRoomToDelete(null)}>
                 Cancel
               </button>
-              <button className="db-btn db-danger-btn" onClick={confirmDeleteRoom}>
+              <button className="lp-btn dash-btn-danger" onClick={confirmDeleteRoom}>
                 Delete room
               </button>
             </div>

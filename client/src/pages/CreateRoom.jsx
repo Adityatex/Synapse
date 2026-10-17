@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { createRoom } from '../services/roomService';
-import SynapseLogo from '../components/SynapseLogo';
+import TopNav from '../components/TopNav';
+import './landing.css';
 
 export default function CreateRoom() {
   const navigate = useNavigate();
@@ -13,7 +14,7 @@ export default function CreateRoom() {
   const [roomName, setRoomName] = useState(() => (searchParams.get('name') || '').slice(0, 120));
 
   useEffect(() => {
-    document.body.style.backgroundColor = '#0b1410';
+    document.body.style.backgroundColor = '#f7f7f7';
     return () => { document.body.style.backgroundColor = ''; };
   }, []);
 
@@ -31,15 +32,12 @@ export default function CreateRoom() {
   };
 
   return (
-    <div className="auth-page">
+    <div className="lp auth-page" data-theme="light">
+      <TopNav label="Rooms">
+        <Link to="/dashboard" className="lp-link">Dashboard</Link>
+      </TopNav>
 
       <div className="auth-container">
-        <Link to="/dashboard" className="auth-logo-link">
-          <div className="auth-logo-icon">
-            <SynapseLogo size={24} color="#0d2a1c" nodeColor="#0d2a1c" />
-          </div>
-          <span className="auth-logo-text">Synapse</span>
-        </Link>
 
         <div className="auth-card">
           <div className="auth-card-header">

@@ -4,7 +4,8 @@ import { useAuth } from '../context/useAuth';
 import { requestSignupOtp } from '../services/authService';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, User, KeyRound } from 'lucide-react';
 import EditorFragment from '../components/EditorFragment';
-import SynapseLogo from '../components/SynapseLogo';
+import TopNav from '../components/TopNav';
+import './landing.css';
 
 export default function Signup() {
   const { completeSignup } = useAuth();
@@ -24,7 +25,7 @@ export default function Signup() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
-    document.body.style.backgroundColor = '#05070d';
+    document.body.style.backgroundColor = '#f7f7f7';
     return () => { document.body.style.backgroundColor = ''; };
   }, []);
 
@@ -134,16 +135,13 @@ export default function Signup() {
   }
 
   return (
-    <div className="auth-page auth-page--split">
+    <div className="lp auth-page auth-page--split" data-theme="light">
+      <TopNav label="Account">
+        <Link to="/login" className="lp-link">Log in</Link>
+      </TopNav>
+      <div className="auth-body">
 
       <div className="auth-container">
-        {/* Logo */}
-        <Link to="/" className="auth-logo-link">
-          <div className="auth-logo-icon">
-            <SynapseLogo size={24} color="#0d2a1c" nodeColor="#0d2a1c" />
-          </div>
-          <span className="auth-logo-text">Synapse</span>
-        </Link>
 
         {/* Card */}
         <div className="auth-card">
@@ -376,12 +374,13 @@ export default function Signup() {
       </div>
 
       <aside className="auth-showcase" aria-label="What Synapse looks like">
-        <EditorFragment />
+        <EditorFragment live />
         <p className="auth-showcase-line">One link puts your whole team in the same file.</p>
         <p className="auth-showcase-note">
           Everyone sees each other&apos;s cursor, runs the code in the browser and reads the same output.
         </p>
       </aside>
+      </div>
     </div>
   );
 }

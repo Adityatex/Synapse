@@ -77,14 +77,18 @@
 /* ── Navigation ─────────────────────────────────────────── */
 
 .lp-nav {
-  position: absolute;
-  inset: 0 0 auto 0;
+  position: relative;
   z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
   height: 76px;
   padding: 0 var(--margin);
+}
+
+.lp-nav--overlay {
+  position: absolute;
+  inset: 0 0 auto 0;
 }
 
 .lp-nav-links {

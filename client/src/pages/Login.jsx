@@ -4,7 +4,8 @@ import { useAuth } from '../context/useAuth';
 import { requestLoginOtp } from '../services/authService';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, KeyRound } from 'lucide-react';
 import EditorFragment from '../components/EditorFragment';
-import SynapseLogo from '../components/SynapseLogo';
+import TopNav from '../components/TopNav';
+import './landing.css';
 
 export default function Login() {
   const { completeLogin } = useAuth();
@@ -21,7 +22,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    document.body.style.backgroundColor = '#05070d';
+    document.body.style.backgroundColor = '#f7f7f7';
     return () => { document.body.style.backgroundColor = ''; };
   }, []);
 
@@ -118,16 +119,13 @@ export default function Login() {
   }
 
   return (
-    <div className="auth-page auth-page--split">
+    <div className="lp auth-page auth-page--split" data-theme="light">
+      <TopNav label="Account">
+        <Link to="/signup" className="lp-link">Create an account</Link>
+      </TopNav>
+      <div className="auth-body">
 
       <div className="auth-container">
-        {/* Logo */}
-        <Link to="/" className="auth-logo-link">
-          <div className="auth-logo-icon">
-            <SynapseLogo size={24} color="#0d2a1c" nodeColor="#0d2a1c" />
-          </div>
-          <span className="auth-logo-text">Synapse</span>
-        </Link>
 
         {/* Card */}
         <div className="auth-card">
@@ -314,12 +312,13 @@ export default function Login() {
       </div>
 
       <aside className="auth-showcase" aria-label="What Synapse looks like">
-        <EditorFragment />
+        <EditorFragment live />
         <p className="auth-showcase-line">One link puts your whole team in the same file.</p>
         <p className="auth-showcase-note">
           Everyone sees each other&apos;s cursor, runs the code in the browser and reads the same output.
         </p>
       </aside>
+      </div>
     </div>
   );
 }

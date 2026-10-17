@@ -80,17 +80,16 @@ but pnpm workspaces are canonical (see `docs/CONTRIBUTING.md`).
 
 ## Start the app
 
-Use either of these options from the project root:
+The backend runs in Docker (API + MongoDB + Redis + Mailpit), the frontend on
+the Vite dev server. From the project root:
 
 ```bash
-npm run dev
+npm run dev:api     # once: build and start the backend containers
+npm run dev         # frontend only, http://localhost:5173
+npm run dev:down    # stop the backend containers
 ```
 
-Or on Windows:
-
-```bat
-start.bat
-```
+OTP emails in dev land in Mailpit at `http://localhost:8025`.
 
 ## Default local URLs
 

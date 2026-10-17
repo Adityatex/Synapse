@@ -5,7 +5,8 @@
   "description": "Collaborative IDE Root (pnpm workspaces + Turborepo)",
   "packageManager": "pnpm@10.34.5",
   "scripts": {
-    "dev": "docker compose up -d --build --renew-anon-volumes && pnpm --filter client dev",
+    "dev": "pnpm --filter client dev",
+    "dev:api": "docker compose up -d --build --renew-anon-volumes",
     "dev:down": "docker compose down",
     "dev:local": "turbo run dev",
     "dev:legacy": "node scripts/dev.js",

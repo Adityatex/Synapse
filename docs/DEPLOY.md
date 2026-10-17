@@ -71,6 +71,6 @@ fly status                            # expect 1 machine, state "started"
 - Fallbacks, in order:
   1. Tunnel URL dies → `restart tunnel`, share the new URL.
   2. Venue blocks tunnels → present from the laptop at `http://localhost:8080`.
-  3. Atlas unreachable (network/IP allowlist) → `docker compose up -d` (local
-     Mongo + Mailpit; OTPs at http://localhost:8025) and use the dev client.
+  3. Atlas unreachable (network/IP allowlist) → `npm run dev:api` then `npm run dev`
+     (local Mongo + Mailpit; OTPs at http://localhost:8025), present http://localhost:5173.
   4. Gmail fails → OTP fallback is logged: `… logs app | grep -i otp`.

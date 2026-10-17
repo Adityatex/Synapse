@@ -5,7 +5,7 @@ const { captureException } = require('../lib/sentry');
 const { validateBody } = require('../middleware/validate');
 const Room = require('../models/Room');
 const User = require('../models/User');
-const { createRoom, getRoomSnapshot } = require('../socket/roomStore');
+const { createRoom, getRoom, getRoomSnapshot } = require('../socket/roomStore');
 const { recordRoomMembership } = require('../lib/roomMembership');
 const { signRoomInvite, verifyRoomInvite } = require('../lib/roomInvites');
 
@@ -19,6 +19,22 @@ function isRoomMember(dbRoom, userId) {
   if (dbRoom.createdBy === userId) return true;
   if (!Array.isArray(dbRoom.members) || dbRoom.members.length === 0) return true;
   return dbRoom.members.some((m) => m.userId === userId);
+}
+
+// Who is in each room right now (in-memory presence), for the dashboard.
+function withLivePresence(rooms) {
+  return rooms.map((doc) => {
+    const room = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+    const live = getRoom(room.roomId);
+    room.live = live
+      ? Array.from(live.participants.values()).map((p) => ({
+          userId: p.userId,
+          username: p.username,
+          color: p.cursorColor,
+        }))
+      : [];
+    return room;
+  });
 }
 
 router.post('/', authMiddleware, validateBody('createRoomSchema'), async (req, res) => {
@@ -54,7 +70,7 @@ router.get('/recent/:userId', authMiddleware, async (req, res) => {
     const rooms = await Room.find({ createdBy: req.params.userId })
       .sort({ lastUpdated: -1 })
       .limit(20);
-    res.json(rooms);
+    res.json(withLivePresence(rooms));
   } catch (error) {
     logger.error({ err: error.message || error, requestId: req.id }, 'Fetch recent rooms error');
     res.status(500).json({ error: 'Failed to fetch recent rooms.', requestId: req.id });
@@ -74,7 +90,7 @@ router.get('/shared/:userId', authMiddleware, async (req, res) => {
       },
     }).sort({ lastUpdated: -1 });
 
-    res.json(rooms);
+    res.json(withLivePresence(rooms));
   } catch (error) {
     logger.error({ err: error.message || error, requestId: req.id }, 'Fetch shared rooms error');
     res.status(500).json({ error: 'Failed to fetch shared rooms.', requestId: req.id });

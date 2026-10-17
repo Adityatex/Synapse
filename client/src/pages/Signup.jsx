@@ -381,7 +381,7 @@ export default function Signup() {
           <EditorFragment live />
           <p className="auth-showcase-line">One link puts your whole team in the same file.</p>
           <p className="auth-showcase-note">
-            Everyone sees each other&apos;s cursor, runs the code in the browser and reads the same output.
+            Everyone sees each other&apos;s cursor as edits arrive, and anyone can run the code right in the browser.
           </p>
         </div>
       </aside>

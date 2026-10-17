@@ -84,10 +84,10 @@ function EditingIndicatorBar({ editingUsers = {}, activeFileId }) {
         alignItems: 'center',
         gap: '8px',
         padding: '4px 14px',
-        background: 'var(--bg-secondary, #17241e)',
-        borderBottom: '1px solid var(--border-color, #1f2e27)',
+        background: 'var(--surface-1)',
+        borderBottom: '1px solid var(--line)',
         fontSize: '12px',
-        color: 'var(--text-muted, #888)',
+        color: 'var(--ink-soft)',
         minHeight: '28px',
         flexWrap: 'wrap',
       }}

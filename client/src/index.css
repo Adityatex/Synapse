@@ -38,7 +38,19 @@
   --radius: 8px;
   --radius-lg: 12px;
 
-  /* Legacy names still read by a few editor styles. */
+
+  --sidebar-width: 280px;
+  --toolbar-height: 56px;
+  --tabbar-height: 44px;
+  --output-height: 260px;
+
+  color-scheme: dark;
+}
+
+/* Legacy names still read by a few editor styles. Declared on every themed
+   root so they resolve to that theme's values, not the :root (dark) ones. */
+:root,
+[data-theme] {
   --bg-primary: var(--ground);
   --bg-secondary: var(--surface-1);
   --bg-tertiary: var(--surface-2);
@@ -48,13 +60,6 @@
   --text-primary: var(--ink);
   --text-secondary: var(--ink-soft);
   --text-muted: var(--muted);
-
-  --sidebar-width: 280px;
-  --toolbar-height: 56px;
-  --tabbar-height: 44px;
-  --output-height: 260px;
-
-  color-scheme: dark;
 }
 
 [data-theme="light"] {

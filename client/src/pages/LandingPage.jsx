@@ -6,6 +6,8 @@ import TopNav from '../components/TopNav';
 import EditorFragment from '../components/EditorFragment';
 import roomCollabShot from '../assets/landing/room-collab.jpg';
 import roomRunShot from '../assets/landing/room-run.jpg';
+import roomClip from '../assets/landing/room-clip.webm';
+import roomClipPoster from '../assets/landing/room-clip-poster.png';
 import './landing.css';
 
 const REPO_URL = 'https://github.com/Adityatex/Synapse';
@@ -24,7 +26,7 @@ const STEPS = [
   { clause: 'First you name a room.' },
   { clause: 'Then you send one link.' },
   { clause: 'Everyone edits the same file.' },
-  { clause: 'Run it and read the output together.' },
+  { clause: 'Then anyone in the room runs it.' },
 ];
 
 const FAQS = [
@@ -149,6 +151,8 @@ function InviteFragment() {
   );
 }
 
+// What a new room opens with: its bar, the starter file every room gets,
+// and where the invite link comes from.
 function RoomBarFragment({ name }) {
   return (
     <div className="ui-roombar" data-ui>
@@ -164,9 +168,15 @@ function RoomBarFragment({ name }) {
         <span className="ui-chip ui-chip--run">Run</span>
         <span className="ui-chip">Invite</span>
       </div>
-      <div className="ui-roombar-file">
-        <span>main.py</span>
-        <code>print(&quot;Hello, Synapse!&quot;)</code>
+      <div className="ui-roombar-tab">main.py</div>
+      <pre className="ui-roombar-code">
+        <code>
+          <span className="ui-roombar-line"><span className="ui-roombar-ln">1</span>print(<span className="ui-str">&quot;Welcome to Synapse collaborative mode!&quot;</span>)</span>
+          <span className="ui-roombar-line"><span className="ui-roombar-ln">2</span>print(<span className="ui-str">&quot;Invite someone to this room and start coding together.&quot;</span>)</span>
+        </code>
+      </pre>
+      <div className="ui-roombar-invite">
+        <span>Invite</span> copies a link to this room that works for 7 days.
       </div>
     </div>
   );
@@ -274,7 +284,7 @@ export default function LandingPage() {
   const trySize = `min(var(--step-display), calc((100vw - 2 * var(--margin)) / ${(Math.max(roomName.length, 10) * 0.66).toFixed(2)}))`;
 
   function startRoom(e) {
-    e.preventDefault();
+    e?.preventDefault();
     const name = roomName.trim();
     navigate(name ? `/create-room?name=${encodeURIComponent(name)}` : '/create-room');
   }
@@ -306,24 +316,51 @@ export default function LandingPage() {
               </div>
               <figure className="lp-frame">
                 <img src={roomCollabShot} width="2048" height="1536" alt="Arjun’s view of a room: Riya Sharma is editing main.py, a binary search, and the file is view-only for him." />
-                <figcaption className="lp-frame-caption">Arjun watches Riya’s edits arrive</figcaption>
+                <figcaption className="lp-frame-caption">Arjun watches Riya’s edits arrive, live</figcaption>
               </figure>
               <figure className="lp-frame">
                 <img src={roomRunShot} width="2048" height="1536" alt="The same file after Run: the output panel shows found 58 at index 3 in 0.011 seconds." loading="lazy" />
-                <figcaption className="lp-frame-caption">Run prints the output for everyone</figcaption>
+                <figcaption className="lp-frame-caption">Riya runs it: real output, 0.011 s</figcaption>
               </figure>
               <div className="lp-frame">
                 <InviteFragment />
               </div>
             </div>
-            <p className="lp-hero-lead">
-              Synapse is a browser IDE for teams. Send one link, edit the same file with live cursors, and run Python,
-              JavaScript, C++ or Java without installing anything.
-            </p>
-            <div className="lp-hero-action">
+            <div className="lp-hero-under">
+              <p className="lp-hero-lead">
+                Synapse is a browser IDE for teams. Send one link, edit the same file with live cursors, and run the
+                code without installing anything.
+              </p>
               <Link to={primaryAction.to} className="lp-btn lp-btn--ink">{primaryAction.label}</Link>
             </div>
+            <p className="lp-hero-langs">Python · JavaScript · C++ · Java</p>
           </div>
+        </section>
+
+        <section className="lp-watch" aria-labelledby="watch-heading">
+          <div className="lp-watch-copy" data-reveal>
+            <h2 id="watch-heading" className="lp-head">Watch a room</h2>
+            <p>
+              Recorded in Synapse, not mocked up. Arjun types two lines from his own browser. They appear in Riya’s file
+              with his name on the cursor, and the file stays view-only for her while he types. Then she presses Run.
+            </p>
+          </div>
+          <figure className="lp-watch-media">
+            <video
+              className="lp-watch-video"
+              src={roomClip}
+              poster={roomClipPoster}
+              width="864"
+              height="668"
+              muted
+              loop
+              playsInline
+              autoPlay={!prefersReducedMotion()}
+              controls={prefersReducedMotion()}
+              preload="metadata"
+              aria-label="Screen recording of a Synapse room: Arjun Mehta types a loop into Riya Sharma's file from another browser, then Riya runs it and the output greets both of them."
+            />
+          </figure>
         </section>
 
         <section className="lp-try" aria-labelledby="try-label" data-reveal>
@@ -345,9 +382,10 @@ export default function LandingPage() {
           </div>
           <div className="lp-try-answer">
             <RoomBarFragment name={roomName} />
-            <p className="lp-try-note">
-              Type a name above and that’s the top of your room. Run is the one yellow button; Invite copies the link you send.
-            </p>
+            <div className="lp-try-act">
+              <button type="button" className="lp-btn" onClick={startRoom}>Create this room</button>
+              <p className="lp-try-note">Type a name above to see your room. You’ll sign in first, then it opens.</p>
+            </div>
           </div>
           <div className="lp-try-examples" role="group" aria-label="Example room names">
             {EXAMPLES.map((ex) => (
@@ -428,17 +466,11 @@ export default function LandingPage() {
           <div className="lp-cta-copy" data-reveal>
             <h2 id="cta-heading" className="lp-cta-line">Start a<br />room</h2>
             <p className="lp-cta-sub">
-              You’ll sign in or create an account first, then the room opens with this name and an invite link ready to copy.
+              Free, in the browser, for as many people as you send the link to.
             </p>
-          </div>
-          <div className="lp-cta-dialog-wrap" data-reveal>
-            <form className="ui-dialog" data-ui onSubmit={startRoom}>
-              <div className="ui-dialog-title">Name your room</div>
-              <div className="ui-dialog-sub">You can rename it later.</div>
-              <label htmlFor="cta-room-name">Room name</label>
-              <input id="cta-room-name" value={roomName} maxLength={120} onChange={(e) => setRoomName(e.target.value)} />
-              <button type="submit" className="lp-btn">Create room</button>
-            </form>
+            <button type="button" className="lp-btn lp-btn--ink lp-cta-btn" onClick={startRoom}>
+              {roomName.trim() ? `Create “${roomName.trim()}”` : 'Create a room'}
+            </button>
           </div>
         </section>
       </main>
@@ -462,7 +494,7 @@ export default function LandingPage() {
         </div>
         <div className="lp-tile lp-tile--source">
           <p className="lp-tile-label">Source code</p>
-          <a className="lp-tile-source" href={REPO_URL} target="_blank" rel="noreferrer">github.com/Adityatex/Synapse</a>
+          <a className="lp-tile-source" href={REPO_URL} target="_blank" rel="noreferrer">github.com/<wbr />Adityatex/<wbr />Synapse</a>
         </div>
         <div className="lp-tile lp-tile--mark" aria-hidden="true">
           <span className="lp-wordmark">Synapse</span>

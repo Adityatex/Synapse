@@ -377,11 +377,13 @@ export default function Signup() {
       </div>
 
       <aside className="auth-showcase" aria-label="What Synapse looks like">
-        <EditorFragment live />
-        <p className="auth-showcase-line">One link puts your whole team in the same file.</p>
-        <p className="auth-showcase-note">
-          Everyone sees each other&apos;s cursor, runs the code in the browser and reads the same output.
-        </p>
+        <div className="auth-showcase-inner">
+          <EditorFragment live />
+          <p className="auth-showcase-line">One link puts your whole team in the same file.</p>
+          <p className="auth-showcase-note">
+            Everyone sees each other&apos;s cursor, runs the code in the browser and reads the same output.
+          </p>
+        </div>
       </aside>
       </div>
     </div>

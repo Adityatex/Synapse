@@ -5,7 +5,9 @@ const { captureException } = require('../lib/sentry');
 const { validateBody } = require('../middleware/validate');
 const Room = require('../models/Room');
 const User = require('../models/User');
-const { createRoom, getRoomSnapshot } = require('../socket/roomStore');
+const { createRoom, getRoom, getRoomSnapshot } = require('../socket/roomStore');
+const { recordRoomMembership } = require('../lib/roomMembership');
+const { signRoomInvite, verifyRoomInvite } = require('../lib/roomInvites');
 
 const router = express.Router();
 
@@ -17,6 +19,22 @@ function isRoomMember(dbRoom, userId) {
   if (dbRoom.createdBy === userId) return true;
   if (!Array.isArray(dbRoom.members) || dbRoom.members.length === 0) return true;
   return dbRoom.members.some((m) => m.userId === userId);
+}
+
+// Who is in each room right now (in-memory presence), for the dashboard.
+function withLivePresence(rooms) {
+  return rooms.map((doc) => {
+    const room = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+    const live = getRoom(room.roomId);
+    room.live = live
+      ? Array.from(live.participants.values()).map((p) => ({
+          userId: p.userId,
+          username: p.username,
+          color: p.cursorColor,
+        }))
+      : [];
+    return room;
+  });
 }
 
 router.post('/', authMiddleware, validateBody('createRoomSchema'), async (req, res) => {
@@ -52,7 +70,7 @@ router.get('/recent/:userId', authMiddleware, async (req, res) => {
     const rooms = await Room.find({ createdBy: req.params.userId })
       .sort({ lastUpdated: -1 })
       .limit(20);
-    res.json(rooms);
+    res.json(withLivePresence(rooms));
   } catch (error) {
     logger.error({ err: error.message || error, requestId: req.id }, 'Fetch recent rooms error');
     res.status(500).json({ error: 'Failed to fetch recent rooms.', requestId: req.id });
@@ -72,7 +90,7 @@ router.get('/shared/:userId', authMiddleware, async (req, res) => {
       },
     }).sort({ lastUpdated: -1 });
 
-    res.json(rooms);
+    res.json(withLivePresence(rooms));
   } catch (error) {
     logger.error({ err: error.message || error, requestId: req.id }, 'Fetch shared rooms error');
     res.status(500).json({ error: 'Failed to fetch shared rooms.', requestId: req.id });
@@ -124,6 +142,45 @@ router.post('/:roomId/invite', authMiddleware, validateBody('inviteMemberSchema'
   } catch (error) {
     logger.error({ err: error.message || error, requestId: req.id }, 'Invite member error');
     return res.status(500).json({ error: 'Failed to invite member.', requestId: req.id });
+  }
+});
+
+// Signed invite links: any member can mint one; opening it while logged in
+// makes the holder a member, which then passes the P0-16 join guard.
+router.post('/:roomId/invite-link', authMiddleware, async (req, res) => {
+  const roomId = String(req.params.roomId || '').trim().toUpperCase();
+  try {
+    const dbRoom = await Room.findOne({ roomId }).select({ createdBy: 1, members: 1 });
+    if (!dbRoom) {
+      return res.status(404).json({ error: 'Room not found.', requestId: req.id });
+    }
+    if (!isRoomMember(dbRoom, req.user.userId)) {
+      return res.status(403).json({ error: 'You are not a member of this room.', requestId: req.id });
+    }
+    return res.json({ roomId, inviteToken: signRoomInvite(roomId, req.user.userId) });
+  } catch (error) {
+    logger.error({ err: error.message || error, requestId: req.id }, 'Create invite link error');
+    return res.status(500).json({ error: 'Failed to create invite link.', requestId: req.id });
+  }
+});
+
+router.post('/:roomId/join', authMiddleware, validateBody('joinRoomInviteSchema'), async (req, res) => {
+  const roomId = String(req.params.roomId || '').trim().toUpperCase();
+  try {
+    verifyRoomInvite(req.body.inviteToken, roomId);
+  } catch {
+    return res.status(403).json({ error: 'This invite link is invalid or has expired. Ask for a new one.', requestId: req.id });
+  }
+  try {
+    const exists = await Room.exists({ roomId });
+    if (!exists) {
+      return res.status(404).json({ error: 'Room not found.', requestId: req.id });
+    }
+    await recordRoomMembership(roomId, { userId: req.user.userId, username: req.user.name || '' });
+    return res.json({ roomId, joined: true });
+  } catch (error) {
+    logger.error({ err: error.message || error, requestId: req.id }, 'Join via invite error');
+    return res.status(500).json({ error: 'Failed to join room.', requestId: req.id });
   }
 });
 

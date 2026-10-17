@@ -24,9 +24,9 @@ export default function TabBar({ theme, roomId = 'Room', fileLocks = {}, current
             <div 
               key={file.id}
               onClick={() => openTab(file.id)}
-              className={`flex items-center gap-2 px-4 py-2 text-[11px] border-r ${t.border} cursor-pointer min-w-[120px] relative transition-all group select-none ${isActive ? t.tabActive + ' shadow-[inset_0_2px_0_0_#6366f1]' : t.tabInactive}`}
+              className={`flex items-center gap-2 px-4 py-2 text-[11px] border-r ${t.border} cursor-pointer min-w-[120px] relative transition-all group select-none ${isActive ? t.tabActive + ' shadow-[inset_0_2px_0_0_var(--accent)]' : t.tabInactive}`}
             >
-              <FileCode size={12} className={isActive ? 'text-indigo-500 shrink-0' : `${t.textMuted} shrink-0`} />
+              <FileCode size={12} className={isActive ? 'text-accent-fg shrink-0' : `${t.textMuted} shrink-0`} />
               <span className="truncate">{file.name}</span>
               {fileLock && (
                 <span
@@ -41,7 +41,7 @@ export default function TabBar({ theme, roomId = 'Room', fileLocks = {}, current
                   e.stopPropagation();
                   closeTab(file.id);
                 }}
-                className={`ml-auto opacity-0 group-hover:opacity-100 ${t.textMuted} hover:text-indigo-500 transition-opacity cursor-pointer`}
+                className={`ml-auto opacity-0 group-hover:opacity-100 ${t.textMuted} hover:text-accent-fg transition-opacity cursor-pointer`}
               >
                 <X size={12} />
               </button>
@@ -52,13 +52,13 @@ export default function TabBar({ theme, roomId = 'Room', fileLocks = {}, current
 
       {/* Breadcrumbs */}
       <div className={`flex items-center gap-1 px-4 py-1.5 text-[10px] ${t.textMuted} ${t.bg} border-b ${t.border} shrink-0`}>
-        <span className="hover:text-indigo-500 cursor-pointer">{roomId}</span>
+        <span className="hover:text-accent-fg cursor-pointer">{roomId}</span>
         <ChevronRight size={10} />
-        <span className="hover:text-indigo-500 cursor-pointer">src</span>
+        <span className="hover:text-accent-fg cursor-pointer">src</span>
         {activeFile && (
           <>
             <ChevronRight size={10} />
-            <span className="text-indigo-500 font-medium">{activeFile.name}</span>
+            <span className="text-accent-fg font-medium">{activeFile.name}</span>
           </>
         )}
       </div>

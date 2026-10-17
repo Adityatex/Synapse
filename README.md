@@ -80,17 +80,16 @@ but pnpm workspaces are canonical (see `docs/CONTRIBUTING.md`).
 
 ## Start the app
 
-Use either of these options from the project root:
+The backend runs in Docker (API + MongoDB + Redis + Mailpit), the frontend on
+the Vite dev server. From the project root:
 
 ```bash
-npm run dev
+npm run dev:api     # once: build and start the backend containers
+npm run dev         # frontend only, http://localhost:5173
+npm run dev:down    # stop the backend containers
 ```
 
-Or on Windows:
-
-```bat
-start.bat
-```
+OTP emails in dev land in Mailpit at `http://localhost:8025`.
 
 ## Default local URLs
 
@@ -108,10 +107,10 @@ start.bat
 
 ## Deployment
 
-Hosting is paused: Synapse currently runs locally only (see `docs/CONTRIBUTING.md`
-→ Quick start). Render and Vercel were retired; at the deploy phase the backend
-moves to Fly.io (`fly.staging.toml` is kept as the starting point) and the
-deploy/uptime workflows get their triggers back.
+See `docs/DEPLOY.md`. One production image (root `Dockerfile`) serves the API,
+Socket.IO and the built client. It runs as a public demo from a laptop through a
+Cloudflare quick tunnel (`docker-compose.demo.yml`) or on Fly.io (`fly.toml`).
+Render and Vercel were retired.
 
 ## Monitoring (P0-15)
 

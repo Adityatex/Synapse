@@ -10,19 +10,19 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 // VS Code-style file icon mapping
 function getFileIcon(name, isActive, mutedClass) {
   const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
-  const activeColor = 'text-indigo-500';
+  const activeColor = 'text-accent-fg';
   
   const iconMap = {
     // JavaScript / TypeScript
     js:   { Icon: Braces,    color: 'text-yellow-400' },
-    jsx:  { Icon: Braces,    color: 'text-sky-400' },
-    ts:   { Icon: Braces,    color: 'text-blue-400' },
-    tsx:  { Icon: Braces,    color: 'text-blue-400' },
+    jsx:  { Icon: Braces,    color: 'text-accent-fg' },
+    ts:   { Icon: Braces,    color: 'text-accent-fg' },
+    tsx:  { Icon: Braces,    color: 'text-accent-fg' },
     // Python
     py:   { Icon: Hash,      color: 'text-green-400' },
     // Web
     html: { Icon: Code,      color: 'text-orange-400' },
-    css:  { Icon: FileType,  color: 'text-blue-400' },
+    css:  { Icon: FileType,  color: 'text-accent-fg' },
     scss: { Icon: FileType,  color: 'text-pink-400' },
     // Data
     json: { Icon: FileJson,  color: 'text-yellow-500' },
@@ -32,21 +32,21 @@ function getFileIcon(name, isActive, mutedClass) {
     env:  { Icon: Settings,  color: 'text-yellow-600' },
     // Java / C
     java: { Icon: FileCode,  color: 'text-red-400' },
-    cpp:  { Icon: FileCode,  color: 'text-blue-500' },
-    c:    { Icon: FileCode,  color: 'text-blue-400' },
-    h:    { Icon: FileCode,  color: 'text-purple-400' },
+    cpp:  { Icon: FileCode,  color: 'text-accent-fg' },
+    c:    { Icon: FileCode,  color: 'text-accent-fg' },
+    h:    { Icon: FileCode,  color: 'text-accent-fg' },
     // Shell
     sh:   { Icon: Terminal,  color: 'text-green-500' },
     bat:  { Icon: Terminal,  color: 'text-green-400' },
     // Markdown / Text
-    md:   { Icon: FileText,  color: 'text-sky-300' },
+    md:   { Icon: FileText,  color: 'text-accent-fg' },
     txt:  { Icon: FileText,  color: 'text-slate-400' },
     // Images
     png:  { Icon: Image,     color: 'text-emerald-400' },
     jpg:  { Icon: Image,     color: 'text-emerald-400' },
     svg:  { Icon: Image,     color: 'text-amber-400' },
     // Database
-    sql:  { Icon: Database,  color: 'text-blue-300' },
+    sql:  { Icon: Database,  color: 'text-accent-fg' },
     db:   { Icon: Database,  color: 'text-slate-400' },
   };
 
@@ -211,11 +211,11 @@ export default function FileTreeItem({
   }
 
   // Determine background color
-  let bgClass = `hover:bg-black/5 ${t.text} hover:text-indigo-500`;
+  let bgClass = `hover:bg-black/5 ${t.text} hover:text-accent-fg`;
   if (isDropTarget) {
-    bgClass = 'bg-indigo-500/20 ring-1 ring-indigo-500/40 ring-inset';
+    bgClass = 'bg-surface-3 ring-1 ring-accent/40 ring-inset';
   } else if (isActive) {
-    bgClass = 'bg-indigo-500/10 text-indigo-400';
+    bgClass = 'bg-surface-3 text-accent-fg';
   } else if (isSelected && !isActive) {
     bgClass = theme === 'dark' 
       ? 'bg-white/5 text-slate-200' 
@@ -230,7 +230,7 @@ export default function FileTreeItem({
         transition-colors duration-75
         ${bgClass}
         ${isDragging ? 'z-10' : ''}
-        ${isActive ? 'border-l-2 border-indigo-500' : 'border-l-2 border-transparent'}
+        ${isActive ? 'border-l-2 border-accent/50' : 'border-l-2 border-transparent'}
       `}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
@@ -287,8 +287,8 @@ export default function FileTreeItem({
             {/* File/Folder icon */}
             {isFolder ? (
               item.isOpen 
-                ? <FolderOpen size={14} className={`shrink-0 ${isActive ? 'text-indigo-400' : 'text-amber-400/80'}`} />
-                : <Folder size={14} className={`shrink-0 ${isActive ? 'text-indigo-400' : 'text-amber-400/60'}`} />
+                ? <FolderOpen size={14} className={`shrink-0 ${isActive ? 'text-accent-fg' : 'text-amber-400/80'}`} />
+                : <Folder size={14} className={`shrink-0 ${isActive ? 'text-accent-fg' : 'text-amber-400/60'}`} />
             ) : (
               getFileIcon(item.name, isActive, t.textMuted)
             )}
@@ -306,8 +306,8 @@ export default function FileTreeItem({
                 onPointerDown={(e) => e.stopPropagation()}
                 className={`flex-1 min-w-0 text-[13px] outline-none py-0 px-1 rounded ${
                   theme === 'dark' 
-                    ? 'bg-[#1a1f2e] text-indigo-400 border border-indigo-500/50' 
-                    : 'bg-white text-indigo-600 border border-indigo-500/50'
+                    ? 'bg-[#17241e] text-accent-fg border border-accent/50' 
+                    : 'bg-white text-accent-fg border border-accent/50'
                 }`}
               />
             ) : (
@@ -340,7 +340,7 @@ export default function FileTreeItem({
         <div className="flex items-center gap-1 shrink-0 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <Pencil
             size={11}
-            className="hover:text-indigo-500 transition-colors text-slate-500 cursor-pointer p-0"
+            className="hover:text-accent-fg transition-colors text-slate-500 cursor-pointer p-0"
             onClick={(e) => {
               e.stopPropagation();
               startRenaming();

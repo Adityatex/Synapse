@@ -1,16 +1,16 @@
+// Light, slightly muted tones that sit on the dark green ground and carry
+// dark ink. Yellow is left out: it belongs to the primary action.
 const AVATAR_COLORS = [
-  '#FF6B6B',
-  '#4ECDC4',
-  '#45B7D1',
-  '#F7B32B',
-  '#7C3AED',
-  '#10B981',
-  '#F97316',
-  '#EC4899',
-  '#3B82F6',
-  '#84CC16',
-  '#EF4444',
-  '#14B8A6',
+  '#7dd3fc',
+  '#9fe0bb',
+  '#e8c6a0',
+  '#c8b6ff',
+  '#f4a6a6',
+  '#8fd3c8',
+  '#d9c27a',
+  '#b5c99a',
+  '#f2b8d8',
+  '#a8c5ff',
 ];
 
 function hexToRgba(color, alpha) {
@@ -70,7 +70,6 @@ export function getAvatarStyle(userLike, preferredColor) {
   return {
     backgroundColor: color,
     borderColor: hexToRgba(color, 0.35),
-    color: '#ffffff',
-    boxShadow: `0 0 0 1px ${hexToRgba(color, 0.15)}`,
+    color: '#0d2a1c',
   };
 }

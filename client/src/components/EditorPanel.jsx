@@ -7,6 +7,7 @@ import { useFiles } from '../context/FileContext';
 import { getMonacoLanguage } from '../utils/languageMap';
 import { getThemeClasses } from '../utils/theme';
 import { Loader2 } from 'lucide-react';
+import { MONACO_THEME, defineSynapseThemes } from '../utils/monacoThemes';
 
 
 
@@ -83,10 +84,10 @@ function EditingIndicatorBar({ editingUsers = {}, activeFileId }) {
         alignItems: 'center',
         gap: '8px',
         padding: '4px 14px',
-        background: 'var(--bg-secondary, #1e1e2e)',
-        borderBottom: '1px solid var(--border-color, #2a2a3c)',
+        background: 'var(--surface-1)',
+        borderBottom: '1px solid var(--line)',
         fontSize: '12px',
-        color: 'var(--text-muted, #888)',
+        color: 'var(--ink-soft)',
         minHeight: '28px',
         flexWrap: 'wrap',
       }}
@@ -148,10 +149,10 @@ function FileLockBanner({ activeFileLock, isReadOnly, lockNotice }) {
         alignItems: 'center',
         gap: '8px',
         padding: '6px 14px',
-        background: isReadOnly ? 'rgba(245, 158, 11, 0.12)' : 'rgba(99, 102, 241, 0.12)',
-        borderBottom: `1px solid ${isReadOnly ? 'rgba(245, 158, 11, 0.35)' : 'rgba(99, 102, 241, 0.28)'}`,
+        background: isReadOnly ? 'rgba(245, 158, 11, 0.12)' : 'var(--surface-2)',
+        borderBottom: `1px solid ${isReadOnly ? 'rgba(245, 158, 11, 0.35)' : 'var(--line)'}`,
         fontSize: '12px',
-        color: isReadOnly ? '#fbbf24' : '#a5b4fc',
+        color: isReadOnly ? 'var(--warn-fg)' : 'var(--ink-soft)',
       }}
     >
       <span style={{ fontWeight: 700 }}>{isReadOnly ? 'Locked' : 'Lock'}</span>
@@ -186,7 +187,7 @@ export default function EditorPanel({
 
   const activeFileId = activeFileIdProp || activeFile?.id;
   const t = getThemeClasses(theme);
-  const monacoTheme = theme === 'dark' ? 'vs-dark' : 'vs';
+  const monacoTheme = theme === 'dark' ? MONACO_THEME.dark : MONACO_THEME.light;
   const language = activeFile ? getMonacoLanguage(activeFile.name) : 'plaintext';
 
   // Keep sharedTextRef current so onMount can access the latest Y.Text
@@ -328,6 +329,7 @@ export default function EditorPanel({
           height="100%"
           language={language}
           theme={monacoTheme}
+          beforeMount={defineSynapseThemes}
           defaultValue={sharedText ? '' : activeFile.content}
           onChange={(value) => {
             if (!sharedText && activeFileId && updateContent) {
@@ -387,7 +389,7 @@ export default function EditorPanel({
             readOnly: isReadOnly,
             domReadOnly: isReadOnly,
             fontSize: 15,
-            fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+            fontFamily: "'JetBrains Mono Variable', 'JetBrains Mono', 'Cascadia Code', monospace",
             fontLigatures: true,
             minimap: { enabled: true, scale: 1 },
             scrollBeyondLastLine: false,

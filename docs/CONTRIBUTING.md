@@ -7,15 +7,13 @@
 ## Quick start
 
 ```bash
-pnpm install
-pnpm --filter @synapse/shared build
-# recommended: backend stack in Docker (api + mongo + redis + mailpit)…
-docker compose up -d
-# …and the client on the host with hot reload
-pnpm --filter client dev
+npm i -g pnpm@10      # once
+pnpm install          # once, and after pulling dependency changes
+npm run dev           # Docker backend (api + mongo + redis + mailpit) + client with hot reload
 # client: http://localhost:5173  api health: http://localhost:5000/api/health
 # mailpit UI (OTP catcher): http://localhost:8025
-# alternative without Docker (needs a MongoDB URI in server/.env): pnpm dev
+npm run dev:down      # stop the Docker backend
+# alternative without Docker (uses the MongoDB URI in server/.env): npm run dev:local
 ```
 
 Copy env templates first: `server/.env.example → server/.env`,

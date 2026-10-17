@@ -4,7 +4,7 @@ import { useAuth } from '../context/useAuth';
 import { requestLoginOtp } from '../services/authService';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, KeyRound } from 'lucide-react';
 import EditorFragment from '../components/EditorFragment';
-import TopNav from '../components/TopNav';
+import SynapseLogo from '../components/SynapseLogo';
 import './landing.css';
 
 export default function Login() {
@@ -120,12 +120,15 @@ export default function Login() {
 
   return (
     <div className="lp auth-page auth-page--split" data-theme="light">
-      <TopNav label="Account">
-        <Link to="/signup" className="lp-link">Create an account</Link>
-      </TopNav>
       <div className="auth-body">
 
       <div className="auth-container">
+        <Link to="/" className="brand-link auth-brand" aria-label="Synapse home">
+          <span className="brand-mark">
+            <SynapseLogo size={22} color="#0d2a1c" nodeColor="#0d2a1c" />
+          </span>
+          <span className="brand-name">Synapse</span>
+        </Link>
 
         {/* Card */}
         <div className="auth-card">

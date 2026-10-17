@@ -9,14 +9,14 @@ import Toolbar from '../components/Toolbar';
 import OutputPanel from '../components/OutputPanel';
 import StatusBar from '../components/StatusBar';
 import NeuraPanel from '../components/NeuraPanel';
-import { readStorage, writeStorage } from '../utils/storage';
+import { readEditorTheme, saveEditorTheme } from '../utils/editorTheme';
 
 function EditorPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const [theme, setTheme] = useState(() => {
-    return readStorage('synapse-theme') || 'dark';
+    return readEditorTheme();
   });
 
   const [output, setOutput] = useState({
@@ -31,7 +31,7 @@ function EditorPage() {
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
-    writeStorage('synapse-theme', newTheme);
+    saveEditorTheme(newTheme);
   };
 
   const handleExit = useCallback(() => {
@@ -54,7 +54,7 @@ function EditorPage() {
         />
 
         {/* Main content area */}
-        <div className={`flex flex-1 overflow-hidden p-2 gap-2 ${theme === 'dark' ? 'bg-[#0b1410]' : 'bg-slate-200/60'}`}>
+        <div className={`flex flex-1 overflow-hidden p-2 gap-2 ${theme === 'dark' ? 'bg-[#0b1410]' : 'bg-[#ebebeb]'}`}>
           {/* Sidebar */}
           <Sidebar theme={theme} />
 

@@ -51,7 +51,7 @@ export function defineSynapseThemes(monaco) {
     base: 'vs',
     inherit: true,
     rules: [
-      { token: 'keyword', foreground: '7a6400', fontStyle: 'bold' },
+      { token: 'keyword', foreground: '17643b' },
       { token: 'string', foreground: '9a4f1d' },
       { token: 'number', foreground: '5b3fb5' },
       { token: 'comment', foreground: '7c8a82', fontStyle: 'italic' },
@@ -68,8 +68,8 @@ export function defineSynapseThemes(monaco) {
       'editor.lineHighlightBorder': '#00000000',
       'editor.selectionBackground': '#f6e01673',
       'editorCursor.foreground': '#0d2a1c',
-      'editorBracketHighlight.foreground1': '#7a6400',
-      'editorBracketHighlight.foreground2': '#1f6b45',
+      'editorBracketHighlight.foreground1': '#17643b',
+      'editorBracketHighlight.foreground2': '#9a4f1d',
       'editorBracketHighlight.foreground3': '#5b3fb5',
     },
   });

@@ -137,10 +137,10 @@ function useReveal(rootRef) {
 function InviteFragment() {
   return (
     <div className="frag" data-ui style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 8%' }}>
-      <div className="ui-card" style={{ width: '100%', background: '#17241e' }}>
+      <div className="ui-card" style={{ width: '100%', background: 'var(--ed-chrome)' }}>
         <div className="ui-card-title">Invite link copied</div>
         <div className="ui-card-sub" style={{ letterSpacing: 0, marginTop: 4 }}>Anyone with this link can join DSA practice for 7 days.</div>
-        <div className="ui-card-row" style={{ background: '#0d1712' }}>
+        <div className="ui-card-row" style={{ background: 'var(--ed-bg)' }}>
           <code>synapse/room/3VNXXF?invite=eyJ0eXAiOiJyb29t…</code>
           <span className="ui-card-ok">Copied</span>
         </div>
@@ -243,13 +243,13 @@ function CardFragment({ step }) {
             <span className="ui-avatar" style={{ background: '#7dd3fc' }}>A</span>
             <span className="ui-avatar" style={{ background: '#9fe0bb' }}>K</span>
           </span>
-          <span style={{ color: '#b9c6be' }}>Riya is editing main.py</span>
+          <span style={{ color: 'var(--ed-soft)' }}>Riya is editing main.py</span>
         </div>
       )}
       {step >= 3 && (
         <div className="ui-card-row" style={{ justifyContent: 'space-between' }}>
           <code className="ui-card-out">found 58 at index 3</code>
-          <span style={{ color: '#84948b', fontSize: 12 }}>0.011 s</span>
+          <span style={{ color: 'var(--ed-muted)', fontSize: 12 }}>0.011 s</span>
         </div>
       )}
     </div>

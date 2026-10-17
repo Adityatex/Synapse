@@ -10,9 +10,9 @@ import { useEffect, useRef, useState } from 'react';
 //              cursor ("You") and their text lands as a comment on line 7.
 
 const PEERS = {
-  riya: { name: 'Riya', bg: '#f6e016', ink: '#0d2a1c' },
-  arjun: { name: 'Arjun', bg: '#7dd3fc', ink: '#062433' },
-  you: { name: 'You', bg: '#eef3ef', ink: '#0d2a1c' },
+  riya: { name: 'Riya', bg: '#f6e016', ink: '#0d2a1c', bar: '#b89c00' },
+  arjun: { name: 'Arjun', bg: '#7dd3fc', ink: '#062433', bar: '#0284c7' },
+  you: { name: 'You', bg: '#0d2a1c', ink: '#ffffff', bar: '#0d2a1c' },
 };
 
 const PRINT_LINE = 'print(two_sum([2, 7, 11, 15], 9))';
@@ -24,7 +24,7 @@ const HOLD_MS = 3600;
 function Caret({ peer, blink = false }) {
   const p = PEERS[peer];
   return (
-    <span className={`frag-caret ${blink ? 'frag-caret--blink' : ''}`} style={{ background: p.bg }} aria-hidden="true">
+    <span className={`frag-caret ${blink ? 'frag-caret--blink' : ''}`} style={{ background: p.bar }} aria-hidden="true">
       <span className="frag-caret-label" style={{ background: p.bg, color: p.ink }}>
         {p.name}
       </span>

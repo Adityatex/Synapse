@@ -152,7 +152,7 @@ function FileLockBanner({ activeFileLock, isReadOnly, lockNotice }) {
         background: isReadOnly ? 'rgba(245, 158, 11, 0.12)' : 'var(--surface-2)',
         borderBottom: `1px solid ${isReadOnly ? 'rgba(245, 158, 11, 0.35)' : 'var(--line)'}`,
         fontSize: '12px',
-        color: isReadOnly ? '#fbbf24' : 'var(--ink-soft)',
+        color: isReadOnly ? 'var(--warn-fg)' : 'var(--ink-soft)',
       }}
     >
       <span style={{ fontWeight: 700 }}>{isReadOnly ? 'Locked' : 'Lock'}</span>

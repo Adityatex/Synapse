@@ -3,7 +3,7 @@
 // to RoomSession; this store owns session chrome: theme, output, connection,
 // load/error flags, room name, invite-copy + lock notices.
 import { create } from 'zustand';
-import { readStorage, writeStorage } from '../utils/storage';
+import { readEditorTheme, saveEditorTheme } from '../utils/editorTheme';
 
 export interface OutputState {
   stdout: string;
@@ -47,11 +47,11 @@ interface RoomUiState {
 }
 
 export const useRoomUiStore = create<RoomUiState>()((set) => ({
-  theme: readStorage('synapse-theme') || 'dark',
+  theme: readEditorTheme(),
   toggleTheme: () =>
     set((s) => {
       const next = s.theme === 'dark' ? 'light' : 'dark';
-      writeStorage('synapse-theme', next);
+      saveEditorTheme(next);
       return { theme: next };
     }),
   output: INITIAL_OUTPUT,

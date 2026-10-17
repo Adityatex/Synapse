@@ -643,7 +643,7 @@ function RoomSession({ roomId }) {
         currentUser={toolbarUser}
       />
 
-      <div className={`flex flex-1 overflow-hidden p-2 gap-2 ${theme === 'dark' ? 'bg-[#0b1410]' : 'bg-slate-200/60'}`}>
+      <div className={`flex flex-1 overflow-hidden p-2 gap-2 ${theme === 'dark' ? 'bg-[#0b1410]' : 'bg-[#ebebeb]'}`}>
         <Sidebar 
           theme={theme} 
           collaborators={Object.values(presence)} 

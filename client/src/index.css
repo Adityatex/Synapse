@@ -32,6 +32,7 @@
 
   --danger: #ff6b5e;
   --danger-fg: #ff9a90;
+  --warn-fg: #fbbf24;
   --success: #5bd68a;
 
   --radius: 8px;
@@ -68,8 +69,9 @@
   --ink-soft: #3c4f45;
   --muted: #5f6b64;
 
-  --accent-fg: #6b5c00;
+  --accent-fg: #0d2a1c;
   --danger-fg: #b42318;
+  --warn-fg: #8a5300;
 
   color-scheme: light;
 }
@@ -609,22 +611,32 @@ code, pre, kbd, samp {
   color: var(--ink-soft);
 }
 
-/* Login / Signup: form on the left, the product on a tile on the right. */
+/* Login / Signup: two full-height halves. Logo, form and note share one
+   column centred in the left half; the product fills the right half. */
+.auth-brand {
+  align-self: flex-start;
+  margin-bottom: 48px;
+}
+
+.auth-page--split .auth-container {
+  justify-content: flex-start;
+}
+
+.auth-page--split .auth-card {
+  margin: auto 0;
+}
+
 @media (min-width: 1024px) {
   .auth-page--split .auth-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-    gap: 8px;
+    min-height: 100dvh;
   }
 
   .auth-page--split .auth-container {
-    max-width: none;
-    margin: 0;
-    padding: 24px var(--margin) 64px;
-  }
-
-  .auth-page--split .auth-card {
-    max-width: 440px;
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 22px 40px 40px;
   }
 }
 
@@ -638,9 +650,7 @@ code, pre, kbd, samp {
     flex-direction: column;
     justify-content: center;
     gap: 28px;
-    margin: 0 8px 8px 0;
     padding: 64px clamp(40px, 5vw, 88px);
-    border-radius: var(--radius);
     background: var(--surface-2);
   }
 }
@@ -661,18 +671,41 @@ code, pre, kbd, samp {
   color: var(--ink-soft);
 }
 
+/* Light editor palette for product fragments (previews of the editor on
+   the landing, auth and dashboard pages). Same colours as the light Monaco
+   theme in utils/monacoThemes.js, so the previews show what people get. */
+.frag, [data-ui] {
+  --ed-bg: #ffffff;
+  --ed-chrome: #f1f3f1;
+  --ed-chrome-2: #e4e8e4;
+  --ed-line: #dfe3df;
+  --ed-ink: #0d2a1c;
+  --ed-soft: #3c4f45;
+  --ed-muted: #5f6b64;
+  --ed-ln: #a4b0a9;
+  --ed-kw: #17643b;
+  --ed-str: #9a4f1d;
+  --ed-num: #5b3fb5;
+  --ed-cm: #7c8a82;
+  --ed-sel: rgba(246, 224, 22, 0.45);
+  --ed-ok: #17643b;
+  --ed-ok-bg: rgba(23, 100, 59, 0.1);
+  --ed-active-line: #f6f8f6;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    PRODUCT FRAGMENT — a static, true-to-size piece of the editor
    ═══════════════════════════════════════════════════════════════ */
 
 .frag {
+  border: 1px solid var(--ed-line);
   width: 100%;
   max-width: 560px;
   border-radius: var(--radius-lg);
-  background: #0d1712;
+  background: var(--ed-bg);
   overflow: hidden;
   font-size: 13px;
-  color: #eef3ef;
+  color: var(--ed-ink);
 }
 
 .frag-tabs {
@@ -681,7 +714,7 @@ code, pre, kbd, samp {
   gap: 2px;
   height: 38px;
   padding: 0 8px;
-  background: #0a120e;
+  background: var(--ed-chrome);
 }
 
 .frag-tab {
@@ -691,13 +724,13 @@ code, pre, kbd, samp {
   height: 30px;
   padding: 0 12px;
   border-radius: 6px 6px 0 0;
-  color: #84948b;
+  color: var(--ed-muted);
   font-size: 13px;
 }
 
 .frag-tab--active {
-  background: #0d1712;
-  color: #eef3ef;
+  background: var(--ed-bg);
+  color: var(--ed-ink);
 }
 
 .frag-peers {
@@ -705,7 +738,7 @@ code, pre, kbd, samp {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #b9c6be;
+  color: var(--ed-soft);
   font-size: 12.5px;
 }
 
@@ -737,21 +770,21 @@ code, pre, kbd, samp {
   width: 44px;
   padding-right: 16px;
   text-align: right;
-  color: #3f5249;
+  color: var(--ed-ln);
   flex-shrink: 0;
   user-select: none;
 }
 
 .frag-line--active {
-  background: rgba(246, 224, 22, 0.05);
+  background: var(--ed-active-line);
 }
 
-.frag-kw { color: #f6e016; }
-.frag-fn { color: #9fe0bb; }
-.frag-str { color: #e8c6a0; }
-.frag-num { color: #c8b6ff; }
-.frag-cm { color: #5f7a6c; }
-.frag-sel { background: rgba(125, 211, 252, 0.22); border-radius: 2px; }
+.frag-kw { color: var(--ed-kw); }
+.frag-fn { color: var(--ed-ink); font-weight: 500; }
+.frag-str { color: var(--ed-str); }
+.frag-num { color: var(--ed-num); }
+.frag-cm { color: var(--ed-cm); font-style: italic; }
+.frag-sel { background: var(--ed-sel); border-radius: 2px; }
 
 .frag-caret {
   position: relative;
@@ -781,12 +814,12 @@ code, pre, kbd, samp {
   align-items: baseline;
   gap: 12px;
   padding: 12px 16px;
-  background: #0a120e;
+  background: var(--ed-chrome);
   font-size: 13px;
 }
 
 .frag-output-label {
-  color: #84948b;
+  color: var(--ed-muted);
 }
 
 .frag { position: relative; }
@@ -808,8 +841,8 @@ code, pre, kbd, samp {
   right: 12px;
   padding: 3px 9px;
   border-radius: 6px;
-  background: #17241e;
-  color: #b9c6be;
+  background: var(--ed-chrome);
+  color: var(--ed-soft);
   font-size: 12px;
   pointer-events: none;
 }
@@ -821,13 +854,13 @@ code, pre, kbd, samp {
 }
 
 .frag-output-running {
-  color: #84948b;
+  color: var(--ed-muted);
   font-size: 13px;
 }
 
 .frag-output-value {
   font-family: var(--font-mono);
-  color: #5bd68a;
+  color: var(--ed-ok);
 }
 
 /* ═══════════════════════════════════════════════════════════════

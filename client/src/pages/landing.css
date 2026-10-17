@@ -150,7 +150,7 @@
   aspect-ratio: 16 / 9;
   border-radius: 4px;
   overflow: hidden;
-  background: #0d1712;
+  background: var(--ed-bg);
 }
 
 .lp-frame img {
@@ -176,8 +176,8 @@
   right: 12px;
   padding: 4px 10px;
   border-radius: 6px;
-  background: rgba(10, 18, 14, 0.82);
-  color: #eef3ef;
+  background: rgba(13, 42, 28, 0.86);
+  color: var(--ed-ink);
   font-size: 13px;
 }
 
@@ -361,9 +361,10 @@
 
 /* A room's top bar, at true size (data-ui) */
 .ui-roombar {
+  border: 1px solid var(--ed-line);
   border-radius: var(--radius-lg);
-  background: #111c17;
-  color: #eef3ef;
+  background: var(--ed-bg);
+  color: var(--ed-ink);
   font-size: 13px;
   overflow: hidden;
 }
@@ -400,7 +401,7 @@
   font-weight: 600;
 }
 
-.ui-roombar-name span { color: #84948b; font-size: 12px; }
+.ui-roombar-name span { color: var(--ed-muted); font-size: 12px; }
 
 .ui-roombar-spacer { flex: 1; }
 
@@ -411,8 +412,8 @@
   height: 30px;
   padding: 0 12px;
   border-radius: 6px;
-  background: #17241e;
-  color: #eef3ef;
+  background: var(--ed-chrome);
+  color: var(--ed-ink);
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
@@ -425,13 +426,13 @@
   align-items: center;
   gap: 16px;
   padding: 12px 16px 14px;
-  background: #0d1712;
+  background: var(--ed-bg);
   font-family: var(--font-mono);
   font-size: 13px;
-  color: #e8c6a0;
+  color: var(--ed-str);
 }
 
-.ui-roombar-file span:first-child { color: #84948b; font-family: var(--font-sans); }
+.ui-roombar-file span:first-child { color: var(--ed-muted); font-family: var(--font-sans); }
 
 /* ── Features: one panel with margin notes ──────────────── */
 
@@ -516,13 +517,14 @@
 
 /* The room sidebar, at true size (data-ui) */
 .ui-panel {
+  border: 1px solid var(--ed-line);
   width: 380px;
   max-width: 100%;
   min-height: 680px;
   padding: 10px;
   border-radius: var(--radius-lg);
-  background: #111c17;
-  color: #eef3ef;
+  background: var(--ed-bg);
+  color: var(--ed-ink);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -537,13 +539,13 @@
 
 .ui-part + .ui-part { margin-top: 6px; }
 
-.ui-part.is-active { outline-color: #f6e016; background: #15211b; }
+.ui-part.is-active { outline-color: var(--ed-ink); background: var(--ed-chrome); }
 
 .ui-part-title {
   margin-bottom: 8px;
   font-size: 11px;
   font-weight: 600;
-  color: #84948b;
+  color: var(--ed-muted);
 }
 
 .ui-row {
@@ -556,15 +558,15 @@
 }
 
 .ui-row--indent { padding-left: 22px; }
-.ui-row--selected { background: #1f2e27; }
-.ui-row-muted { color: #84948b; }
+.ui-row--selected { background: var(--ed-chrome-2); }
+.ui-row-muted { color: var(--ed-muted); }
 
 .ui-lock {
   margin-left: auto;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(91, 214, 138, 0.14);
-  color: #7ee2a6;
+  background: var(--ed-ok-bg);
+  color: var(--ed-ok);
   font-size: 11px;
   font-weight: 600;
 }
@@ -584,7 +586,7 @@
 .ui-msg {
   padding: 8px 10px;
   border-radius: 8px;
-  background: #17241e;
+  background: var(--ed-chrome);
 }
 
 .ui-msg + .ui-msg { margin-top: 6px; }
@@ -597,16 +599,16 @@
   font-weight: 600;
 }
 
-.ui-msg-head span { color: #84948b; font-weight: 400; font-size: 12px; }
+.ui-msg-head span { color: var(--ed-muted); font-weight: 400; font-size: 12px; }
 
-.ui-mention { color: #f6e016; font-weight: 600; }
+.ui-mention { padding: 0 3px; border-radius: 3px; background: rgba(246, 224, 22, 0.55); color: var(--ed-ink); font-weight: 600; }
 
 .ui-reaction {
   display: inline-flex;
   margin-top: 6px;
   padding: 1px 8px;
   border-radius: 999px;
-  background: #1f2e27;
+  background: var(--ed-chrome-2);
   font-size: 12px;
 }
 
@@ -615,9 +617,9 @@
   align-items: center;
   height: 34px;
   padding: 0 10px;
-  border: 1px solid rgba(214, 232, 221, 0.16);
+  border: 1px solid var(--ed-line);
   border-radius: 6px;
-  color: #84948b;
+  color: var(--ed-muted);
 }
 
 .ui-actions { display: flex; gap: 8px; margin-top: 8px; }
@@ -690,8 +692,8 @@
   width: 260px;
   padding: 14px;
   border-radius: var(--radius-lg);
-  background: #111c17;
-  color: #eef3ef;
+  background: var(--ed-bg);
+  color: var(--ed-ink);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -701,7 +703,7 @@
   font-weight: 600;
 }
 
-.ui-card-sub { color: #84948b; font-size: 12px; letter-spacing: 0.04em; }
+.ui-card-sub { color: var(--ed-muted); font-size: 12px; letter-spacing: 0.04em; }
 
 .ui-card-row {
   display: flex;
@@ -710,7 +712,7 @@
   margin-top: 10px;
   padding: 8px 10px;
   border-radius: 8px;
-  background: #17241e;
+  background: var(--ed-chrome);
 }
 
 .ui-card-row code {
@@ -718,12 +720,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  color: #b9c6be;
+  color: var(--ed-soft);
 }
 
-.ui-card-ok { margin-left: auto; color: #7ee2a6; font-size: 12px; font-weight: 600; }
+.ui-card-ok { margin-left: auto; color: var(--ed-ok); font-size: 12px; font-weight: 600; }
 
-.ui-card-out { font-family: var(--font-mono); color: #7ee2a6; font-size: 12.5px; }
+.ui-card-out { font-family: var(--font-mono); color: var(--ed-ok); font-size: 12.5px; }
 
 .ui-faces { display: flex; gap: 4px; }
 
@@ -855,38 +857,38 @@
   max-width: 100%;
   padding: 28px;
   border-radius: var(--radius-lg);
-  background: #111c17;
-  color: #eef3ef;
+  background: var(--ed-bg);
+  color: var(--ed-ink);
   box-shadow: 0 24px 64px rgba(13, 42, 28, 0.35);
 }
 
 .ui-dialog-title { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; }
 
-.ui-dialog-sub { margin-top: 6px; color: #b9c6be; font-size: 15px; }
+.ui-dialog-sub { margin-top: 6px; color: var(--ed-soft); font-size: 15px; }
 
 .ui-dialog label {
   display: block;
   margin: 22px 0 8px;
   font-size: 14px;
   font-weight: 500;
-  color: #b9c6be;
+  color: var(--ed-soft);
 }
 
 .ui-dialog input {
   width: 100%;
   height: 48px;
   padding: 0 14px;
-  border: 1px solid rgba(214, 232, 221, 0.16);
+  border: 1px solid var(--ed-line);
   border-radius: var(--radius);
-  background: #0b1410;
-  color: #eef3ef;
+  background: var(--ed-chrome);
+  color: var(--ed-ink);
   font: inherit;
   font-size: 16px;
   outline: none;
   transition: border-color 0.15s ease;
 }
 
-.ui-dialog input:focus { border-color: #f6e016; }
+.ui-dialog input:focus { border-color: var(--ed-ink); }
 
 .ui-dialog .lp-btn { width: 100%; height: 48px; margin-top: 16px; font-size: 16px; }
 

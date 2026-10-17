@@ -150,7 +150,8 @@
   aspect-ratio: 16 / 9;
   border-radius: 4px;
   overflow: hidden;
-  background: var(--ed-bg);
+  border: 1px solid #dfe3df;
+  background: #ffffff;
 }
 
 .lp-frame img {
@@ -176,9 +177,10 @@
   right: 12px;
   padding: 4px 10px;
   border-radius: 6px;
-  background: rgba(13, 42, 28, 0.86);
-  color: var(--ed-ink);
+  background: #0d2a1c;
+  color: #ffffff;
   font-size: 13px;
+  font-weight: 500;
 }
 
 .lp-hero-lead {

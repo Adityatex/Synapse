@@ -45,7 +45,9 @@ services:
       - /app/server/node_modules
       - /app/packages/shared/node_modules
       - /app/packages/shared/dist
-    command: pnpm dev
+    # Polling: file events from a Windows/macOS bind mount don't reach the
+    # container, so plain nodemon never sees server edits.
+    command: pnpm exec nodemon --legacy-watch server.js
 
   mongo:
     image: mongo:7

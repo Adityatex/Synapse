@@ -18,5 +18,5 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @synapse/shared build
+      - run: pnpm --filter @synapse/shared --filter @synapse/redis build
       - run: pnpm exec turbo run build lint typecheck test

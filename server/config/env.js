@@ -58,6 +58,14 @@ const envSchema = z
       .refine((v) => !v || /^mongodb(\+srv)?:\/\//.test(v), {
         message: 'MONGODB_URI must start with mongodb:// or mongodb+srv://',
       }),
+    REDIS_URL: z
+      .string()
+      .trim()
+      .optional()
+      .default('')
+      .refine((v) => !v || /^rediss?:\/\//.test(v), {
+        message: 'REDIS_URL must start with redis:// or rediss://',
+      }),
     CORS_ORIGIN: commaSeparatedOrigins,
     CLIENT_URL: commaSeparatedOrigins,
     LOG_LEVEL: z

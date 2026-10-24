@@ -5,11 +5,13 @@ RUN corepack enable
 WORKDIR /app
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
 COPY packages/shared ./packages/shared
+COPY packages/redis/package.json ./packages/redis/package.json
 COPY server/package.json ./server/package.json
 RUN pnpm install --filter server... --frozen-lockfile=false
 COPY server ./server
 COPY packages/shared ./packages/shared
-RUN pnpm --filter @synapse/shared build
+COPY packages/redis ./packages/redis
+RUN pnpm --filter @synapse/shared --filter @synapse/redis build
 WORKDIR /app/server
 EXPOSE 5000
 CMD ["pnpm", "dev"]

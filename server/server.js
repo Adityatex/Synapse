@@ -37,6 +37,7 @@ try {
 
 const { logger } = require('./lib/logger');
 const { initSentry, captureException, getRelease } = require('./lib/sentry');
+const { initRedis, redisHealth, closeRedis } = require('./lib/redis');
 
 initSentry();
 
@@ -150,11 +151,15 @@ app.use(express.json({ limit: '1mb' }));
 // P0-02: global per-IP guard (300/min). Specific routes add stricter limits.
 app.use(globalLimiter);
 
-app.get('/api/health', (req, res) => {
+// Redis being down degrades the features that use it, not the process, so it is
+// reported here but never turns the status into a failure (uptime checks stay green).
+app.get('/api/health', async (req, res) => {
+  const redis = await redisHealth();
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    redis,
     release: getRelease(),
     uptimeSec: Math.round(process.uptime()),
     requestId: req.id,
@@ -279,6 +284,7 @@ mongoose.connection.on('error', (err) => {
 });
 
 if (require.main === module) {
+  initRedis();
   connectToMongoWithRetry().catch((err) => {
     logger.error({ err: err.message }, 'MongoDB bootstrap error');
     startServerIfNeeded();
@@ -302,6 +308,8 @@ async function shutdown(signal) {
   } catch (error) {
     logger.error({ err: error.message }, 'MongoDB close error during shutdown');
   }
+
+  await closeRedis();
 
   server.close(() => {
     process.exit(0);

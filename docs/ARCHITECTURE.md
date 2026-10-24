@@ -7,7 +7,7 @@
 ## 1. Layout
 
 ```
-Synapse-main/
+Synapse/
 ├── packages/shared/        # @synapse/shared — zod contracts + TS types (P1-04)
 │   └── src/{http,socket,envelope}.ts
 ├── packages/redis/         # @synapse/redis — ioredis factory + health check (P2-02)

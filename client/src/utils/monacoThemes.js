@@ -1,0 +1,76 @@
+// Editor colour themes built from the app palette (see index.css tokens).
+export const MONACO_THEME = { dark: 'synapse-dark', light: 'synapse-light' };
+
+export function defineSynapseThemes(monaco) {
+  monaco.editor.defineTheme(MONACO_THEME.dark, {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'keyword', foreground: 'f6e016' },
+      { token: 'string', foreground: 'e8c6a0' },
+      { token: 'number', foreground: 'c8b6ff' },
+      { token: 'comment', foreground: '5f7a6c', fontStyle: 'italic' },
+      { token: 'type', foreground: '9fe0bb' },
+      { token: 'type.identifier', foreground: '9fe0bb' },
+      { token: 'delimiter', foreground: 'b9c6be' },
+      { token: 'operator', foreground: 'b9c6be' },
+      { token: 'tag', foreground: 'f6e016' },
+      { token: 'attribute.name', foreground: '9fe0bb' },
+      { token: 'attribute.value', foreground: 'e8c6a0' },
+    ],
+    colors: {
+      'editor.background': '#0d1712',
+      'editor.foreground': '#eef3ef',
+      'editorGutter.background': '#0d1712',
+      'editorLineNumber.foreground': '#3f5249',
+      'editorLineNumber.activeForeground': '#b9c6be',
+      'editor.lineHighlightBackground': '#111c17',
+      'editor.lineHighlightBorder': '#00000000',
+      'editor.selectionBackground': '#f6e01633',
+      'editor.inactiveSelectionBackground': '#f6e0161f',
+      'editorCursor.foreground': '#f6e016',
+      'editorIndentGuide.background1': '#17241e',
+      'editorIndentGuide.activeBackground1': '#2a3b33',
+      'editorWhitespace.foreground': '#1f2e27',
+      'editorBracketMatch.background': '#f6e0161a',
+      'editorBracketMatch.border': '#f6e01680',
+      'editorBracketHighlight.foreground1': '#f6e016',
+      'editorBracketHighlight.foreground2': '#9fe0bb',
+      'editorBracketHighlight.foreground3': '#7dd3fc',
+      'minimap.background': '#0d1712',
+      'scrollbarSlider.background': '#d6e8dd1a',
+      'scrollbarSlider.hoverBackground': '#d6e8dd2e',
+      'editorWidget.background': '#17241e',
+      'editorSuggestWidget.background': '#17241e',
+      'editorSuggestWidget.selectedBackground': '#1f2e27',
+      'editorHoverWidget.background': '#17241e',
+    },
+  });
+
+  monaco.editor.defineTheme(MONACO_THEME.light, {
+    base: 'vs',
+    inherit: true,
+    rules: [
+      { token: 'keyword', foreground: '17643b' },
+      { token: 'string', foreground: '9a4f1d' },
+      { token: 'number', foreground: '5b3fb5' },
+      { token: 'comment', foreground: '7c8a82', fontStyle: 'italic' },
+      { token: 'type', foreground: '1f6b45' },
+      { token: 'type.identifier', foreground: '1f6b45' },
+      { token: 'delimiter', foreground: '3c4f45' },
+    ],
+    colors: {
+      'editor.background': '#ffffff',
+      'editor.foreground': '#0d2a1c',
+      'editorLineNumber.foreground': '#a4b0a9',
+      'editorLineNumber.activeForeground': '#3c4f45',
+      'editor.lineHighlightBackground': '#f3f5f3',
+      'editor.lineHighlightBorder': '#00000000',
+      'editor.selectionBackground': '#f6e01673',
+      'editorCursor.foreground': '#0d2a1c',
+      'editorBracketHighlight.foreground1': '#17643b',
+      'editorBracketHighlight.foreground2': '#9a4f1d',
+      'editorBracketHighlight.foreground3': '#5b3fb5',
+    },
+  });
+}

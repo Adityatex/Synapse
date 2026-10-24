@@ -20,7 +20,7 @@ function LinkifyText({ text }) {
             href={part}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-400 hover:underline break-all"
+            className="text-accent-fg hover:underline break-all"
           >
             {part}
           </a>
@@ -41,7 +41,7 @@ function RichText({ text }) {
     <>
       {segments.map((seg, i) =>
         seg.startsWith('@') ? (
-          <span key={i} className="bg-indigo-500/20 text-indigo-400 font-semibold rounded px-0.5">
+          <span key={i} className="bg-surface-3 text-accent-fg font-semibold rounded px-0.5">
             {seg}
           </span>
         ) : (
@@ -75,7 +75,7 @@ function CodeSnippet({ code, theme }) {
         </button>
       </div>
       <pre className={`p-2.5 text-[12px] font-mono overflow-x-auto ${
-        theme === 'dark' ? 'bg-[#0d1117] text-slate-300' : 'bg-slate-100 text-slate-800'
+        theme === 'dark' ? 'bg-[#0d1712] text-slate-300' : 'bg-slate-100 text-slate-800'
       }`}>
         <code>{code}</code>
       </pre>
@@ -112,7 +112,7 @@ const QUICK_EMOJIS = ['👍', '🔥', '✅', '❤️', '😂', '👀', '🎉', '
 function EmojiPicker({ onSelect, theme }) {
   return (
     <div className={`flex gap-1 p-1.5 rounded-lg shadow-lg border ${
-      theme === 'dark' ? 'bg-[#1a1f2e] border-white/10' : 'bg-white border-slate-200'
+      theme === 'dark' ? 'bg-[#17241e] border-white/10' : 'bg-white border-slate-200'
     }`}>
       {QUICK_EMOJIS.map(e => (
         <button key={e} onClick={() => onSelect(e)}
@@ -132,7 +132,7 @@ function MentionDropdown({ users, filter, onSelect, theme }) {
   if (filtered.length === 0) return null;
   return (
     <div className={`absolute bottom-full left-0 mb-1 w-48 rounded-lg shadow-lg border overflow-hidden z-20 ${
-      theme === 'dark' ? 'bg-[#1a1f2e] border-white/10' : 'bg-white border-slate-200'
+      theme === 'dark' ? 'bg-[#17241e] border-white/10' : 'bg-white border-slate-200'
     }`}>
       {filtered.slice(0, 5).map(u => (
         <button key={u.userId || u.username} onClick={() => onSelect(u.username)}
@@ -353,11 +353,11 @@ export default function ChatPanel({
 
             <div className={`px-3 py-2 rounded-xl text-xs break-words relative ${
               isDeleted
-                ? 'italic opacity-50 ' + (theme === 'dark' ? 'bg-[#1e232b] text-slate-400' : 'bg-slate-100 text-slate-500')
+                ? 'italic opacity-50 ' + (theme === 'dark' ? 'bg-[#17241e] text-slate-400' : 'bg-slate-100 text-slate-500')
                 : isMe
-                  ? 'bg-indigo-600 text-white rounded-br-sm'
+                  ? 'bg-accent text-accent-ink rounded-br-sm'
                   : theme === 'dark'
-                    ? 'bg-[#1e232b] text-slate-200 border-white/5 border rounded-bl-sm'
+                    ? 'bg-[#17241e] text-slate-200 border-white/5 border rounded-bl-sm'
                     : 'bg-white text-slate-800 border shadow-sm border-slate-200 rounded-bl-sm'
             }`}>
               {isDeleted ? (
@@ -370,7 +370,7 @@ export default function ChatPanel({
             {/* Action buttons (on hover) */}
             {isHovered && !isDeleted && !searchMode && (
               <div className={`absolute -top-6 ${isMe ? 'right-0' : 'left-0'} flex gap-0.5 rounded-lg p-0.5 shadow-lg border z-20 ${
-                theme === 'dark' ? 'bg-[#1a1f2e] border-white/10' : 'bg-white border-slate-200'
+                theme === 'dark' ? 'bg-[#17241e] border-white/10' : 'bg-white border-slate-200'
               }`}>
                 <button onClick={() => setActiveEmojiPicker(activeEmojiPicker === msgKey ? null : msgKey)}
                   className="p-1 rounded hover:bg-white/10 cursor-pointer" title="React">
@@ -421,7 +421,7 @@ export default function ChatPanel({
                       onClick={() => getSocket?.()?.emit('react-chat-message', { messageId: msg._id, emoji })}
                       className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] border cursor-pointer transition-colors ${
                         iReacted
-                          ? 'border-indigo-500/50 bg-indigo-500/10'
+                          ? 'border-accent/50 bg-surface-3'
                           : theme === 'dark' ? 'border-white/10 bg-white/5 hover:bg-white/10' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
                       }`}
                       title={reactionUsers.map(u => u.username).join(', ')}
@@ -453,7 +453,7 @@ export default function ChatPanel({
               onKeyDown={e => e.key === 'Enter' && handleSearchSubmit()}
               placeholder="Search messages..."
               className={`flex-1 text-xs rounded px-2 py-1 border focus:outline-none ${
-                theme === 'dark' ? 'bg-[#0d1117] border-white/10 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'
+                theme === 'dark' ? 'bg-[#0d1712] border-white/10 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'
               }`}
               autoFocus
             />
@@ -545,7 +545,7 @@ export default function ChatPanel({
         <div className={`px-3 py-1.5 border-t ${border} flex items-center gap-2 text-[10px] ${textMuted}`}>
           {replyTo && (
             <>
-              <Reply size={11} className="text-indigo-400 shrink-0" />
+              <Reply size={11} className="text-accent-fg shrink-0" />
               <span className="truncate">Replying to <span className="font-semibold">{replyTo.senderName}</span>: {replyTo.content?.slice(0, 60)}</span>
             </>
           )}
@@ -596,8 +596,8 @@ export default function ChatPanel({
             }
             className={`w-full resize-none rounded-lg border ${
               theme === 'dark'
-                ? 'bg-[#0d1117] border-white/10 text-slate-200 focus:border-indigo-500'
-                : 'bg-slate-50 border-slate-300 text-slate-800 focus:border-indigo-500'
+                ? 'bg-[#0d1712] border-white/10 text-slate-200 focus:border-accent/50'
+                : 'bg-slate-50 border-slate-300 text-slate-800 focus:border-accent/50'
             } p-2.5 pr-10 text-xs focus:outline-none custom-scrollbar`}
             rows="2"
           />
@@ -606,7 +606,7 @@ export default function ChatPanel({
             disabled={!inputValue.trim()}
             className={`absolute right-2 bottom-3 p-1.5 rounded-md transition-colors ${
               inputValue.trim()
-                ? 'bg-indigo-600 text-white hover:bg-indigo-500 cursor-pointer'
+                ? 'bg-accent text-accent-ink hover:bg-accent-hover cursor-pointer'
                 : 'bg-transparent text-slate-400 cursor-not-allowed'
             }`}
           >

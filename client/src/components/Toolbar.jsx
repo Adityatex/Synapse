@@ -100,11 +100,11 @@ export default function Toolbar({
         <div className="w-[312px] flex items-center shrink-0">
           <Link to="/" className="flex items-center hover:opacity-80 transition-opacity">
             <div className="w-12 flex items-center justify-center shrink-0">
-              <div className="flex w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded drop-shadow-[0_0_12px_rgba(99,102,241,0.35)] items-center justify-center">
-                <SynapseLogo size={14} color="#ffffff" nodeColor="#ffffff" />
+              <div className="flex w-7 h-7 rounded-md bg-accent items-center justify-center">
+                <SynapseLogo size={18} color="#0d2a1c" nodeColor="#0d2a1c" />
               </div>
             </div>
-            <span className={`ml-1 font-black uppercase tracking-[-0.04em] ${theme === 'dark' ? 'text-white' : 'text-slate-800'} text-sm`} style={{ fontFamily: "'Sora', 'Inter', sans-serif" }}>SYNAPSE</span>
+            <span className={`ml-1 font-semibold tracking-[-0.01em] ${theme === 'dark' ? 'text-white' : 'text-slate-800'} text-[15px]`}>Synapse</span>
           </Link>
           <Link 
             to="/dashboard"
@@ -122,14 +122,14 @@ export default function Toolbar({
           <button 
             onClick={handleRun}
             disabled={isRunning || !activeFile}
-            className={`flex items-center gap-2 px-3 py-1 ${theme === 'dark' ? 'bg-white/5 hover:bg-white/10' : 'bg-slate-100 hover:bg-slate-200'} rounded-md cursor-pointer transition-colors border ${t.border} group disabled:opacity-50`}
+            className="flex items-center gap-2 h-8 px-3.5 bg-accent hover:bg-accent-hover text-accent-ink rounded-md cursor-pointer transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isRunning ? (
-              <div className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+              <div className="w-3.5 h-3.5 border-2 border-accent-ink/30 border-t-accent-ink rounded-full animate-spin" />
             ) : (
-              <Play size={14} className="text-emerald-500 fill-emerald-500 group-hover:scale-110 transition-transform" />
+              <Play size={14} className="fill-current" />
             )}
-            <span className={`text-xs font-medium ${theme === 'dark' ? 'text-emerald-50' : 'text-emerald-700'}`}>
+            <span className="text-[13px] font-semibold">
               {isRunning ? 'Running...' : 'Run'}
             </span>
           </button>
@@ -141,13 +141,13 @@ export default function Toolbar({
               className={`flex items-center gap-2 px-3 py-1 ${theme === 'dark' ? 'bg-white/5 hover:bg-white/10' : 'bg-slate-100 hover:bg-slate-200'} rounded-md cursor-pointer transition-colors border ${t.border} group`}
             >
               {saveStatus === 'saving' ? (
-                <div className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                <div className="w-3.5 h-3.5 border-2 border-accent/50 border-t-transparent rounded-full animate-spin" />
               ) : saveStatus === 'saved' ? (
-                <Check size={14} className="text-indigo-500" />
+                <Check size={14} className="text-accent-fg" />
               ) : (
-                <CloudUpload size={14} className="text-indigo-500 group-hover:scale-110 transition-transform" />
+                <CloudUpload size={14} className="text-ink-soft" />
               )}
-              <span className={`text-xs font-medium ${saveStatus === 'saved' ? 'text-indigo-500' : theme === 'dark' ? 'text-indigo-50' : 'text-indigo-700'}`}>
+              <span className={`text-xs font-medium ${saveStatus === 'saved' ? 'text-accent-fg' : 'text-ink'}`}>
                 {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Version Saved' : 'Save Version'}
               </span>
             </button>
@@ -158,7 +158,7 @@ export default function Toolbar({
               <span>{currentLang.name}</span>
               <ChevronDown size={12} className={t.textMuted} />
             </button>
-            <div className={`absolute top-[calc(100%-8px)] left-0 mt-2 w-32 ${theme === 'dark' ? 'bg-[#161b22]' : 'bg-white'} border ${t.border} rounded-md shadow-xl hidden group-hover:block overflow-hidden animate-in fade-in zoom-in-95 duration-100`}>
+            <div className={`absolute top-[calc(100%-8px)] left-0 mt-2 w-32 ${theme === 'dark' ? 'bg-[#111c17]' : 'bg-white'} border ${t.border} rounded-md shadow-xl hidden group-hover:block overflow-hidden animate-in fade-in zoom-in-95 duration-100`}>
               {LANGUAGES.map(lang => (
                 <div 
                   key={lang.id}
@@ -170,7 +170,7 @@ export default function Toolbar({
                       renameFile(activeFile.id, newName);
                     }
                   }}
-                  className="px-3 py-2 hover:bg-indigo-600 hover:text-white text-xs cursor-pointer transition-colors"
+                  className="px-3 py-2 hover:bg-accent-hover hover:text-accent-ink text-xs cursor-pointer transition-colors"
                 >
                   {lang.name}
                 </div>
@@ -182,24 +182,24 @@ export default function Toolbar({
           <div className="relative">
             <button 
               onClick={() => setIsStdinOpen(!isStdinOpen)}
-              className={`flex items-center gap-2 px-3 py-1 rounded-md border transition-colors text-xs cursor-pointer ${isStdinOpen ? 'bg-indigo-600/20 border-indigo-500 text-indigo-500' : theme === 'dark' ? 'bg-white/5 border-white/5 hover:bg-white/10 text-slate-300' : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'}`}
+              className={`flex items-center gap-2 px-3 py-1 rounded-md border transition-colors text-xs cursor-pointer ${isStdinOpen ? 'bg-surface-3 border-accent/50 text-accent-fg' : theme === 'dark' ? 'bg-white/5 border-white/5 hover:bg-white/10 text-slate-300' : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'}`}
             >
               <Keyboard size={14} />
               <span>stdin</span>
             </button>
 
             {isStdinOpen && (
-              <div className={`absolute top-full left-0 mt-1 w-72 ${theme === 'dark' ? 'bg-[#161b22]' : 'bg-white'} border ${t.border} rounded-md shadow-2xl p-3 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-150`}>
+              <div className={`absolute top-full left-0 mt-1 w-72 ${theme === 'dark' ? 'bg-[#111c17]' : 'bg-white'} border ${t.border} rounded-md shadow-2xl p-3 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-150`}>
                 <div className={`flex justify-between items-center text-[11px] font-bold ${t.textMuted} uppercase`}>
                   Standard Input
-                  <X size={12} className="cursor-pointer hover:text-indigo-500" onClick={() => setIsStdinOpen(false)} />
+                  <X size={12} className="cursor-pointer hover:text-accent-fg" onClick={() => setIsStdinOpen(false)} />
                 </div>
                 <textarea 
                   autoFocus
                   value={stdinValue}
                   onChange={(e) => setStdinValue(e.target.value)}
                   placeholder="Enter inputs here..."
-                  className={`w-full h-32 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-slate-50'} border ${t.border} rounded p-2 text-xs font-mono focus:outline-none focus:border-indigo-500 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'} resize-none`}
+                  className={`w-full h-32 ${theme === 'dark' ? 'bg-[#0d1712]' : 'bg-slate-50'} border ${t.border} rounded p-2 text-xs font-mono focus:outline-none focus:border-accent/50 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'} resize-none`}
                 />
               </div>
             )}
@@ -218,18 +218,18 @@ export default function Toolbar({
         </button>
 
         {showRoomControls && (
-          <div className={`hidden lg:flex items-center gap-3 px-3 py-1 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-slate-100'} rounded border ${t.border}`}>
+          <div className="hidden lg:flex items-center gap-3 h-9 pl-3 pr-1.5 bg-surface-1 rounded-md">
             <div className="flex flex-col items-start leading-tight">
-              <span className={`text-[11px] font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'} truncate max-w-[150px] uppercase tracking-wide`}>
+              <span className="text-[13px] font-semibold text-ink truncate max-w-[180px]">
                 {roomName || 'Untitled Project'}
               </span>
-              <span className={`text-[10px] ${t.textMuted} font-mono uppercase tracking-tighter`}>
-                ID: {roomId}
+              <span className="text-[11px] text-muted tracking-[0.06em] tabular-nums">
+                {roomId}
               </span>
             </div>
             <button 
               onClick={onCopyInvite}
-              className={`ml-1 p-1 hover:bg-white/5 rounded cursor-pointer transition-colors ${t.textMuted} hover:text-indigo-500`}
+              className={`ml-1 p-1 hover:bg-white/5 rounded cursor-pointer transition-colors ${t.textMuted} hover:text-accent-fg`}
               title="Copy invite link"
             >
               {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
@@ -239,7 +239,7 @@ export default function Toolbar({
         {showRoomControls && (
           <button 
             onClick={onCopyInvite}
-            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded cursor-pointer text-xs font-medium transition-all shadow-lg shadow-indigo-900/20"
+            className="flex items-center gap-2 h-8 px-3 bg-surface-2 hover:bg-surface-3 text-ink rounded-md cursor-pointer text-[13px] font-medium transition-colors"
           >
             <Share2 size={14} />
             Invite

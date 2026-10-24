@@ -25,7 +25,7 @@ describe('P0-05: helmet + restricted JSON body', () => {
   it('server.js uses helmet and a restrictive json limit', () => {
     const src = read('server.js');
     assert.ok(src.includes("require('helmet')"), 'helmet must be required');
-    assert.ok(src.includes('app.use(helmet('), 'helmet middleware must be used');
+    assert.ok(/app\.use\(\s*helmet\(/.test(src), 'helmet middleware must be used');
     assert.ok(!src.includes("limit: '5mb'"), '5mb body limit must be gone');
     assert.ok(/express\.json\(\{\s*limit:\s*'1mb'\s*\}\)/.test(src), 'json limit should be 1mb');
   });

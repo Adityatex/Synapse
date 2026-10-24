@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { isAuthenticated, getAuthSession, getUserFromToken } from '../utils/auth';
 import * as authService from '../services/authService';
 import { AuthContext } from './authContextInstance';
+import { consumeReturnTo } from '../utils/returnTo';
 
 // Read any existing session synchronously so the first render already knows
 // who the user is (no setState-in-effect, no logged-out flash).
@@ -27,7 +28,7 @@ export function AuthProvider({ children }) {
     async (email, otp) => {
       const data = await authService.verifySignupOtp(email, otp);
       setUser(data.user);
-      navigate('/dashboard');
+      navigate(consumeReturnTo());
       return data;
     },
     [navigate]
@@ -37,7 +38,7 @@ export function AuthProvider({ children }) {
     async (email, otp) => {
       const data = await authService.verifyLoginOtp(email, otp);
       setUser(data.user);
-      navigate('/dashboard');
+      navigate(consumeReturnTo());
       return data;
     },
     [navigate]

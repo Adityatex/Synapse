@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const pinoHttp = require('pino-http');
 const http = require('http');
+const fs = require('fs');
 const path = require('path');
 const dns = require('dns');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
@@ -55,8 +56,26 @@ const allowedOrigins = (process.env.CORS_ORIGIN || process.env.CLIENT_URL || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
-// P0-05: helmet with sane defaults.
-app.use(helmet());
+// P0-05: helmet with sane defaults, plus a CSP that allows what the bundled
+// client needs when the server serves it: Monaco loads from jsdelivr (scripts,
+// styles, fonts, blob/data workers), Google Fonts, and same-origin websockets.
+// upgrade-insecure-requests is off so the production build can also be tried
+// over plain http://localhost (Fly and Cloudflare Tunnel already force https).
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        scriptSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
+        fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+        connectSrc: ["'self'", 'ws:', 'wss:', 'https://cdn.jsdelivr.net', 'https://*.sentry.io'],
+        workerSrc: ["'self'", 'blob:', 'data:'],
+        upgradeInsecureRequests: null,
+      },
+    },
+  })
+);
 
 // P0-07 + P0-09: correlation ID first, then structured request logging.
 app.use(requestIdMiddleware);
@@ -66,6 +85,29 @@ app.use(
     customProps: (req) => ({ requestId: req.id }),
   })
 );
+// Serve the built client (client/dist) from the same origin when it exists —
+// this is how the production image runs (Fly.io, Cloudflare Tunnel demo).
+// Mounted before CORS and the global rate limit so asset loads don't count
+// against the per-IP API budget. Unknown non-API GETs fall back to index.html
+// for client-side routing.
+const CLIENT_DIST_DIR = process.env.CLIENT_DIST_DIR || path.join(__dirname, '..', 'client', 'dist');
+const CLIENT_INDEX_HTML = path.join(CLIENT_DIST_DIR, 'index.html');
+if (fs.existsSync(CLIENT_INDEX_HTML)) {
+  app.use(
+    '/assets',
+    express.static(path.join(CLIENT_DIST_DIR, 'assets'), { immutable: true, maxAge: '1y', fallthrough: false })
+  );
+  app.use(express.static(CLIENT_DIST_DIR, { index: false, maxAge: '1h' }));
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    if (req.path.startsWith('/api/') || req.path === '/api' || req.path.startsWith('/socket.io')) return next();
+    if (!req.accepts('html')) return next();
+    res.set('Cache-Control', 'no-cache');
+    return res.sendFile(CLIENT_INDEX_HTML);
+  });
+  logger.info({ dir: CLIENT_DIST_DIR }, 'Serving built client');
+}
+
 const MONGO_RETRY_DELAY_MS = Number(process.env.MONGO_RETRY_DELAY_MS || 5000);
 const MONGO_SERVER_SELECTION_TIMEOUT_MS = Number(
   process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 10000
@@ -76,16 +118,30 @@ let reconnectTimer = null;
 let connectInFlight = null;
 let shuttingDown = false;
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+// Same-origin requests are always allowed: browsers send Origin on same-origin
+// POSTs too, and when the server serves the client (e.g. behind a Cloudflare
+// quick tunnel with a random hostname) the page's origin can't be known ahead.
+function isSameOrigin(origin, req) {
+  try {
+    return new URL(origin).host === (req.get('x-forwarded-host') || req.get('host'));
+  } catch {
+    return false;
+  }
+}
 
-      return callback(new Error('Not allowed by CORS'));
-    },
-    credentials: true,
+app.use(
+  cors((req, callback) => {
+    const origin = req.get('origin');
+    if (
+      !origin ||
+      allowedOrigins.length === 0 ||
+      allowedOrigins.includes(origin) ||
+      isSameOrigin(origin, req)
+    ) {
+      return callback(null, { origin: true, credentials: true });
+    }
+
+    return callback(new Error('Not allowed by CORS'));
   })
 );
 // P0-05: restrict JSON body size (was 5mb). 1mb still fits code submissions.

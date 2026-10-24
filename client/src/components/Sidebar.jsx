@@ -82,9 +82,9 @@ function ContextMenu({ x, y, items, onClose, theme }) {
   return (
     <div
       ref={menuRef}
-      className={`fixed z-[9999] py-1 min-w-[180px] rounded-lg shadow-xl border backdrop-blur-sm ${
+      className={`fixed z-[9999] py-1 min-w-[180px] rounded-lg shadow-xl border  ${
         theme === 'dark'
-          ? 'bg-[#1e2030]/95 border-white/10 shadow-black/60'
+          ? 'bg-[#17241e]/95 border-white/10 shadow-black/60'
           : 'bg-white/95 border-slate-200 shadow-slate-300/60'
       }`}
       style={{ left: x, top: y }}
@@ -98,8 +98,8 @@ function ContextMenu({ x, y, items, onClose, theme }) {
             key={i}
             className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs text-left transition-colors ${
               theme === 'dark'
-                ? 'text-slate-300 hover:bg-indigo-500/15 hover:text-indigo-300'
-                : 'text-slate-700 hover:bg-indigo-50 hover:text-indigo-600'
+                ? 'text-slate-300 hover:bg-surface-3 hover:text-accent-fg'
+                : 'text-slate-700 hover:bg-surface-3 hover:text-accent-fg'
             }`}
             onClick={() => {
               item.action();
@@ -261,7 +261,7 @@ export default function Sidebar({
       menuItems.push({
         label: 'New File',
         icon: FilePlus,
-        iconColor: 'text-indigo-400',
+        iconColor: 'text-accent-fg',
         action: () => startCreate('file', item.id),
       });
       menuItems.push({
@@ -276,7 +276,7 @@ export default function Sidebar({
     menuItems.push({
       label: 'Rename',
       icon: Pencil,
-      iconColor: 'text-indigo-400',
+      iconColor: 'text-accent-fg',
       shortcut: 'F2',
       action: () => setRenameTargetId(item.id),
     });
@@ -294,7 +294,7 @@ export default function Sidebar({
       menuItems.push({
         label: 'New File Here',
         icon: FilePlus,
-        iconColor: 'text-indigo-400',
+        iconColor: 'text-accent-fg',
         action: () => startCreate('file', item.id),
       });
       menuItems.push({
@@ -484,7 +484,7 @@ export default function Sidebar({
       {
         label: 'New File',
         icon: FilePlus,
-        iconColor: 'text-indigo-400',
+        iconColor: 'text-accent-fg',
         action: () => startCreate('file', null),
       },
       {
@@ -531,12 +531,12 @@ export default function Sidebar({
   return (
     <>
       {/* Activity Bar */}
-      <nav className={`w-12 ${theme === 'dark' ? 'bg-[#0d1117] border-white/10 shadow-black/50' : 'bg-slate-200/80 border-slate-300 shadow-slate-200/50'} border rounded-xl shadow-lg flex flex-col items-center py-4 gap-4 shrink-0 overflow-hidden`}>
+      <nav className={`w-12 ${theme === 'dark' ? 'bg-[#0d1712] border-white/10 shadow-black/50' : 'bg-slate-200/80 border-slate-300 shadow-slate-200/50'} border rounded-xl shadow-lg flex flex-col items-center py-4 gap-4 shrink-0 overflow-hidden`}>
         {(roomId ? ['explorer', 'search', 'users', 'chat'] : ['explorer', 'search']).map((type) => (
           <button 
             key={type}
             onClick={() => handleSidebarToggle(type)}
-            className={`p-2 rounded-lg transition-all cursor-pointer ${activeSidebar === type ? 'text-indigo-500 bg-indigo-500/10' : theme === 'dark' ? 'text-slate-500 hover:text-slate-300 hover:bg-white/5' : 'text-slate-500 hover:text-slate-800 hover:bg-black/5'}`}
+            className={`p-2 rounded-lg transition-all cursor-pointer ${activeSidebar === type ? 'text-accent-fg bg-surface-3' : theme === 'dark' ? 'text-slate-500 hover:text-slate-300 hover:bg-white/5' : 'text-slate-500 hover:text-slate-800 hover:bg-black/5'}`}
             title={type.charAt(0).toUpperCase() + type.slice(1)}
           >
             {type === 'explorer' && <Files size={20} />}
@@ -545,7 +545,7 @@ export default function Sidebar({
               <div className="relative">
                 <Users size={20} />
                 {hasNewUser && (
-                  <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 ${theme === 'dark' ? 'border-[#0d1117]' : 'border-slate-200'} shadow-[0_0_5px_rgba(16,185,129,0.5)] z-10`} />
+                  <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 ${theme === 'dark' ? 'border-[#0d1712]' : 'border-slate-200'}  z-10`} />
                 )}
               </div>
             )}
@@ -553,12 +553,12 @@ export default function Sidebar({
               <div className="relative">
                 <MessageSquare size={20} />
                 {hasUnreadMention && (
-                  <div className={`absolute -top-2.5 -left-2.5 w-5 h-5 min-w-5 min-h-5 bg-indigo-500 text-white text-[11px] font-black rounded-full flex items-center justify-center border-2 ${theme === 'dark' ? 'border-white/20' : 'border-indigo-100'} shadow-[0_0_8px_rgba(99,102,241,0.5)] animate-pulse z-20`}>
+                  <div className={`absolute -top-2.5 -left-2.5 w-5 h-5 min-w-5 min-h-5 bg-accent text-accent-ink text-[11px] font-bold rounded-full flex items-center justify-center border-2 ${theme === 'dark' ? 'border-white/20' : 'border-accent/50'}  animate-pulse z-20`}>
                     @
                   </div>
                 )}
                 {hasUnreadMsgs && (
-                  <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 ${theme === 'dark' ? 'border-[#0d1117]' : 'border-slate-200'} shadow-sm z-10`} />
+                  <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 ${theme === 'dark' ? 'border-[#0d1712]' : 'border-slate-200'} shadow-sm z-10`} />
                 )}
               </div>
             )}
@@ -588,8 +588,8 @@ export default function Sidebar({
             {activeSidebar === 'chat' && "Room Chat"}
             {activeSidebar === 'explorer' && (
               <div className="flex gap-3">
-                <FilePlus size={14} className="cursor-pointer hover:text-indigo-500 transition-colors" title="New File" onClick={handleCreateFile} />
-                <FolderPlus size={14} className="cursor-pointer hover:text-indigo-500 transition-colors" title="New Folder" onClick={handleCreateFolder} />
+                <FilePlus size={14} className="cursor-pointer hover:text-accent-fg transition-colors" title="New File" onClick={handleCreateFile} />
+                <FolderPlus size={14} className="cursor-pointer hover:text-accent-fg transition-colors" title="New Folder" onClick={handleCreateFolder} />
               </div>
             )}
           </div>
@@ -601,7 +601,7 @@ export default function Sidebar({
                 onClick={handleExplorerBgClick}
                 onContextMenu={handleExplorerContextMenu}
               >
-                <div className={`flex items-center gap-1 px-3 py-1.5 text-xs ${theme === 'dark' ? 'text-white bg-white/5' : 'text-slate-800 bg-slate-200'} border-l-2 border-indigo-500 cursor-default select-none`}>
+                <div className={`flex items-center gap-1 px-3 py-1.5 text-xs ${theme === 'dark' ? 'text-white bg-white/5' : 'text-slate-800 bg-slate-200'} border-l-2 border-accent/50 cursor-default select-none`}>
                   <ChevronRight size={14} className="rotate-90" />
                   <span className={`font-semibold uppercase tracking-tight text-[11px] ${t.textMuted}`}>Project Files</span>
                 </div>
@@ -622,14 +622,14 @@ export default function Sidebar({
                           return (
                             <div
                               key="__creating__"
-                              className={`relative flex items-center gap-1.5 py-0.75 text-xs ${theme === 'dark' ? 'bg-indigo-500/10' : 'bg-indigo-50'}`}
+                              className={`relative flex items-center gap-1.5 py-0.75 text-xs ${theme === 'dark' ? 'bg-surface-3' : 'bg-surface-3'}`}
                               style={{ paddingLeft: `${inputDepth * 16 + 12}px` }}
                               onClick={(e) => e.stopPropagation()}
                             >
                               <span className="w-3 shrink-0" />
                               {creatingType === 'folder'
                                 ? <FolderPlus size={14} className="text-amber-400/80 shrink-0" />
-                                : <FileCode size={14} className="text-indigo-400 shrink-0" />
+                                : <FileCode size={14} className="text-accent-fg shrink-0" />
                               }
                               <input
                                 ref={createInputRef}
@@ -643,7 +643,7 @@ export default function Sidebar({
                                 }}
                                 onBlur={() => setTimeout(() => commitCreate(), 50)}
                                 placeholder={creatingType === 'folder' ? "folder name..." : "filename.ext"}
-                                className={`flex-1 min-w-0 text-xs outline-none py-0.5 px-1 rounded ${theme === 'dark' ? 'bg-[#1a1f2e] text-indigo-400 border border-indigo-500/50' : 'bg-white text-indigo-600 border border-indigo-500/50'}`}
+                                className={`flex-1 min-w-0 text-xs outline-none py-0.5 px-1 rounded ${theme === 'dark' ? 'bg-[#17241e] text-accent-fg border border-accent/50' : 'bg-white text-accent-fg border border-accent/50'}`}
                               />
                             </div>
                           );
@@ -682,12 +682,12 @@ export default function Sidebar({
                     {draggedItem ? (
                       <div className={`text-xs flex items-center gap-2 px-4 py-1.5 rounded-md shadow-lg border ${
                         theme === 'dark' 
-                          ? 'bg-[#1a1f2e] border-indigo-500/40 text-slate-200' 
-                          : 'bg-white border-indigo-500/40 text-slate-700'
+                          ? 'bg-[#17241e] border-accent/40 text-slate-200' 
+                          : 'bg-white border-accent/40 text-slate-700'
                       }`}>
                         {draggedItem.type === 'folder' 
                           ? <FolderPlus size={14} className="text-amber-400" />
-                          : <FileCode size={14} className="text-indigo-400" />
+                          : <FileCode size={14} className="text-accent-fg" />
                         }
                         <span>{draggedItem.name}</span>
                       </div>
@@ -714,7 +714,7 @@ export default function Sidebar({
                       autoFocus
                     />
                     {searchQuery && (
-                      <X size={14} className={`cursor-pointer hover:text-indigo-500 ${t.textMuted}`} onClick={() => setSearchQuery('')} />
+                      <X size={14} className={`cursor-pointer hover:text-accent-fg ${t.textMuted}`} onClick={() => setSearchQuery('')} />
                     )}
                   </div>
                 </div>
@@ -730,17 +730,17 @@ export default function Sidebar({
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <div className="text-[11px] font-bold text-indigo-500 uppercase px-2 tracking-wide">
+                      <div className="text-[11px] font-bold text-accent-fg uppercase px-2 tracking-wide">
                         {searchResults.reduce((acc, curr) => acc + curr.matches.length, 0)} results in {searchResults.length} files
                       </div>
                       {searchResults.map(({ file, matches }) => (
                         <div key={file.id} className="flex flex-col">
                           <div 
-                            className={`flex items-center gap-2 px-2 py-1.5 text-xs font-semibold ${t.text} cursor-pointer hover:text-indigo-500 transition-colors`}
+                            className={`flex items-center gap-2 px-2 py-1.5 text-xs font-semibold ${t.text} cursor-pointer hover:text-accent-fg transition-colors`}
                             onClick={() => openTab(file.id)}
                           >
                             <ChevronDown size={14} className={t.textMuted} />
-                            <FileCode size={14} className={activeFileId === file.id ? 'text-indigo-500' : t.textMuted} />
+                            <FileCode size={14} className={activeFileId === file.id ? 'text-accent-fg' : t.textMuted} />
                             <span className="truncate">{file.name}</span>
                           </div>
                           <div className="flex flex-col pl-6">
@@ -786,7 +786,7 @@ export default function Sidebar({
                       </div>
                       <div className="flex flex-col min-w-0">
                         <span className={`text-[11px] font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'} truncate`}>
-                          {user.username || user.name} {user.isYou && <span className="text-indigo-500 font-normal">(You)</span>}
+                          {user.username || user.name} {user.isYou && <span className="text-accent-fg font-normal">(You)</span>}
                         </span>
                         <span className={`text-[10px] ${t.textMuted}`}>{isOnline ? 'Online' : 'Offline'}</span>
                       </div>

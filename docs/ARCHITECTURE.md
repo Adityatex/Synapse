@@ -10,6 +10,7 @@
 Synapse-main/
 ├── packages/shared/        # @synapse/shared — zod contracts + TS types (P1-04)
 │   └── src/{http,socket,envelope}.ts
+├── packages/redis/         # @synapse/redis — ioredis factory + health check (P2-02)
 ├── server/                 # Express 5 + Socket.IO API (CJS runtime, P1-02 incremental TS)
 │   ├── config/env.js       # boot-time zod env validation (P0-06)
 │   ├── lib/{logger,errors,sentry}.js

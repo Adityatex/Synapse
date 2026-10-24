@@ -1,5 +1,5 @@
 # P1-06: local dev stack — `docker compose up`
-# api (server, hot reload) + mongo + redis (rate-limit sessions in P2) + mailpit (OTP email catcher).
+# api (server, hot reload) + mongo + redis (P2: pub/sub, locks, queues) + mailpit (OTP email catcher).
 services:
   api:
     build:
@@ -14,7 +14,7 @@ services:
       PORT: 5000
       MONGODB_URI: mongodb://mongo:27017/synapse
       CORS_ORIGIN: http://localhost:5173
-      # Future P2 wiring (unused by the app today, reserved for Redis sessions):
+      # P2-02: the api connects and reports Redis state on /api/health.
       REDIS_URL: redis://redis:6379
       # Catch OTP mail locally instead of Gmail:
       SMTP_HOST: mailpit
@@ -40,11 +40,14 @@ services:
     volumes:
       - ./server:/app/server
       - ./packages/shared:/app/packages/shared
+      - ./packages/redis:/app/packages/redis
       # Anonymous volumes keep the image's pnpm installs and built shared/dist
       # from being hidden by the bind mounts above (host node_modules differ).
       - /app/server/node_modules
       - /app/packages/shared/node_modules
       - /app/packages/shared/dist
+      - /app/packages/redis/node_modules
+      - /app/packages/redis/dist
     # Polling: file events from a Windows/macOS bind mount don't reach the
     # container, so plain nodemon never sees server edits.
     command: pnpm exec nodemon --legacy-watch server.js

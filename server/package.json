@@ -19,6 +19,7 @@
   "license": "ISC",
   "dependencies": {
     "@sentry/node": "^11.0.0",
+    "@synapse/redis": "workspace:*",
     "@synapse/shared": "workspace:*",
     "axios": "^1.13.6",
     "bcryptjs": "^3.0.3",

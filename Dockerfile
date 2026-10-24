@@ -9,17 +9,19 @@ WORKDIR /app
 # Install with only manifests first so the dependency layer caches.
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/redis/package.json packages/redis/
 COPY server/package.json server/
 COPY client/package.json client/
 RUN pnpm install --frozen-lockfile
 
 COPY packages/shared packages/shared
+COPY packages/redis packages/redis
 COPY server server
 COPY client client
 
 # Client is built with no VITE_* URLs, so it talks to its own origin
 # (/api + same-origin Socket.IO).
-RUN pnpm --filter @synapse/shared build \
+RUN pnpm --filter @synapse/shared --filter @synapse/redis build \
  && pnpm --filter client build \
  && pnpm --filter server deploy --prod --legacy /out
 

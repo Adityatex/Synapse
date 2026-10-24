@@ -23,15 +23,18 @@ export interface CollabDeps {
   redisUrl?: string;
   connectionsPerMin?: number;
   release?: string;
+  /** Quiet period before a changed document is persisted. Tests shorten it. */
+  storeDebounceMs?: number;
 }
 
-// Persist at most every 2 s of quiet, and never leave a busy document unsaved for over 10 s.
-const STORE_DEBOUNCE_MS = 2_000;
-const STORE_MAX_DEBOUNCE_MS = 10_000;
+// Persist after 2 s of quiet, and never leave a busy document unsaved for over 10 s.
+const DEFAULT_STORE_DEBOUNCE_MS = 2_000;
+const MAX_STORE_DEBOUNCE_MS = 10_000;
 
 export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
   const { jwtSecret, logger, access, store, redisUrl, release = '' } = deps;
   const startedAt = Date.now();
+  const storeDebounceMs = deps.storeDebounceMs ?? DEFAULT_STORE_DEBOUNCE_MS;
 
   const redis = redisUrl
     ? new RedisExtension({
@@ -56,8 +59,8 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
     name: 'synapse-collab',
     quiet: true,
     stopOnSignals: false,
-    debounce: STORE_DEBOUNCE_MS,
-    maxDebounce: STORE_MAX_DEBOUNCE_MS,
+    debounce: storeDebounceMs,
+    maxDebounce: Math.max(storeDebounceMs, MAX_STORE_DEBOUNCE_MS),
     extensions,
 
     async onAuthenticate({ token, documentName, connectionConfig }) {
@@ -93,7 +96,18 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
     async onStoreDocument({ documentName, document }) {
       const roomId = parseDocumentName(documentName);
       if (!roomId) return;
-      await store.store(roomId, Y.encodeStateAsUpdate(document));
+      try {
+        await store.store(roomId, document);
+      } catch (err) {
+        // The document stays in memory and the next change retries; make the failure visible.
+        logger.error({ err: err instanceof Error ? err.message : String(err), roomId }, 'Failed to persist room document');
+        throw err;
+      }
+    },
+
+    async afterUnloadDocument({ documentName }) {
+      const roomId = parseDocumentName(documentName);
+      if (roomId) store.release?.(roomId);
     },
 
     async onDisconnect({ documentName, context, clientsCount }) {

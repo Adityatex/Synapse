@@ -1,19 +1,10 @@
-import { HocuspocusProvider } from '@hocuspocus/provider';
-import type { Server } from '@hocuspocus/server';
 import { createRedisClient } from '@synapse/redis';
 import jwt from 'jsonwebtoken';
-import { createServer } from 'node:net';
-import { pino } from 'pino';
 import { afterEach, describe, expect, it } from 'vitest';
-import * as Y from 'yjs';
-import { documentNameFor } from './auth.js';
 import { MemoryDocStore } from './docStore.js';
-import { decideAccess, type RoomAccess, type RoomAccessRecord } from './roomAccess.js';
-import { createCollabServer, type CollabContext } from './server.js';
+import { closeAll, connect, fakeAccess, randomRoomId, startServer, tokenFor, waitFor } from './testUtils.js';
 
-const SECRET = 'integration-secret-long-enough-1234567890';
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
-const logger = pino({ level: 'silent' });
 
 // The multi-replica test needs a real Redis; it is skipped (not failed) without one.
 const redisAvailable = await (async () => {
@@ -28,67 +19,7 @@ const redisAvailable = await (async () => {
   }
 })();
 
-// Hocuspocus treats port 0 as "use the default (80)", so ask the OS for a free port first.
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const probe = createServer();
-    probe.once('error', reject);
-    probe.listen(0, () => {
-      const { port } = probe.address() as { port: number };
-      probe.close(() => resolve(port));
-    });
-  });
-}
-
-const randomRoomId = () => Math.random().toString(36).slice(2, 10).toUpperCase().padEnd(8, 'X');
-const tokenFor = (userId: string) => jwt.sign({ userId, name: userId, email: `${userId}@x.io` }, SECRET);
-
-function fakeAccess(rooms: Record<string, RoomAccessRecord>): RoomAccess {
-  return { check: async (roomId, userId) => decideAccess(rooms[roomId] ?? null, userId) };
-}
-
-const servers: Server<CollabContext>[] = [];
-const providers: HocuspocusProvider[] = [];
-
-async function startServer(opts: { access: RoomAccess; store?: MemoryDocStore; redisUrl?: string }): Promise<Server<CollabContext>> {
-  const server = createCollabServer({ jwtSecret: SECRET, logger, store: new MemoryDocStore(), ...opts });
-  await server.listen(await freePort());
-  servers.push(server);
-  return server;
-}
-
-type Client = { doc: Y.Doc; provider: HocuspocusProvider; synced: Promise<void>; denied: Promise<string> };
-
-function connect(server: Server<CollabContext>, roomId: string, token?: string, documentName = documentNameFor(roomId)): Client {
-  const doc = new Y.Doc();
-  let resolveSynced!: () => void;
-  let resolveDenied!: (reason: string) => void;
-  const synced = new Promise<void>((r) => (resolveSynced = r));
-  const denied = new Promise<string>((r) => (resolveDenied = r));
-  const provider = new HocuspocusProvider({
-    url: server.webSocketURL,
-    name: documentName,
-    document: doc,
-    token: token ?? '',
-    onSynced: () => resolveSynced(),
-    onAuthenticationFailed: ({ reason }) => resolveDenied(reason),
-  });
-  providers.push(provider);
-  return { doc, provider, synced, denied };
-}
-
-async function waitFor(check: () => boolean, ms = 8000): Promise<void> {
-  const start = Date.now();
-  while (!check()) {
-    if (Date.now() - start > ms) throw new Error('timed out waiting for condition');
-    await new Promise((r) => setTimeout(r, 25));
-  }
-}
-
-afterEach(async () => {
-  for (const p of providers.splice(0)) p.destroy();
-  for (const s of servers.splice(0)) await s.destroy();
-});
+afterEach(closeAll);
 
 describe('authentication and room access', () => {
   it('lets a member in and syncs their document', async () => {

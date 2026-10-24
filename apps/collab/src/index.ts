@@ -1,6 +1,6 @@
 import { MongoClient } from 'mongodb';
 import { loadConfig, type CollabConfig } from './config.js';
-import { MemoryDocStore } from './docStore.js';
+import { MongoDocStore } from './mongoDocStore.js';
 import { createLogger } from './logger.js';
 import { createMongoRoomAccess } from './roomAccess.js';
 import { createCollabServer } from './server.js';
@@ -19,11 +19,14 @@ async function main(): Promise<void> {
   await mongo.connect();
   logger.info('Connected to MongoDB');
 
+  const store = new MongoDocStore(mongo.db());
+  await store.ensureIndexes();
+
   const server = createCollabServer({
     jwtSecret: config.JWT_SECRET,
     logger,
     access: createMongoRoomAccess(mongo.db()),
-    store: new MemoryDocStore(), // replaced by the Mongo-backed store in P2-04
+    store,
     redisUrl: config.REDIS_URL || undefined,
     connectionsPerMin: config.COLLAB_CONNECTIONS_PER_MIN,
     release: config.APP_RELEASE,

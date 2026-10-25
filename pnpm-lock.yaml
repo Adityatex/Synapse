@@ -357,6 +357,9 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
     devDependencies:
+      '@synapse/room-doc':
+        specifier: workspace:*
+        version: link:../packages/room-doc
       '@types/node':
         specifier: ^26.6.3
         version: 26.6.3

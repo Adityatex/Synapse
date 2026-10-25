@@ -1,8 +1,8 @@
 // Shared helpers for the integration tests. Not part of the build (see tsconfig.build.json).
-import { HocuspocusProvider } from '@hocuspocus/provider';
+import { HocuspocusProvider, HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 import type { Server } from '@hocuspocus/server';
 import jwt from 'jsonwebtoken';
-import { createServer } from 'node:net';
+import { connect as tcpConnect, createServer, type Server as NetServer, type Socket } from 'node:net';
 import { pino } from 'pino';
 import * as Y from 'yjs';
 import { documentNameFor } from './auth.js';
@@ -16,6 +16,9 @@ export const SECRET = 'integration-secret-long-enough-1234567890';
 const logger = pino({ level: 'silent' });
 const servers: Server<CollabContext>[] = [];
 const providers: HocuspocusProvider[] = [];
+const proxies: Array<() => Promise<void>> = [];
+const sockets: HocuspocusProviderWebsocket[] = [];
+const trackSocket = (socket: HocuspocusProviderWebsocket) => (sockets.push(socket), socket);
 
 // Hocuspocus treats port 0 as "use the default (80)", so ask the OS for a free port first.
 export function freePort(): Promise<number> {
@@ -63,7 +66,22 @@ export type Client = {
   messages: Array<Record<string, any>>;
 };
 
-export function connect(server: Server<CollabContext>, roomId: string, token?: string, documentName = documentNameFor(roomId)): Client {
+export interface ConnectExtras {
+  /** Connect here instead of straight to the server, for example through a proxy that can be cut. */
+  url?: string;
+  /** A function is asked again on every (re)connect, like the real client does. */
+  token?: string | (() => string);
+  /** Reconnect timing (delay, minDelay, maxDelay, jitter...), set on the socket as the client does; tests shorten the delays. */
+  socketOptions?: Record<string, unknown>;
+}
+
+export function connect(
+  server: Server<CollabContext>,
+  roomId: string,
+  token?: string,
+  documentName = documentNameFor(roomId),
+  extras: ConnectExtras = {},
+): Client {
   const doc = new Y.Doc();
   let resolveSynced!: () => void;
   let resolveDenied!: (reason: string) => void;
@@ -71,10 +89,12 @@ export function connect(server: Server<CollabContext>, roomId: string, token?: s
   const synced = new Promise<void>((r) => (resolveSynced = r));
   const denied = new Promise<string>((r) => (resolveDenied = r));
   const provider = new HocuspocusProvider({
-    url: server.webSocketURL,
+    ...(extras.socketOptions
+      ? { websocketProvider: trackSocket(new HocuspocusProviderWebsocket({ url: extras.url ?? server.webSocketURL, ...extras.socketOptions })) }
+      : { url: extras.url ?? server.webSocketURL }),
     name: documentName,
     document: doc,
-    token: token ?? '',
+    token: extras.token ?? token ?? '',
     onSynced: () => resolveSynced(),
     onAuthenticationFailed: ({ reason }) => resolveDenied(reason),
     onStateless: ({ payload }) => {
@@ -85,6 +105,7 @@ export function connect(server: Server<CollabContext>, roomId: string, token?: s
       }
     },
   });
+  if (extras.socketOptions) provider.attach(); // a socket we supply is not attached for us
   providers.push(provider);
   return { doc, provider, synced, denied, messages };
 }
@@ -100,6 +121,8 @@ export async function waitFor(check: () => boolean | Promise<boolean>, ms = 8000
 /** Call from afterEach: disconnects clients first, then flushes and stops servers. */
 export async function closeAll(): Promise<void> {
   for (const p of providers.splice(0)) p.destroy();
+  for (const s of sockets.splice(0)) s.destroy();
+  for (const stop of proxies.splice(0)) await stop();
   for (const s of servers.splice(0)) await s.destroy();
 }
 
@@ -108,4 +131,43 @@ export async function stopServer(server: Server<CollabContext>): Promise<void> {
   const index = servers.indexOf(server);
   if (index >= 0) servers.splice(index, 1);
   await server.destroy();
+}
+
+/**
+ * A TCP proxy in front of a collab server that can be cut and restored, to stand in for the
+ * network going away: `cut()` drops every open connection and refuses new ones.
+ */
+export async function startProxy(server: Server<CollabContext>) {
+  const target = new URL(server.webSocketURL);
+  const port = await freePort();
+  const sockets = new Set<Socket>();
+  let listener: NetServer | null = null;
+
+  const open = () =>
+    new Promise<void>((resolve) => {
+      listener = createServer((client) => {
+        const upstream = tcpConnect(Number(target.port), target.hostname);
+        for (const socket of [client, upstream]) {
+          sockets.add(socket);
+          socket.on('error', () => socket.destroy());
+          socket.on('close', () => sockets.delete(socket));
+        }
+        client.on('close', () => upstream.destroy());
+        upstream.on('close', () => client.destroy());
+        client.pipe(upstream);
+        upstream.pipe(client);
+      });
+      listener.listen(port, '127.0.0.1', () => resolve());
+    });
+  await open();
+
+  const stop = async () => {
+    const closing = listener;
+    listener = null;
+    // Drop the connections first: a listener only finishes closing once they are gone.
+    for (const socket of [...sockets]) socket.destroy();
+    if (closing) await new Promise<void>((resolve) => closing.close(() => resolve()));
+  };
+  proxies.push(stop);
+  return { url: `ws://127.0.0.1:${port}`, cut: stop, restore: open };
 }

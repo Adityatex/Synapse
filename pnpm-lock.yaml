@@ -26,6 +26,9 @@ importers:
       '@synapse/redis':
         specifier: workspace:*
         version: link:../../packages/redis
+      '@synapse/room-doc':
+        specifier: workspace:*
+        version: link:../../packages/room-doc
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
@@ -197,6 +200,21 @@ importers:
       vitest:
         specifier: ^5.0.2
         version: 5.0.2(@opentelemetry/api@1.9.1)(@types/node@26.6.3)(vite@6.4.3(@types/node@26.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15))
+
+  packages/room-doc:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.3
+        version: 26.6.3
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.2
+        version: 5.0.2(@opentelemetry/api@1.9.1)(@types/node@26.6.3)(vite@6.4.3(@types/node@26.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15))
+      yjs:
+        specifier: ^13.6.33
+        version: 13.6.33
 
   packages/shared:
     dependencies:

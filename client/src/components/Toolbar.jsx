@@ -19,6 +19,7 @@ import {
   Moon,
   Copy,
   Share2,
+  Lock,
   LogOut
 } from 'lucide-react';
 
@@ -33,7 +34,9 @@ export default function Toolbar({
   onCopyInvite,
   onExitRoom,
   onExit,
-  currentUser
+  currentUser,
+  // Collab mode, creator only (P2-08): { enabled, canToggle, busy, onToggle }.
+  locksControl = null
 }) {
   const { activeFile, renameFile } = useFiles();
   const [isRunning, setIsRunning] = useState(false);
@@ -243,6 +246,21 @@ export default function Toolbar({
           >
             <Share2 size={14} />
             Invite
+          </button>
+        )}
+        {locksControl?.canToggle && (
+          <button
+            type="button"
+            onClick={locksControl.onToggle}
+            disabled={locksControl.busy}
+            aria-pressed={locksControl.enabled}
+            className={`flex items-center gap-2 h-8 px-3 rounded-md cursor-pointer text-[13px] font-medium transition-colors disabled:opacity-60 ${
+              locksControl.enabled ? 'bg-accent text-accent-ink' : 'bg-surface-2 hover:bg-surface-3 text-ink'
+            }`}
+            title={locksControl.enabled ? 'Edit locks are on: members can lock a file while they edit it. Click to turn off.' : 'Turn on edit locks, so members can lock a file while they edit it.'}
+          >
+            <Lock size={14} />
+            Locks {locksControl.busy ? '…' : locksControl.enabled ? 'on' : 'off'}
           </button>
         )}
         {(showRoomControls || onExit) && (

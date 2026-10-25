@@ -48,6 +48,14 @@ export function getRoom(roomId) {
   return request(`/${String(roomId).trim().toUpperCase()}`);
 }
 
+/** Creator only: switch focus locks (P2-08) on or off for the room. */
+export function updateRoomSettings(roomId, settings) {
+  return request(`/${String(roomId).trim().toUpperCase()}/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
+  });
+}
+
 export function getRecentRooms(userId) {
   return request(`/recent/${encodeURIComponent(userId)}`);
 }

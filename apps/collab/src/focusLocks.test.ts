@@ -19,8 +19,10 @@ const redisAvailable = await (async () => {
 
 afterEach(closeAll);
 
-// Short timings so expiry and propagation can be waited for.
-const FAST = { ttlMs: 500, tickMs: 80, settingsCacheMs: 30, locksCacheMs: 10 };
+// Quick propagation, but long-lived locks: a test that is slow on a busy machine must not lose its lock.
+const FAST = { ttlMs: 30_000, tickMs: 80, settingsCacheMs: 30, locksCacheMs: 10 };
+// For the two tests about expiry itself.
+const SHORT_LIVED = { ...FAST, ttlMs: 800 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const send = (client: Client, message: object) => client.provider.sendStateless(JSON.stringify(message));
@@ -155,12 +157,12 @@ describe('focus locks', () => {
     expect(holderOf(bob, 'a')).toBe('ada');
   });
 
-  it('expires a lock 45 s (here 0.5 s) after its last renewal', async () => {
-    const { ada, bob } = await setup();
+  it('expires a lock 45 s (here 0.8 s) after its last renewal', async () => {
+    const { ada, bob } = await setup({ locks: SHORT_LIVED });
     send(ada, { type: 'locks.acquire', fileId: 'a' });
     await waitFor(() => holderOf(bob, 'a') === 'ada');
 
-    await sleep(900); // never renewed
+    await sleep(1300); // never renewed
     await waitFor(() => holderOf(bob, 'a') === undefined); // clients are told it lapsed
     getContentText(bob.doc, 'a').insert(0, 'after expiry');
     await waitFor(() => text(ada, 'a') === 'after expiry');
@@ -172,12 +174,12 @@ describe('focus locks', () => {
   });
 
   it('keeps a lock for as long as the holder renews it', async () => {
-    const { ada, bob } = await setup();
+    const { ada, bob } = await setup({ locks: SHORT_LIVED });
     send(ada, { type: 'locks.acquire', fileId: 'a' });
     await waitFor(() => holderOf(bob, 'a') === 'ada');
 
     for (let i = 0; i < 8; i++) {
-      await sleep(150); // 1.2 s in all, well past the 0.5 s expiry
+      await sleep(150); // 1.2 s in all, past the 0.8 s expiry
       send(ada, { type: 'locks.renew', fileId: 'a' });
     }
     expect(holderOf(bob, 'a')).toBe('ada');
@@ -186,7 +188,7 @@ describe('focus locks', () => {
   });
 
   it('releases a member’s locks as soon as their connection closes', async () => {
-    const { ada, bob } = await setup({ locks: { ...FAST, ttlMs: 30_000 } });
+    const { ada, bob } = await setup();
     send(ada, { type: 'locks.acquire', fileId: 'a' });
     await waitFor(() => holderOf(bob, 'a') === 'ada');
 

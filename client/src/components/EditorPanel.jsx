@@ -134,14 +134,26 @@ function EditingIndicatorBar({ editingUsers = {}, activeFileId }) {
   );
 }
 
-function FileLockBanner({ activeFileLock, isReadOnly, lockNotice }) {
-  if (!activeFileLock && !lockNotice) return null;
+// `lockControls` (collab mode, P2-08) is set when the room has edit locks on:
+// { heldByMe, onAcquire, onRelease }. Without it the banner only reports lock state.
+function FileLockBanner({ activeFileLock, isReadOnly, lockNotice, lockControls = null }) {
+  if (!activeFileLock && !lockNotice && !lockControls) return null;
 
-  const message = isReadOnly && activeFileLock
-    ? `${activeFileLock.username || 'Another user'} is editing this file. View-only mode is active.`
-    : activeFileLock
-      ? 'You hold the edit lock for this file.'
-      : lockNotice;
+  const message = lockNotice
+    ? lockNotice
+    : isReadOnly && activeFileLock
+      ? `${activeFileLock.username || 'Another user'} is editing this file. View-only mode is active.`
+      : activeFileLock
+        ? 'You hold the edit lock for this file.'
+        : 'Edit locks are on in this room. Lock this file to keep others from editing it.';
+
+  const action = !lockControls
+    ? null
+    : lockControls.heldByMe
+      ? { label: 'Release lock', onClick: lockControls.onRelease }
+      : !activeFileLock
+        ? { label: 'Lock file', onClick: lockControls.onAcquire }
+        : null;
 
   return (
     <div
@@ -157,7 +169,25 @@ function FileLockBanner({ activeFileLock, isReadOnly, lockNotice }) {
       }}
     >
       <span style={{ fontWeight: 700 }}>{isReadOnly ? 'Locked' : 'Lock'}</span>
-      <span>{message}</span>
+      <span style={{ flex: 1 }}>{message}</span>
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          style={{
+            border: '1px solid var(--line)',
+            borderRadius: '6px',
+            padding: '2px 10px',
+            fontSize: '12px',
+            fontWeight: 600,
+            background: 'var(--surface-1)',
+            color: 'inherit',
+            cursor: 'pointer',
+          }}
+        >
+          {action.label}
+        </button>
+      )}
     </div>
   );
 }
@@ -176,6 +206,7 @@ export default function EditorPanel({
   activeFileLock = null,
   isReadOnly = false,
   lockNotice = '',
+  lockControls = null,
 }) {
   const { activeFile, updateContent, jumpTarget } = useFiles();
   const editorRef = useRef(null);
@@ -339,7 +370,7 @@ export default function EditorPanel({
     <div className={`flex-1 overflow-hidden flex flex-col ${t.editorBg}`}>
       {/* Real-time "who is editing" indicator */}
       <EditingIndicatorBar editingUsers={editingUsers} activeFileId={activeFileId} />
-      <FileLockBanner activeFileLock={activeFileLock} isReadOnly={isReadOnly} lockNotice={lockNotice} />
+      <FileLockBanner activeFileLock={activeFileLock} isReadOnly={isReadOnly} lockNotice={lockNotice} lockControls={lockControls} />
 
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <Suspense

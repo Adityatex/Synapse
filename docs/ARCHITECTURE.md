@@ -161,6 +161,45 @@ The legacy relay's `userAppearance` map is gone, and `server/tests/vitest/appear
 checks that the relay and the collab path agree. Clients also re-derive the colour
 and strip the name to CSS-safe characters before putting either into a stylesheet.
 
+### 4.4 Focus locks (P2-08)
+
+Off by default. The room creator turns them on (`PATCH /api/rooms/:id/settings`,
+`locksEnabled` on the `rooms` document, which collab reads, cached for 2 s). While
+on, a member can lock a file; edits to that file's text from anyone else are dropped
+by the collab server. Files nobody has locked stay open to everyone and merge as
+usual. Only text is protected: renaming, moving or deleting a locked file is not.
+
+- **Where locks live:** Redis (`synapse:locks:<roomId>`, a hash of file to holder),
+  not the document, because they are transient and every replica must agree. Each
+  operation is a Lua script that reads Redis' own clock, so replicas with skewed
+  clocks agree on expiry and two replicas cannot both take a lock. Without Redis
+  (single-instance dev) an in-memory store is used.
+- **Expiry:** a lock lasts 45 s from its last renewal. The client renews every 15 s
+  while it holds one, gives it up when the member moves to another file, and
+  closing the connection releases the member's locks at once.
+- **Protocol:** Hocuspocus stateless messages. Clients send `locks.acquire|renew|
+  release|sync`; the server sends `locks.snapshot` (to a new connection, to the room
+  on any change, and from a 2 s tick that also announces expiry and the creator
+  switching the setting), `locks.denied` (to the requester) and `locks.rejected`.
+- **Enforcement:** `beforeHandleMessage` takes each sync update, asks
+  `touchedFileIds` (room-doc) which files it writes to by following item origins to
+  the owning text, so it costs the size of the update rather than the room, and
+  rejects it if one of them is locked by someone else. Hocuspocus already drops
+  edits from a read-only connection and answers "not saved", so the connection is
+  made read-only for that one message instead of being closed.
+- **After a rejection the client must start over.** Yjs applies a client's changes in
+  order, so nothing later from that client (even to another file) can be applied
+  behind the dropped one. `CollabRoom` therefore remounts with a new document and
+  client id and says the last edit was not saved. The UI makes a locked file
+  read-only, so this only happens in a race (the lock was taken a moment ago) or from
+  a modified client. An offline client that edited a locked file loses its unsent
+  edits the same way; P2-12 should look at keeping them.
+- **Failure policy:** if the lock state cannot be read (Redis or Mongo down), edits
+  are allowed: losing exclusivity for a while beats freezing every room. If it can be
+  read but an update cannot be attributed to a file, it is refused whenever someone
+  else holds a lock.
+- A member can hold at most 5 locks, and can only lock files that exist.
+
 ## 5. Client state
 
 - Server state: `context/FileContext` (files/tabs) + `context/AuthContext`.
@@ -182,8 +221,8 @@ The room page has two paths, chosen at build time by `VITE_COLLAB_URL`:
   shared `Y.Text`. Tabs, the active file and open folders are per-user.
 
 In collab mode Socket.IO still carries chat and `save-version`; the people list,
-the "is editing" bar and remote cursors come from awareness (section 4.3). Not used: `code-change`, `sync-room-state`, `autosave` and file
-locks (P2-08 brings locks back as an optional per-room setting). The flag is global
+the "is editing" bar and remote cursors come from awareness (section 4.3). Not used: `code-change`, `sync-room-state`, `autosave` and the
+Socket.IO file locks (section 4.4 replaces them with an optional per-room setting). The flag is global
 per client build until P2-10 adds a per-room one, so do not run old and new clients
 against the same rooms.
 

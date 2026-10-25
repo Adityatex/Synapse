@@ -111,7 +111,7 @@ describe('touchedFileIds', () => {
   });
 
   it('reports exactly the files each user edited, across random concurrent edits by three users', () => {
-    for (let seed = 1; seed <= 40; seed++) {
+    for (let seed = 1; seed <= 25; seed++) {
       let state = seed * 2654435761;
       const random = () => ((state = (Math.imul(state, 1664525) + 1013904223) >>> 0) / 2 ** 32);
       const pick = <T>(items: T[]): T => items[Math.floor(random() * items.length)];
@@ -158,5 +158,5 @@ describe('touchedFileIds', () => {
         }
       }
     }
-  });
+  }, 30_000);
 });

@@ -51,4 +51,14 @@ async function recordRoomMembership(roomId, participant) {
   }
 }
 
-module.exports = { recordRoomMembership };
+// P0-16: invite-only guard. Creator + recorded members may access.
+// Legacy rooms with an empty members list are grandfathered (any authed user
+// may join once, which records membership for subsequent joins).
+function isRoomMember(dbRoom, userId) {
+  if (!dbRoom || !userId) return false;
+  if (dbRoom.createdBy === userId) return true;
+  if (!Array.isArray(dbRoom.members) || dbRoom.members.length === 0) return true;
+  return dbRoom.members.some((m) => m.userId === userId);
+}
+
+module.exports = { recordRoomMembership, isRoomMember };

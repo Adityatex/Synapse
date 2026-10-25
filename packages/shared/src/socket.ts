@@ -11,6 +11,8 @@ const roomRefSchema = z.object({
 
 export const joinRoomSchema = z.object({
   roomId: roomIdSchema,
+  // P2-10: a client that edits through the collab server joins for chat only.
+  collab: z.boolean().optional(),
 });
 export type JoinRoomPayload = z.infer<typeof joinRoomSchema>;
 

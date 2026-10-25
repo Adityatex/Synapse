@@ -1,4 +1,4 @@
-import { Server } from '@hocuspocus/server';
+import { IncomingMessage, MessageType, Server, type Connection, type Hocuspocus } from '@hocuspocus/server';
 import { Redis as RedisExtension } from '@hocuspocus/extension-redis';
 import { Throttle } from '@hocuspocus/extension-throttle';
 import { checkRedisHealth, createRedisClient } from '@synapse/redis';
@@ -7,6 +7,8 @@ import * as Y from 'yjs';
 import { AuthError, documentNameFor, parseDocumentName, verifyAccessToken, type AuthUser } from './auth.js';
 import type { DocStore } from '@synapse/ydoc-store';
 import type { LegacyRooms } from './legacyRooms.js';
+import { LockService, lockRequestSchema, snapshotSignature, type LockMessage, type LockOutcome } from './lockService.js';
+import { MemoryLockStore, RedisLockStore, type LockStore } from './locks.js';
 import { guardAwareness } from './presence.js';
 import type { Logger } from './logger.js';
 import type { RoomAccess } from './roomAccess.js';
@@ -30,7 +32,31 @@ export interface CollabDeps {
   release?: string;
   /** Quiet period before a changed document is persisted. Tests shorten it. */
   storeDebounceMs?: number;
+  /** Focus locks (P2-08). Defaults: Redis when `redisUrl` is set (else in memory), 45 s expiry, 2 s tick. */
+  locks?: { store?: LockStore; ttlMs?: number; tickMs?: number; settingsCacheMs?: number; locksCacheMs?: number };
 }
+
+const DEFAULT_LOCK_TICK_MS = 2_000;
+const MAX_STATELESS_BYTES = 512;
+const SYNC_STEP2 = 1; // y-protocols sync message types
+const SYNC_UPDATE = 2;
+
+/** The Yjs update inside a raw sync message that would change the document, or null for anything else. */
+function writableUpdate(raw: Uint8Array): Uint8Array | null {
+  try {
+    const message = new IncomingMessage(raw);
+    message.readVarString(); // the document name
+    const type = message.readVarUint();
+    // A client answers the server's sync step 1 with a "sync reply", so both carry edits.
+    if (type !== MessageType.Sync && type !== MessageType.SyncReply) return null;
+    const syncType = message.readVarUint();
+    return syncType === SYNC_STEP2 || syncType === SYNC_UPDATE ? message.readVarUint8Array() : null;
+  } catch {
+    return null;
+  }
+}
+
+const encode = (message: LockMessage) => JSON.stringify(message);
 
 // Persist after 2 s of quiet, and never leave a busy document unsaved for over 10 s.
 const DEFAULT_STORE_DEBOUNCE_MS = 2_000;
@@ -54,6 +80,51 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
           }),
       })
     : null;
+
+  // Locks use the request path (fail fast when Redis is down), unlike the pub/sub clients above.
+  const lockRedis = redisUrl && !deps.locks?.store
+    ? createRedisClient(redisUrl, {
+        name: 'synapse-collab-locks',
+        onError: (err) => logger.warn({ err: err.message }, 'Redis connection error (locks)'),
+      })
+    : null;
+  const lockService = new LockService({
+    store: deps.locks?.store ?? (lockRedis ? new RedisLockStore(lockRedis) : new MemoryLockStore()),
+    settings: (roomId) => access.settings(roomId),
+    ttlMs: deps.locks?.ttlMs,
+    settingsCacheMs: deps.locks?.settingsCacheMs,
+    locksCacheMs: deps.locks?.locksCacheMs,
+    onProblem: (err, what) => logger.warn({ err: err instanceof Error ? err.message : String(err), what }, 'focus locks unavailable'),
+  });
+  // What each room's clients were last told, so a change is announced once and a quiet room costs nothing.
+  const announced = new Map<string, string>();
+  let tick: ReturnType<typeof setInterval> | undefined;
+  // Connections whose current message is being dropped: they are read-only for exactly that message.
+  const droppingEdits = new WeakMap<Connection, boolean>();
+
+  const publish = (roomId: string, document: { broadcastStateless(payload: string): void }, outcome: LockOutcome) => {
+    if (!outcome.broadcast) return;
+    if (outcome.broadcast.type === 'locks.snapshot') announced.set(roomId, snapshotSignature(outcome.broadcast));
+    // Across replicas: the Redis extension forwards a broadcast to the others.
+    document.broadcastStateless(encode(outcome.broadcast));
+  };
+
+  const runTick = async (instance: Hocuspocus) => {
+    for (const [name, document] of instance.documents) {
+      const roomId = parseDocumentName(name);
+      if (!roomId || document.getConnectionsCount() === 0) continue;
+      try {
+        const snapshot = await lockService.snapshot(roomId, true);
+        const signature = snapshotSignature(snapshot);
+        if (announced.get(roomId) === signature) continue;
+        announced.set(roomId, signature);
+        // Every replica ticks for its own clients, so this one only needs to reach its own.
+        document.relayStateless(encode({ type: 'locks.snapshot', ...snapshot }));
+      } catch (err) {
+        logger.warn({ err: err instanceof Error ? err.message : String(err), roomId }, 'lock tick failed');
+      }
+    }
+  };
 
   const extensions = [
     new Throttle({ throttle: deps.connectionsPerMin ?? 300, consideredSeconds: 60, banTime: 5 }),
@@ -124,18 +195,85 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
 
     async afterUnloadDocument({ documentName }) {
       const roomId = parseDocumentName(documentName);
-      if (roomId) store.release?.(roomId);
+      if (!roomId) return;
+      store.release?.(roomId);
+      announced.delete(roomId);
+      lockService.forget(roomId);
+    },
+
+    // --- Focus locks (P2-08) ---
+
+    async onListen({ instance }) {
+      tick = setInterval(() => void runTick(instance), deps.locks?.tickMs ?? DEFAULT_LOCK_TICK_MS);
+      tick.unref();
+    },
+
+    async onDestroy() {
+      clearInterval(tick);
+      lockRedis?.disconnect();
+    },
+
+    /** Tell a new connection who holds what, before it has to ask. */
+    async connected({ connection, context }) {
+      try {
+        connection.sendStateless(encode({ type: 'locks.snapshot', ...(await lockService.snapshot(context.roomId, true)) }));
+      } catch (err) {
+        logger.warn({ err: err instanceof Error ? err.message : String(err), roomId: context.roomId }, 'could not send lock state');
+      }
+    },
+
+    async onStateless({ connection, document, payload }) {
+      const context = connection.context as CollabContext | undefined;
+      if (!context || payload.length > MAX_STATELESS_BYTES) return;
+      let request;
+      try {
+        request = lockRequestSchema.parse(JSON.parse(payload));
+      } catch {
+        return; // not a lock request
+      }
+      const outcome = await lockService.handle(
+        { roomId: context.roomId, user: { userId: context.user.userId, name: context.user.name ?? '' }, connectionId: connection.socketId, document },
+        request,
+      );
+      if (outcome.reply) connection.sendStateless(encode(outcome.reply));
+      publish(context.roomId, document, outcome);
+    },
+
+    /**
+     * An edit to a file somebody else has locked is dropped. Hocuspocus already drops edits from a
+     * read-only connection and answers "not saved", so the connection is made read-only for this one
+     * message (afterHandleMessage restores it) rather than closed, and the sender is told which file.
+     */
+    async beforeHandleMessage({ update, document, context, connection }) {
+      const edit = writableUpdate(update);
+      if (!edit) return;
+      const rejection = await lockService.rejects(context.roomId, context.user.userId, document, edit);
+      if (!rejection) return;
+      droppingEdits.set(connection, connection.readOnly);
+      connection.readOnly = true;
+      connection.sendStateless(encode(rejection));
+      logger.info(
+        { event: 'collab.lock.rejected', roomId: context.roomId, userId: context.user.userId, files: rejection.type === 'locks.rejected' ? rejection.fileIds : [] },
+        'edit to a locked file dropped',
+      );
+    },
+
+    async afterHandleMessage({ connection }) {
+      if (!droppingEdits.has(connection)) return;
+      connection.readOnly = droppingEdits.get(connection) ?? false;
+      droppingEdits.delete(connection);
     },
 
     async beforeHandleAwareness(payload) {
       guardAwareness(payload);
     },
 
-    async onDisconnect({ documentName, context, clientsCount }) {
+    async onDisconnect({ documentName, context, clientsCount, document, socketId }) {
       logger.info(
         { event: 'collab.disconnect', roomId: context?.roomId, userId: context?.user?.userId, documentName, clientsCount },
         'connection closed',
       );
+      if (context?.roomId) publish(context.roomId, document, await lockService.releaseConnection(context.roomId, socketId));
     },
 
     async onRequest({ request, response, instance }) {

@@ -1,5 +1,6 @@
 import { MongoClient } from 'mongodb';
 import { loadConfig, type CollabConfig } from './config.js';
+import { createMongoLegacyRooms } from './legacyRooms.js';
 import { MongoDocStore } from './mongoDocStore.js';
 import { createLogger } from './logger.js';
 import { createMongoRoomAccess } from './roomAccess.js';
@@ -27,6 +28,7 @@ async function main(): Promise<void> {
     logger,
     access: createMongoRoomAccess(mongo.db()),
     store,
+    legacy: createMongoLegacyRooms(mongo.db()),
     redisUrl: config.REDIS_URL || undefined,
     connectionsPerMin: config.COLLAB_CONNECTIONS_PER_MIN,
     release: config.APP_RELEASE,

@@ -18,6 +18,7 @@
     "@hocuspocus/extension-throttle": "^4.7.1",
     "@hocuspocus/server": "^4.7.1",
     "@synapse/redis": "workspace:*",
+    "@synapse/room-doc": "workspace:*",
     "jsonwebtoken": "^9.0.3",
     "mongodb": "^7.7.0",
     "pino": "^10.3.1",

@@ -1,0 +1,33 @@
+{
+  "name": "@synapse/room-doc",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Room document model: file tree + per-file text in one Y.Doc (P2-06)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "echo \"@synapse/room-doc: lint ok\""
+  },
+  "peerDependencies": {
+    "yjs": "^13.6.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2",
+    "yjs": "^13.6.33"
+  }
+}

@@ -7,6 +7,7 @@ import { pino } from 'pino';
 import * as Y from 'yjs';
 import { documentNameFor } from './auth.js';
 import { MemoryDocStore, type DocStore } from './docStore.js';
+import type { LegacyRooms } from './legacyRooms.js';
 import { decideAccess, type RoomAccess, type RoomAccessRecord } from './roomAccess.js';
 import { createCollabServer, type CollabContext } from './server.js';
 
@@ -38,6 +39,7 @@ export function fakeAccess(rooms: Record<string, RoomAccessRecord>): RoomAccess 
 export async function startServer(opts: {
   access: RoomAccess;
   store?: DocStore;
+  legacy?: LegacyRooms;
   redisUrl?: string;
   storeDebounceMs?: number;
 }): Promise<Server<CollabContext>> {

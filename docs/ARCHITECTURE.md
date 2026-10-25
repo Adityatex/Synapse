@@ -11,6 +11,7 @@ Synapse/
 ├── packages/shared/        # @synapse/shared — zod contracts + TS types (P1-04)
 │   └── src/{http,socket,envelope}.ts
 ├── packages/redis/         # @synapse/redis — ioredis factory + health check (P2-02)
+├── packages/room-doc/      # @synapse/room-doc — file tree + text in one Y.Doc: ops, tree resolution, seeding (P2-06)
 ├── apps/collab/            # @synapse/collab — Hocuspocus server, one Y.Doc per room (P2-03)
 │   └── src/{server,auth,roomAccess,docStore,config}.ts
 ├── server/                 # Express 5 + Socket.IO API (CJS runtime, P1-02 incremental TS)
@@ -97,6 +98,27 @@ the worker in P2-05; until then `ydoc_updates` grows unbounded.
 Durability window: edits are persisted 2 s after the last change (10 s max
 under continuous typing) and on last disconnect / graceful shutdown. A
 hard-killed process can lose at most that window server-side.
+
+### 4.2 Room document model (P2-06)
+
+`@synapse/room-doc` defines what is inside a room's Y.Doc: `files`
+(Y.Map of fileId to a node map: name, type `file|folder`, parentId, order,
+timestamps, `deletedAt`) and one `content:<fileId>` Y.Text per file. Tabs, the
+active file and folder open/closed state are per-user UI and are not shared.
+
+Concurrent edits are resolved by `listNodes`, a pure function of the document,
+so every client sees the same tree: deleted nodes and everything under a
+deleted folder are hidden (a delete is a tombstone; the text is kept); a node
+whose parent is missing becomes root-level; if two users move folders into each
+other the member with the smallest id is lifted to the root, so nothing
+disappears. Siblings sort by `order` then id, so ties are stable. Deviations
+from the P2-01 design doc: nodes use `folder` (not `directory`) to match the
+existing UI, and file text is a top-level `content:<fileId>` Y.Text as in the
+roadmap rather than nested in the node map.
+
+Rooms that existed before collab are seeded on first load: with no stored
+document, collab builds one from `Room.files` using a fixed Yjs client id, so
+replicas that seed the same room at the same moment merge into one copy.
 
 ## 5. Client state
 

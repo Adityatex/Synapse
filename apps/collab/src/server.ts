@@ -2,9 +2,11 @@ import { Server } from '@hocuspocus/server';
 import { Redis as RedisExtension } from '@hocuspocus/extension-redis';
 import { Throttle } from '@hocuspocus/extension-throttle';
 import { checkRedisHealth, createRedisClient } from '@synapse/redis';
+import { buildSeedUpdate } from '@synapse/room-doc';
 import * as Y from 'yjs';
 import { AuthError, documentNameFor, parseDocumentName, verifyAccessToken, type AuthUser } from './auth.js';
 import type { DocStore } from './docStore.js';
+import type { LegacyRooms } from './legacyRooms.js';
 import type { Logger } from './logger.js';
 import type { RoomAccess } from './roomAccess.js';
 
@@ -19,6 +21,8 @@ export interface CollabDeps {
   logger: Logger;
   access: RoomAccess;
   store: DocStore;
+  /** A room with no stored document is seeded from its legacy files (the migration path, P2-10). */
+  legacy?: LegacyRooms;
   /** Without a Redis URL the server runs single-instance. */
   redisUrl?: string;
   connectionsPerMin?: number;
@@ -90,7 +94,19 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
       const roomId = parseDocumentName(documentName);
       if (!roomId) return;
       const state = await store.load(roomId);
-      if (state) Y.applyUpdate(document, state);
+      if (state) {
+        Y.applyUpdate(document, state);
+        return;
+      }
+      if (!deps.legacy) return;
+
+      // First open since collab: build the document from the room's legacy files.
+      // The seed is deterministic, so replicas that race to do this merge into one copy.
+      const files = await deps.legacy.loadFiles(roomId);
+      if (files.length === 0) return;
+      Y.applyUpdate(document, buildSeedUpdate(files));
+      await store.store(roomId, document); // persist now: loading does not trigger a store
+      logger.info({ event: 'collab.seeded', roomId, files: files.length }, 'seeded room from legacy files');
     },
 
     async onStoreDocument({ documentName, document }) {

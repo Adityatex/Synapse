@@ -5,6 +5,7 @@ const { logger } = require('../lib/logger');
 const { captureException } = require('../lib/sentry');
 const { validateBody } = require('../middleware/validate');
 const { executeLimiter } = require('../middleware/rateLimits');
+const { resolveExecuteSource } = require('../lib/roomFiles');
 
 const router = express.Router();
 
@@ -32,13 +33,20 @@ function decodeBase64Field(value) {
 // per-user quota (20/min) on top of auth.
 router.post('/execute', authMiddleware, executeLimiter, validateBody('executeSchema'), async (req, res) => {
   try {
-    const { source_code, language_id, stdin = '' } = req.body;
+    const { language_id, stdin = '' } = req.body;
 
-    if (!source_code || !language_id) {
+    if (!language_id) {
       return res.status(400).json({
         error: 'source_code and language_id are required',
        requestId: req.id, });
     }
+
+    // P2-09: with a room and file named, run what is in the room right now (not the cached copy).
+    const source = await resolveExecuteSource(req.body, req.headers.authorization);
+    if (!source.ok) {
+      return res.status(source.status).json({ error: source.error, requestId: req.id });
+    }
+    const source_code = source.source_code;
 
     // base64-encode source_code/stdin: Judge0 can't losslessly store raw UTF-8
     // for some inputs (control chars, unusual unicode from pasted code) and

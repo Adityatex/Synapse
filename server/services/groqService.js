@@ -20,7 +20,7 @@ function buildContextBlock(context = {}) {
 
   const fileList = fileSummaries
     .slice(0, 30)
-    .map((file) => `- ${file.name}${file.id === activeFile?.id ? ' (active)' : ''}`)
+    .map((file) => `- ${file.path || file.name}${file.id === activeFile?.id ? ' (active)' : ''}`)
     .join('\n');
 
   if (!activeFile) {

@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const authMiddleware = require('../middleware/auth');
+const { withRoomContext } = require('../lib/roomFiles');
 const { logger } = require('../lib/logger');
 const { captureException } = require('../lib/sentry');
 const { validateBody } = require('../middleware/validate');
@@ -249,7 +250,8 @@ router.post('/chat', aiChatLimiter, validateBody('aiChatSchema'), async (req, re
     const reply = await requestGroqChat({
       message: normalizedMessage,
       history: persistedHistory.length > 0 ? persistedHistory : history,
-      context,
+      // P2-09: the room's files come from the room, not from what the browser says they are.
+      context: await withRoomContext(context, req.headers.authorization),
     });
 
     const existingMessageCount = await AIMessage.countDocuments({

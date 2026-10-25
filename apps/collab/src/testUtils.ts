@@ -39,7 +39,7 @@ export function fakeAccess(rooms: Record<string, RoomAccessRecord>): RoomAccess 
   return {
     check: async (roomId, userId) => decideAccess(rooms[roomId] ?? null, userId),
     // Read on every call, so a test can flip `locksEnabled` on the record mid-run.
-    settings: async (roomId) => (rooms[roomId] ? { locksEnabled: rooms[roomId].locksEnabled === true } : null),
+    settings: async (roomId) => (rooms[roomId] ? { locksEnabled: rooms[roomId].locksEnabled === true, collabVersion: rooms[roomId].collabVersion ?? null } : null),
   };
 }
 

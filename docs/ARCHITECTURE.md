@@ -129,6 +129,26 @@ replicas that seed the same room at the same moment merge into one copy.
 - Code splitting (P1-11): all pages `React.lazy` + `Suspense`; Monaco
   lazy inside `EditorPanel`.
 
+### 5.1 Collab mode (P2-06)
+
+The room page has two paths, chosen at build time by `VITE_COLLAB_URL`:
+
+- **unset (default)**: the legacy Socket.IO relay, unchanged.
+- **set** (e.g. `ws://localhost:5001`): `useRoomCollab` connects to `apps/collab`
+  and `CollabFileProvider` replaces `FileProvider`. It exposes the same
+  `useFiles()` interface, backed by the room's Y.Doc through `@synapse/room-doc`,
+  so Sidebar, TabBar, Toolbar and Neura are unchanged. Monaco binds to the file's
+  shared `Y.Text`. Tabs, the active file and open folders are per-user.
+
+In collab mode Socket.IO still carries chat, presence and cursors (until P2-07),
+and `save-version`. Not used: `code-change`, `sync-room-state`, `autosave` and file
+locks (P2-08 brings locks back as an optional per-room setting). The flag is global
+per client build until P2-10 adds a per-room one, so do not run old and new clients
+against the same rooms.
+
+Run it locally: `docker compose up -d --build` (starts `collab` on :5001), put
+`VITE_COLLAB_URL=ws://localhost:5001` in `client/.env.local`, then `pnpm dev`.
+
 ## 6. TypeScript plan (P1-02 / P1-03)
 
 - `packages/shared` is fully TS (source of truth for payloads).

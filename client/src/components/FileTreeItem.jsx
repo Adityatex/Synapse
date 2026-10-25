@@ -116,6 +116,8 @@ export default function FileTreeItem({
     }
   }, [item._triggerRename, startRenaming]);
 
+  // Select the name once, when renaming starts. Depending on renameValue here would
+  // re-select on every keystroke, so each typed character replaced the previous one.
   useEffect(() => {
     if (isRenaming && renameInputRef.current) {
       renameInputRef.current.focus();
@@ -130,7 +132,8 @@ export default function FileTreeItem({
         renameInputRef.current.select();
       }
     }
-  }, [isRenaming, isFolder, renameValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRenaming]);
 
   const handleClick = (e) => {
     e.stopPropagation();

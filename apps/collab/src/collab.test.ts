@@ -1,7 +1,7 @@
 import { createRedisClient } from '@synapse/redis';
 import jwt from 'jsonwebtoken';
 import { afterEach, describe, expect, it } from 'vitest';
-import { MemoryDocStore } from './docStore.js';
+import { MemoryDocStore } from '@synapse/ydoc-store';
 import { closeAll, connect, fakeAccess, randomRoomId, startServer, tokenFor, waitFor } from './testUtils.js';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';

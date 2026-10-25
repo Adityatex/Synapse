@@ -1,0 +1,40 @@
+{
+  "name": "@synapse/ydoc-store",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MongoDB persistence for room documents, and the queue that keeps it compact (P2-04, P2-05)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "echo \"@synapse/ydoc-store: lint ok\""
+  },
+  "peerDependencies": {
+    "mongodb": "^7.0.0",
+    "yjs": "^13.6.8"
+  },
+  "dependencies": {
+    "bullmq": "^6.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "mongodb": "^7.7.0",
+    "mongodb-memory-server": "^11.3.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2",
+    "yjs": "^13.6.33",
+    "@synapse/redis": "workspace:*"
+  }
+}

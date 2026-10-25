@@ -70,6 +70,24 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-only-long-enough-secret-1234567890}
       # Local testing opens many tabs from one IP.
       COLLAB_CONNECTIONS_PER_MIN: 5000
+      # Compact quickly in dev so the worker is easy to watch (production default: 5 minutes).
+      SNAPSHOT_DELAY_MS: 10000
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # P2-05: folds each room's updates into snapshots and prunes them (queue: Redis).
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      MONGODB_URI: mongodb://mongo:27017/synapse
+      REDIS_URL: redis://redis:6379
     depends_on:
       mongo:
         condition: service_healthy

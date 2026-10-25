@@ -20,6 +20,10 @@ const schema = z
     APP_RELEASE: z.string().trim().default(''),
     /** Per-IP websocket connections allowed per minute before a short ban. */
     COLLAB_CONNECTIONS_PER_MIN: z.coerce.number().int().min(1).default(300),
+    /** Compact a room once this many updates sit on top of its newest snapshot. */
+    SNAPSHOT_UPDATES_THRESHOLD: z.coerce.number().int().min(1).default(500),
+    /** Otherwise compact this long after a room's first un-compacted update. */
+    SNAPSHOT_DELAY_MS: z.coerce.number().int().min(100).default(300_000),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.JWT_SECRET.length < 32) {

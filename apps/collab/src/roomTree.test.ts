@@ -2,7 +2,7 @@ import { createNode, deleteNode, getContentText, getFileText, listNodes, moveNod
 import { createRedisClient } from '@synapse/redis';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { MemoryDocStore } from './docStore.js';
+import { MemoryDocStore } from '@synapse/ydoc-store';
 import type { LegacyRooms } from './legacyRooms.js';
 import { closeAll, connect, fakeAccess, randomRoomId, startServer, tokenFor, waitFor } from './testUtils.js';
 

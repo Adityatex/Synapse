@@ -5,7 +5,7 @@ import { checkRedisHealth, createRedisClient } from '@synapse/redis';
 import { buildSeedUpdate } from '@synapse/room-doc';
 import * as Y from 'yjs';
 import { AuthError, documentNameFor, parseDocumentName, verifyAccessToken, type AuthUser } from './auth.js';
-import type { DocStore } from './docStore.js';
+import type { DocStore } from '@synapse/ydoc-store';
 import type { LegacyRooms } from './legacyRooms.js';
 import type { Logger } from './logger.js';
 import type { RoomAccess } from './roomAccess.js';

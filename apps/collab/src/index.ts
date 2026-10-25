@@ -1,7 +1,7 @@
 import { MongoClient } from 'mongodb';
 import { loadConfig, type CollabConfig } from './config.js';
+import { MongoDocStore, connectionFromUrl, createSnapshotScheduler, type SnapshotScheduler } from '@synapse/ydoc-store';
 import { createMongoLegacyRooms } from './legacyRooms.js';
-import { MongoDocStore } from './mongoDocStore.js';
 import { createLogger } from './logger.js';
 import { createMongoRoomAccess } from './roomAccess.js';
 import { createCollabServer } from './server.js';
@@ -20,7 +20,20 @@ async function main(): Promise<void> {
   await mongo.connect();
   logger.info('Connected to MongoDB');
 
-  const store = new MongoDocStore(mongo.db());
+  // Compaction keeps ydoc_updates bounded (P2-05). It needs Redis for the queue; without it
+  // a single-instance dev setup still works, it just never compacts.
+  const scheduler: SnapshotScheduler | null = config.REDIS_URL
+    ? createSnapshotScheduler({
+        connection: connectionFromUrl(config.REDIS_URL),
+        policy: { updatesThreshold: config.SNAPSHOT_UPDATES_THRESHOLD, quietDelayMs: config.SNAPSHOT_DELAY_MS },
+        onError: (err) => logger.warn({ err: err.message }, 'snapshot queue error'),
+      })
+    : null;
+  if (!scheduler) logger.warn('REDIS_URL is not set: room documents will not be compacted');
+
+  const store = new MongoDocStore(mongo.db(), {
+    onAppend: (roomId, info) => scheduler?.noteAppend(roomId, info.updatesSinceSnapshot),
+  });
   await store.ensureIndexes();
 
   const server = createCollabServer({
@@ -44,6 +57,7 @@ async function main(): Promise<void> {
     logger.info(`${signal} received. Shutting down gracefully...`);
     try {
       await server.destroy(); // flushes pending document stores before closing
+      await scheduler?.close();
       await mongo.close();
     } catch (err) {
       logger.error({ err: err instanceof Error ? err.message : String(err) }, 'Error during shutdown');

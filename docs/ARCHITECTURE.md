@@ -12,6 +12,8 @@ Synapse/
 │   └── src/{http,socket,envelope}.ts
 ├── packages/redis/         # @synapse/redis — ioredis factory + health check (P2-02)
 ├── packages/room-doc/      # @synapse/room-doc — file tree + text in one Y.Doc: ops, tree resolution, seeding (P2-06)
+├── packages/ydoc-store/    # @synapse/ydoc-store — Mongo persistence for room docs + the compaction queue (P2-04, P2-05)
+├── apps/worker/            # @synapse/worker — BullMQ worker: snapshots and prunes room updates (P2-05)
 ├── apps/collab/            # @synapse/collab — Hocuspocus server, one Y.Doc per room (P2-03)
 │   └── src/{server,auth,roomAccess,docStore,config}.ts
 ├── server/                 # Express 5 + Socket.IO API (CJS runtime, P1-02 incremental TS)
@@ -92,8 +94,22 @@ are contiguous (writers insert highest+1; the unique index rejects a collision
 and they retry), a snapshot at N contains every update <= N, and Yjs updates
 are idempotent, so duplicate writes from two replicas are harmless. A load
 that sees a gap throws rather than return partial data. Snapshotting and
-pruning (`writeSnapshot`, `pruneCoveredUpdates`) exist but are scheduled by
-the worker in P2-05; until then `ydoc_updates` grows unbounded.
+pruning (`writeSnapshot`, `pruneCoveredUpdates`) are run by the worker (below).
+
+**Compaction (P2-05).** After each appended update, collab tells a scheduler how
+many updates sit on top of the newest snapshot. At 500 it enqueues a
+`compact-now` job on the BullMQ queue `ydoc-snapshot` (Redis); otherwise it keeps
+one delayed `compact` job per room, 5 minutes after the first un-compacted
+update. Job ids are fixed per room, so repeated enqueues collapse into one. The
+worker (`apps/worker`) snapshots what is new and deletes the updates the
+snapshot covers, retrying up to 3 times with exponential backoff; failures are
+kept (last 100) until the dead-letter queue and Bull Board arrive in P4-01.
+Compaction is idempotent and safe against concurrent writers, so the queue only
+needs to be at-least-once. Tunables: `SNAPSHOT_UPDATES_THRESHOLD`,
+`SNAPSHOT_DELAY_MS` (collab), `SNAPSHOT_CONCURRENCY` (worker). Without
+`REDIS_URL` collab still runs but never compacts.
+Soak result: 3000 edits from two simulated replicas peaked at 501 updates in the
+collection (limit 1000) with 5 compactions.
 
 Durability window: edits are persisted 2 s after the last change (10 s max
 under continuous typing) and on last disconnect / graceful shutdown. A

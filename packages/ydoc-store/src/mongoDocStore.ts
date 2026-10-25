@@ -52,13 +52,27 @@ export interface CompactionResult {
   snapshotBytes: number;
 }
 
+export interface AppendInfo {
+  seq: number;
+  /** Updates written since the newest snapshot, including this one (the length of the tail a load must merge). */
+  updatesSinceSnapshot: number;
+}
+
+export interface MongoDocStoreOptions {
+  /** Called after each update is appended; the collab server uses it to schedule compaction. */
+  onAppend?: (roomId: string, info: AppendInfo) => void;
+}
+
 export class MongoDocStore implements DocStore {
   private readonly updates: Collection<UpdateDoc>;
   private readonly snapshots: Collection<SnapshotDoc>;
   /** State vector this process last persisted (or loaded) per room, so writes are diffs. */
   private readonly persisted = new Map<string, Uint8Array>();
 
-  constructor(db: Db) {
+  private readonly onAppend?: MongoDocStoreOptions['onAppend'];
+
+  constructor(db: Db, options: MongoDocStoreOptions = {}) {
+    this.onAppend = options.onAppend;
     this.updates = db.collection<UpdateDoc>('ydoc_updates');
     this.snapshots = db.collection<SnapshotDoc>('ydoc_snapshots');
   }
@@ -140,9 +154,10 @@ export class MongoDocStore implements DocStore {
 
   private async append(roomId: string, update: Uint8Array): Promise<void> {
     for (let attempt = 0; attempt < MAX_APPEND_ATTEMPTS; attempt++) {
-      const seq = await this.nextSeq(roomId);
+      const { seq, snapshotSeq } = await this.nextSeq(roomId);
       try {
         await this.updates.insertOne({ roomId, seq, update: new Binary(update), createdAt: new Date() });
+        this.notifyAppend(roomId, { seq, updatesSinceSnapshot: seq - snapshotSeq });
         return;
       } catch (err) {
         if (!isDuplicateKey(err)) throw err; // lost the race for this seq; re-read and retry
@@ -157,10 +172,20 @@ export class MongoDocStore implements DocStore {
    * updates in between, the snapshot read afterwards is guaranteed to be at
    * least as new, so the next seq can never fall inside a covered range.
    */
-  private async nextSeq(roomId: string): Promise<number> {
+  private async nextSeq(roomId: string): Promise<{ seq: number; snapshotSeq: number }> {
     const lastUpdate = await this.updates.find({ roomId }).sort({ seq: -1 }).limit(1).next();
     const lastSnapshot = await this.snapshots.find({ roomId }).sort({ seq: -1 }).limit(1).next();
-    return Math.max(lastUpdate?.seq ?? 0, lastSnapshot?.seq ?? 0) + 1;
+    const snapshotSeq = lastSnapshot?.seq ?? 0;
+    return { seq: Math.max(lastUpdate?.seq ?? 0, snapshotSeq) + 1, snapshotSeq };
+  }
+
+  /** A failing hook must never fail the write it is observing. */
+  private notifyAppend(roomId: string, info: AppendInfo): void {
+    try {
+      this.onAppend?.(roomId, info);
+    } catch {
+      // scheduling is best effort; the next append reschedules
+    }
   }
 }
 

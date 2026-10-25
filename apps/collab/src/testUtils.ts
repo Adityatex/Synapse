@@ -6,7 +6,7 @@ import { createServer } from 'node:net';
 import { pino } from 'pino';
 import * as Y from 'yjs';
 import { documentNameFor } from './auth.js';
-import { MemoryDocStore, type DocStore } from './docStore.js';
+import { MemoryDocStore, type DocStore } from '@synapse/ydoc-store';
 import type { LegacyRooms } from './legacyRooms.js';
 import { decideAccess, type RoomAccess, type RoomAccessRecord } from './roomAccess.js';
 import { createCollabServer, type CollabContext } from './server.js';

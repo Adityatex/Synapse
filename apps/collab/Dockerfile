@@ -9,13 +9,15 @@ WORKDIR /app
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
 COPY packages/redis/package.json packages/redis/
 COPY packages/room-doc/package.json packages/room-doc/
+COPY packages/ydoc-store/package.json packages/ydoc-store/
 COPY apps/collab/package.json apps/collab/
 RUN pnpm install --frozen-lockfile --filter "@synapse/collab..."
 
 COPY packages/redis packages/redis
 COPY packages/room-doc packages/room-doc
+COPY packages/ydoc-store packages/ydoc-store
 COPY apps/collab apps/collab
-RUN pnpm --filter @synapse/redis --filter @synapse/room-doc --filter @synapse/collab build \
+RUN pnpm --filter @synapse/redis --filter @synapse/room-doc --filter @synapse/ydoc-store --filter @synapse/collab build \
  && pnpm --filter @synapse/collab deploy --prod --legacy /out
 
 FROM node:22-slim

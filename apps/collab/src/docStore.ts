@@ -1,14 +1,20 @@
+import * as Y from 'yjs';
+
 /**
- * Where room documents live between sessions. P2-04 replaces this with the
- * MongoDB `ydoc_updates` + `ydoc_snapshots` implementation; until then the
- * in-memory store keeps a room alive across reconnects but NOT across a
- * collab restart.
+ * Where room documents live between sessions.
+ *
+ * `store` receives the live Y.Doc rather than a state blob so an implementation
+ * can persist only what changed since its previous write.
  */
 export interface DocStore {
+  /** Merged persisted state, or null for a room that has never been stored. */
   load(roomId: string): Promise<Uint8Array | null>;
-  store(roomId: string, state: Uint8Array): Promise<void>;
+  store(roomId: string, document: Y.Doc): Promise<void>;
+  /** The room's document was unloaded from this process; drop per-room bookkeeping. */
+  release?(roomId: string): void;
 }
 
+/** Test double: keeps a room across reconnects but not across a process restart. */
 export class MemoryDocStore implements DocStore {
   private readonly states = new Map<string, Uint8Array>();
 
@@ -16,7 +22,7 @@ export class MemoryDocStore implements DocStore {
     return this.states.get(roomId) ?? null;
   }
 
-  async store(roomId: string, state: Uint8Array): Promise<void> {
-    this.states.set(roomId, state);
+  async store(roomId: string, document: Y.Doc): Promise<void> {
+    this.states.set(roomId, Y.encodeStateAsUpdate(document));
   }
 }

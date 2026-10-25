@@ -75,6 +75,29 @@ regex search), locks, `sync-room-state`/`autosave`/`save-version`.
 Client `RoomYjsManager` binds `Y.Text` per file; `EditorPanel` lazy-loads
 Monaco (P1-11).
 
+### 4.1 Collab persistence (P2-03, P2-04)
+
+`apps/collab` is the target replacement for the relay above (cut over in P2-06).
+One Y.Doc per room, persisted in two collections:
+
+- `ydoc_updates { roomId, seq, update, createdAt }` — append-only Yjs diffs.
+  Each write is the change since this process last persisted that room, not
+  the whole document.
+- `ydoc_snapshots { roomId, seq, state, createdAt }` — merged state through
+  `seq`. Load = newest snapshot + updates after it.
+
+Invariants (see `apps/collab/src/mongoDocStore.ts`): committed seqs per room
+are contiguous (writers insert highest+1; the unique index rejects a collision
+and they retry), a snapshot at N contains every update <= N, and Yjs updates
+are idempotent, so duplicate writes from two replicas are harmless. A load
+that sees a gap throws rather than return partial data. Snapshotting and
+pruning (`writeSnapshot`, `pruneCoveredUpdates`) exist but are scheduled by
+the worker in P2-05; until then `ydoc_updates` grows unbounded.
+
+Durability window: edits are persisted 2 s after the last change (10 s max
+under continuous typing) and on last disconnect / graceful shutdown. A
+hard-killed process can lose at most that window server-side.
+
 ## 5. Client state
 
 - Server state: `context/FileContext` (files/tabs) + `context/AuthContext`.

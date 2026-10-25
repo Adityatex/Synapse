@@ -204,6 +204,7 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
             roomName: dbRoom.roomName,
             createdAt: dbRoom.createdAt,
             createdBy: dbRoom.createdBy,
+            locksEnabled: dbRoom.locksEnabled === true,
             participantCount: 0,
           },
         });
@@ -213,8 +214,9 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch room.', requestId: req.id });
     }
   } else {
+    let dbRoom = null;
     try {
-      const dbRoom = await Room.findOne({ roomId });
+      dbRoom = await Room.findOne({ roomId });
       if (dbRoom && !isRoomMember(dbRoom, req.user.userId)) {
         return res.status(403).json({ error: 'You are not a member of this room.', requestId: req.id });
       }
@@ -227,6 +229,7 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
         roomName: room.roomName,
         createdAt: room.createdAt,
         createdBy: room.createdBy,
+        locksEnabled: dbRoom?.locksEnabled === true,
         participantCount: room.participants ? room.participants.length : 0,
       },
     });
@@ -236,6 +239,29 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
     error: 'Room not found.',
     requestId: req.id,
   });
+});
+
+// P2-08: the creator switches focus locks on or off for the room. The collab server reads the
+// flag from the same collection, so the change reaches editors within a couple of seconds.
+router.patch('/:roomId/settings', authMiddleware, validateBody('updateRoomSettingsSchema'), async (req, res) => {
+  const roomId = String(req.params.roomId || '').trim().toUpperCase();
+
+  try {
+    const room = await Room.findOne({ roomId }).select({ createdBy: 1 });
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found.', requestId: req.id });
+    }
+    if (room.createdBy !== req.user.userId) {
+      return res.status(403).json({ error: 'Only the room creator can change room settings.', requestId: req.id });
+    }
+
+    const { locksEnabled } = req.validatedBody;
+    await Room.updateOne({ roomId }, { $set: { locksEnabled } });
+    return res.json({ roomId, locksEnabled });
+  } catch (error) {
+    logger.error({ err: error.message || error, requestId: req.id }, 'Update room settings error');
+    return res.status(500).json({ error: 'Failed to update room settings.', requestId: req.id });
+  }
 });
 
 router.delete('/:roomId', authMiddleware, async (req, res) => {

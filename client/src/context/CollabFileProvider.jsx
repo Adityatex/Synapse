@@ -23,7 +23,7 @@ const newId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).
  * folders, renames, moves and deletes go through @synapse/room-doc and are
  * merged by Yjs, while tabs, the active file and open folders stay per-user.
  */
-export function CollabFileProvider({ doc, children }) {
+export function CollabFileProvider({ doc, readOnly = false, children }) {
   const [version, setVersion] = useState(0);
   const [openFolders, setOpenFolders] = useState(() => new Set());
   const [chosenFileId, setActiveFileId] = useState(null);
@@ -84,17 +84,23 @@ export function CollabFileProvider({ doc, children }) {
   const activeFileId = chosenFileId && files.some((f) => f.id === chosenFileId) ? chosenFileId : firstFileId;
   const activeFile = files.find((f) => f.id === activeFileId) || null;
 
-  const run = useCallback((operation) => {
-    try {
-      operation();
-    } catch (error) {
-      // An invalid move, or an edit to something a peer just deleted: the tree is unchanged.
-      if (!(error instanceof RoomDocError)) throw error;
-    }
-  }, []);
+  // `readOnly` (the sign-in expired, P2-12): changes would only stay on this screen, so make none.
+  const run = useCallback(
+    (operation) => {
+      if (readOnly) return;
+      try {
+        operation();
+      } catch (error) {
+        // An invalid move, or an edit to something a peer just deleted: the tree is unchanged.
+        if (!(error instanceof RoomDocError)) throw error;
+      }
+    },
+    [readOnly]
+  );
 
   const createFile = useCallback(
     (name, parentId = null) => {
+      if (readOnly) return null;
       const id = newId('file');
       run(() =>
         createNode(doc, { id, name, type: 'file', parentId, content: getLanguageByExtension(name).template })
@@ -104,11 +110,12 @@ export function CollabFileProvider({ doc, children }) {
       setActiveFileId(id);
       return id;
     },
-    [doc, run, openTabs]
+    [doc, run, openTabs, readOnly]
   );
 
   const createFolder = useCallback(
     (name, parentId = null) => {
+      if (readOnly) return null;
       const id = newId('folder');
       run(() => createNode(doc, { id, name, type: 'folder', parentId }));
       setOpenFolders((prev) => {
@@ -118,7 +125,7 @@ export function CollabFileProvider({ doc, children }) {
       });
       return id;
     },
-    [doc, run]
+    [doc, run, readOnly]
   );
 
   const toggleFolder = useCallback((id) => {

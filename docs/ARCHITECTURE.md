@@ -226,6 +226,29 @@ Socket.IO file locks (section 4.4 replaces them with an optional per-room settin
 per client build until P2-10 adds a per-room one, so do not run old and new clients
 against the same rooms.
 
+### 5.2 Offline and reconnecting (P2-12)
+
+The connection to the room is a `HocuspocusProviderWebsocket` the client builds itself
+(`hooks/useRoomCollab`), so its reconnect timing is explicit: retry forever, backing off from
+1 s to at most 10 s with jitter, so a connection that comes back is noticed within seconds.
+While it is down the document keeps accepting edits; they are sent on reconnect and Yjs merges
+them with what others did meanwhile (checked headlessly in `apps/collab/src/reconnect.test.ts`
+with a proxy that cuts the network: text and file-tree edits merge with no duplicates, through
+repeated outages).
+
+- **Banner** (`ConnectionBanner`, state from `utils/connectionState.js`): "You are offline" while
+  disconnected, with the number of changes kept on this screen; nothing while connected. The first
+  connection is covered by the loading screen, which says when the server cannot be reached.
+- **Signed out mid-session:** if the token expired while offline, the server refuses the reconnect
+  (and, tested, accepts nothing the client types afterwards). If the room was already open, it stays
+  on screen read-only (the editor, and file create/rename/move/delete, which would only change this
+  screen) with a banner and a Sign in button that returns to the room. If it happens at join, it is
+  the usual "Unable to join room" page.
+- Closing the tab while changes are unsent asks for confirmation. Changes are held in memory only:
+  reloading while offline loses them (persisting them locally, for example with y-indexeddb, is not
+  part of this).
+- The Socket.IO connection that carries chat reconnects on its own, separately.
+
 Run it locally: `docker compose up -d --build` (starts `collab` on :5001), put
 `VITE_COLLAB_URL=ws://localhost:5001` in `client/.env.local`, then `pnpm dev`.
 

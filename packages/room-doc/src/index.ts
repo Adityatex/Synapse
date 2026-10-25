@@ -5,3 +5,5 @@ export type { NewNode } from './ops.js';
 export { listNodes } from './tree.js';
 export { buildSeedUpdate, SEED_CLIENT_ID } from './seed.js';
 export type { LegacyFile } from './seed.js';
+export { projectRoom } from './projection.js';
+export type { ProjectedFile, RoomProjection } from './projection.js';

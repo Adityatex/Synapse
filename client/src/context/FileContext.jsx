@@ -3,7 +3,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { LANGUAGES, getLanguageByExtension } from '../utils/languageMap';
 import { readStorage, writeStorage } from '../utils/storage';
 
-const FileContext = createContext();
+export const FileContext = createContext();
 
 const DEFAULT_FILE = {
   id: 'welcome-py',

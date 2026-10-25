@@ -13,6 +13,8 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    // One copy of yjs: room-doc and the editor binding must share it.
+    resolve: { dedupe: ['yjs'] },
     server: {
       host: devHost,
       port: devPort,

@@ -21,6 +21,10 @@ import { getThemeClasses } from '../utils/theme';
 import { createCollaborationSocket } from '../services/socket';
 import { getRoom } from '../services/roomService';
 import { RoomYjsManager } from '../services/yjsRoom';
+import { getContentText, getFileText } from '@synapse/room-doc';
+import { CollabFileProvider } from '../context/CollabFileProvider';
+import { useRoomCollab } from '../hooks/useRoomCollab';
+import { COLLAB_ENABLED } from '../config/apiConfig';
 
 const FILE_LOCK_RENEW_INTERVAL_MS = 15000;
 
@@ -36,8 +40,13 @@ function getStructureSignature({ files = [] }) {
   });
 }
 
-function RoomSession({ roomId }) {
+// `collab` is set when the room edits through the collab server (P2-06): the shared
+// Y.Doc is then the source of truth for files and text, and the legacy relay is only
+// used for chat, presence and cursors. With `collab` null this is the legacy path.
+function RoomSession({ roomId, collab }) {
   const navigate = useNavigate();
+  const collabDoc = collab?.doc ?? null;
+  const isCollab = collabDoc !== null;
   const { user, logout } = useAuth();
   const { files, activeFileId, openTabs, updateContent, replaceState, replaceSharedFiles } = useFiles();
   const prevFilesRef = useRef([]);
@@ -109,15 +118,16 @@ function RoomSession({ roomId }) {
   );
 
   const handleLocalChange = useCallback((fileId, content) => {
+    if (isCollab) return; // the server persists the document itself
     localChangeEmitterRef.current(fileId, content);
-  }, []);
+  }, [isCollab]);
 
   const handleSaveVersion = useCallback(() => {
-    if (socketRef.current && activeFileId && yjsManager) {
-      const content = yjsManager.getText(activeFileId).toString();
+    if (socketRef.current && activeFileId && (yjsManager || isCollab)) {
+      const content = isCollab ? getFileText(collabDoc, activeFileId) : yjsManager.getText(activeFileId).toString();
       socketRef.current.emit('save-version', { roomId, fileId: activeFileId, content });
     }
-  }, [activeFileId, yjsManager, roomId]);
+  }, [activeFileId, yjsManager, roomId, isCollab, collabDoc]);
 
   useEffect(() => {
     latestRoomStateRef.current = {
@@ -156,7 +166,7 @@ function RoomSession({ roomId }) {
     const socket = createCollaborationSocket();
     socketRef.current = socket;
 
-    const manager = new RoomYjsManager({
+    const manager = isCollab ? null : new RoomYjsManager({
       socket,
       roomId,
       userId: user.userId,
@@ -216,7 +226,7 @@ function RoomSession({ roomId }) {
     };
 
     const applySharedDocs = (sharedDocs, nextFiles) => {
-      manager.applySharedStates(sharedDocs, nextFiles);
+      manager?.applySharedStates(sharedDocs, nextFiles);
     };
 
     const handleRoomJoined = ({ room, sharedDocs, fileLocks: initialFileLocks, participant }) => {
@@ -265,7 +275,7 @@ function RoomSession({ roomId }) {
     };
 
     const handleRemoteCodeChange = ({ fileId, changes }) => {
-      manager.applyRemoteUpdate(fileId, changes);
+      manager?.applyRemoteUpdate(fileId, changes);
     };
 
     const handleUserEditing = ({ userId: peerId, username: peerName, cursorColor: peerColor, fileId }) => {
@@ -430,10 +440,10 @@ function RoomSession({ roomId }) {
       socket.off('user-typing');
       socket.emit('leave-room');
       socket.disconnect();
-      manager.destroy();
+      manager?.destroy();
       setYjsManager(null);
     };
-  }, [logout, navigate, replaceSharedFiles, replaceState, roomId, showLockNotice, updateContent, user, setConnectionState, setError, setLoadingRoom, setRoomName, setRoomReady]);
+  }, [isCollab, logout, navigate, replaceSharedFiles, replaceState, roomId, showLockNotice, updateContent, user, setConnectionState, setError, setLoadingRoom, setRoomName, setRoomReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -459,7 +469,7 @@ function RoomSession({ roomId }) {
 
   useEffect(() => {
     const socket = socketRef.current;
-    if (!socket || connectionState !== 'connected' || loadingRoom || !roomReady) {
+    if (isCollab || !socket || connectionState !== 'connected' || loadingRoom || !roomReady) {
       return;
     }
 
@@ -470,11 +480,12 @@ function RoomSession({ roomId }) {
     suppressStructureSyncRef.current = null;
 
     structureEmitterRef.current?.(latestRoomStateRef.current);
-  }, [structureSignature, connectionState, loadingRoom, roomReady]);
+  }, [structureSignature, connectionState, loadingRoom, roomReady, isCollab]);
 
   useEffect(() => {
     const socket = socketRef.current;
-    if (!socket || connectionState !== 'connected' || !roomReady) {
+    // Focus locks are off in collab mode: concurrent edits merge, and P2-08 brings locks back as an option.
+    if (isCollab || !socket || connectionState !== 'connected' || !roomReady) {
       return undefined;
     }
 
@@ -498,7 +509,7 @@ function RoomSession({ roomId }) {
     return () => {
       window.clearInterval(renewTimer);
     };
-  }, [activeFileId, connectionState, roomId, roomReady]);
+  }, [activeFileId, connectionState, roomId, roomReady, isCollab]);
 
   useEffect(() => {
     if (!ownedLockRef.current) {
@@ -517,7 +528,23 @@ function RoomSession({ roomId }) {
   // getText() returns a STABLE Y.Text reference — no fallback content is
   // provided here so we never pre-seed locally. Content comes exclusively
   // from the server (applySharedStates) to avoid CRDT double-inserts.
-  const sharedText = activeFileId && yjsManager ? yjsManager.getText(activeFileId) : null;
+  const sharedText = !activeFileId
+    ? null
+    : isCollab
+      ? getContentText(collabDoc, activeFileId)
+      : yjsManager
+        ? yjsManager.getText(activeFileId)
+        : null;
+
+  // The collab server refused us (expired token, not a member, unknown room).
+  const collabAuthError = collab?.authError || '';
+  useEffect(() => {
+    if (!collabAuthError) return;
+    setLoadingRoom(false);
+    setRoomReady(false);
+    setError(collabAuthError);
+  }, [collabAuthError, setError, setLoadingRoom, setRoomReady]);
+  const collabPending = isCollab && !collab.synced && !collabAuthError;
 
   // Detect newly created files (present in current files but not previous)
   // and seed their Y.Doc locally so the editor isn't blank before the
@@ -563,7 +590,7 @@ function RoomSession({ roomId }) {
     localChangeEmitterRef.current?.cancel?.();
 
     if (socket?.connected) {
-      if (roomReady) {
+      if (roomReady && !isCollab) {
         socket.emit('sync-room-state', latestRoomStateRef.current);
       }
       if (ownedLockRef.current) {
@@ -575,7 +602,7 @@ function RoomSession({ roomId }) {
     }
 
     navigate('/dashboard');
-  }, [navigate, roomId, roomReady]);
+  }, [navigate, roomId, roomReady, isCollab]);
 
   const activeRemotePeers = useMemo(
     () =>
@@ -599,7 +626,7 @@ function RoomSession({ roomId }) {
       : user;
   }, [presence, user]);
 
-  if (loadingRoom) {
+  if (loadingRoom || collabPending) {
     return (
       <div className="auth-loading-screen">
         <div className="auth-loading-spinner" />
@@ -688,12 +715,28 @@ function RoomSession({ roomId }) {
   );
 }
 
+function CollabRoom({ roomId }) {
+  const collab = useRoomCollab(roomId);
+
+  return (
+    <CollabFileProvider doc={collab.doc}>
+      <RoomSession roomId={roomId} collab={collab} />
+    </CollabFileProvider>
+  );
+}
+
 export default function RoomPage() {
   const { roomId } = useParams();
+  const normalizedRoomId = String(roomId || '').toUpperCase();
+
+  if (COLLAB_ENABLED) {
+    // keyed so moving between rooms gets a fresh document and connection
+    return <CollabRoom key={normalizedRoomId} roomId={normalizedRoomId} />;
+  }
 
   return (
     <FileProvider storageKey={null}>
-      <RoomSession roomId={String(roomId || '').toUpperCase()} />
+      <RoomSession roomId={normalizedRoomId} collab={null} />
     </FileProvider>
   );
 }

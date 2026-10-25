@@ -11,6 +11,11 @@ const devSocketFallback: string =
     ? `${window.location.protocol}//${window.location.hostname}:${backendPort}`
     : '';
 
+// P2-06 rollout flag. When VITE_COLLAB_URL is set (e.g. ws://localhost:5001), rooms edit
+// through the collab server; when empty, the legacy Socket.IO relay is used.
+export const COLLAB_URL: string = trimTrailingSlash(import.meta.env.VITE_COLLAB_URL || '');
+export const COLLAB_ENABLED: boolean = COLLAB_URL !== '';
+
 export const API_BASE: string = apiBaseFromEnv || '/api';
 export const SOCKET_URL: string =
   socketBaseFromEnv || (isDev ? devBackendBase || devSocketFallback : window.location.origin);

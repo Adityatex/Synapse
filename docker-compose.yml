@@ -52,6 +52,30 @@ services:
     # container, so plain nodemon never sees server edits.
     command: pnpm exec nodemon --legacy-watch server.js
 
+  # P2-06: the collaboration server the client connects to when VITE_COLLAB_URL is set
+  # (ws://localhost:5001). Production-style image: rebuild with `docker compose up -d --build collab`.
+  collab:
+    build:
+      context: .
+      dockerfile: apps/collab/Dockerfile
+    ports:
+      - '${COLLAB_PORT:-5001}:5001'
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      PORT: 5001
+      MONGODB_URI: mongodb://mongo:27017/synapse
+      REDIS_URL: redis://redis:6379
+      # Same secret as the api: collab verifies the tokens the api signs.
+      JWT_SECRET: ${JWT_SECRET:-dev-only-long-enough-secret-1234567890}
+      # Local testing opens many tabs from one IP.
+      COLLAB_CONNECTIONS_PER_MIN: 5000
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
   mongo:
     image: mongo:7
     ports:

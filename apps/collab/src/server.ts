@@ -1,14 +1,17 @@
-import { Server } from '@hocuspocus/server';
+import { Server, type Extension } from '@hocuspocus/server';
 import { Redis as RedisExtension } from '@hocuspocus/extension-redis';
 import { Throttle } from '@hocuspocus/extension-throttle';
 import { checkRedisHealth, createRedisClient } from '@synapse/redis';
 import { buildSeedUpdate } from '@synapse/room-doc';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { Hocuspocus } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import { AuthError, documentNameFor, parseDocumentName, verifyAccessToken, type AuthUser } from './auth.js';
 import type { DocStore } from '@synapse/ydoc-store';
 import type { LegacyRooms } from './legacyRooms.js';
 import type { Logger } from './logger.js';
 import type { RoomAccess } from './roomAccess.js';
+import { createProjectionService, type ProjectionOptions } from './projectionService.js';
 
 /** Per-connection data set by onAuthenticate and read by every later hook. */
 export interface CollabContext {
@@ -29,7 +32,11 @@ export interface CollabDeps {
   release?: string;
   /** Quiet period before a changed document is persisted. Tests shorten it. */
   storeDebounceMs?: number;
+  /** The plain-text projection (P2-09). Tests shorten the waits and can supply a cache client. */
+  projection?: Pick<ProjectionOptions, 'cacheMs' | 'syncWaitMs' | 'client'>;
 }
+
+const FILES_ROUTE = /^\/rooms\/([A-Za-z0-9]{4,32})\/files$/;
 
 // Persist after 2 s of quiet, and never leave a busy document unsaved for over 10 s.
 const DEFAULT_STORE_DEBOUNCE_MS = 2_000;
@@ -54,10 +61,49 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
       })
     : null;
 
-  const extensions = [
+  const extensions: Extension[] = [
     new Throttle({ throttle: deps.connectionsPerMin ?? 300, consideredSeconds: 60, banTime: 5 }),
     ...(redis ? [redis] : []),
   ];
+
+  const projection = createProjectionService({ redisUrl, logger, ...deps.projection });
+  extensions.push({
+    async onDestroy() {
+      await projection.close();
+    },
+  });
+
+  /** GET /rooms/:id/files: the room as plain text for a member (P2-09). */
+  async function serveRoomFiles(request: IncomingMessage, response: ServerResponse, instance: Hocuspocus, roomParam: string) {
+    const send = (status: number, body: unknown) => {
+      response.writeHead(status, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify(body));
+    };
+    try {
+      let user;
+      try {
+        user = verifyAccessToken((request.headers.authorization ?? '').replace(/^Bearer\s+/i, ''), jwtSecret);
+      } catch {
+        return send(401, { error: 'Authentication required.' });
+      }
+      const roomId = roomParam.toUpperCase();
+      let decision;
+      try {
+        decision = await access.check(roomId, user.userId);
+      } catch (err) {
+        logger.error({ err: err instanceof Error ? err.message : String(err), roomId }, 'Room access check failed');
+        return send(503, { error: 'Could not verify room access.' });
+      }
+      if (decision === 'not-found') return send(404, { error: 'Room not found.' });
+      if (decision === 'denied') return send(403, { error: 'You are not a member of this room.' });
+
+      const fresh = new URL(request.url ?? '', 'http://collab').searchParams.get('fresh') === '1';
+      return send(200, { roomId, ...(await projection.read(instance, roomId, { fresh })) });
+    } catch (err) {
+      logger.error({ err: err instanceof Error ? err.message : String(err), roomParam }, 'Room projection failed');
+      return send(500, { error: 'Could not read the room.' });
+    }
+  }
 
   return new Server<CollabContext>({
     name: 'synapse-collab',
@@ -90,7 +136,7 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
       return { user, roomId } satisfies CollabContext;
     },
 
-    async onLoadDocument({ documentName, document }) {
+    async onLoadDocument({ documentName, document, context }) {
       const roomId = parseDocumentName(documentName);
       if (!roomId) return;
       const state = await store.load(roomId);
@@ -98,7 +144,8 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
         Y.applyUpdate(document, state);
         return;
       }
-      if (!deps.legacy) return;
+      // A read-only open (the projection) must not turn a legacy room into a collab room just by looking.
+      if (!deps.legacy || (context as { projection?: boolean } | undefined)?.projection) return;
 
       // First open since collab: build the document from the room's legacy files.
       // The seed is deterministic, so replicas that race to do this merge into one copy.
@@ -135,7 +182,10 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
 
     async onRequest({ request, response, instance }) {
       const path = (request.url ?? '').split('?')[0];
-      if (path === '/health') {
+      const files = request.method === 'GET' ? FILES_ROUTE.exec(path) : null;
+      if (files) {
+        await serveRoomFiles(request, response, instance, files[1]);
+      } else if (path === '/health') {
         const body = {
           status: 'ok',
           service: 'collab',

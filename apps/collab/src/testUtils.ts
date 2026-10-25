@@ -9,7 +9,7 @@ import { documentNameFor } from './auth.js';
 import { MemoryDocStore, type DocStore } from '@synapse/ydoc-store';
 import type { LegacyRooms } from './legacyRooms.js';
 import { decideAccess, type RoomAccess, type RoomAccessRecord } from './roomAccess.js';
-import { createCollabServer, type CollabContext } from './server.js';
+import { createCollabServer, type CollabContext, type CollabDeps } from './server.js';
 
 export const SECRET = 'integration-secret-long-enough-1234567890';
 
@@ -42,6 +42,7 @@ export async function startServer(opts: {
   legacy?: LegacyRooms;
   redisUrl?: string;
   storeDebounceMs?: number;
+  projection?: CollabDeps['projection'];
 }): Promise<Server<CollabContext>> {
   const server = createCollabServer({ jwtSecret: SECRET, logger, store: new MemoryDocStore(), ...opts });
   await server.listen(await freePort());

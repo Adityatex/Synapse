@@ -255,7 +255,11 @@ router.patch('/:roomId/settings', authMiddleware, validateBody('updateRoomSettin
       return res.status(403).json({ error: 'Only the room creator can change room settings.', requestId: req.id });
     }
 
-    const { locksEnabled } = req.validatedBody;
+    // validateBody lets a request through when it cannot find the schema, so check here as well.
+    const { locksEnabled } = req.validatedBody ?? req.body ?? {};
+    if (typeof locksEnabled !== 'boolean') {
+      return res.status(400).json({ error: 'locksEnabled must be true or false.', requestId: req.id });
+    }
     await Room.updateOne({ roomId }, { $set: { locksEnabled } });
     return res.json({ roomId, locksEnabled });
   } catch (error) {

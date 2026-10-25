@@ -25,6 +25,7 @@ import { getContentText, getFileText, identityFor } from '@synapse/room-doc';
 import { CollabFileProvider } from '../context/CollabFileProvider';
 import { useRoomCollab } from '../hooks/useRoomCollab';
 import { useLocalPresence, usePeers } from '../hooks/usePresence';
+import { useRoomMode } from '../hooks/useRoomMode';
 import ConnectionBanner from '../components/ConnectionBanner';
 import { connectionBannerState } from '../utils/connectionState';
 import { rememberReturnTo } from '../utils/returnTo';
@@ -247,7 +248,8 @@ function RoomSession({ roomId, collab }) {
       setConnectionState('connected');
       setError('');
       // P0-03: identity comes from the JWT — only roomId is sent.
-      socket.emit('join-room', { roomId });
+      // A collab client joins for chat only (P2-10): its files are not loaded into the api.
+      socket.emit('join-room', isCollab ? { roomId, collab: true } : { roomId });
     };
 
     const handleDisconnect = () => {
@@ -675,7 +677,7 @@ function RoomSession({ roomId, collab }) {
   }, [unsyncedChanges]);
 
   const bannerState = isCollab
-    ? connectionBannerState({ status: collab.status, synced: collab.synced, unsynced: unsyncedChanges, authLost })
+    ? connectionBannerState({ status: collab.status, synced: collab.synced, unsynced: unsyncedChanges, authLost, refusal: collabAuthError })
     : null;
 
   // Detect newly created files (present in current files but not previous)
@@ -852,7 +854,7 @@ function RoomSession({ roomId, collab }) {
         />
 
         <main className={`flex-1 min-w-0 flex flex-col ${t.editorBg} overflow-hidden rounded-xl border shadow-lg ${theme === 'dark' ? 'border-white/10 shadow-black/50' : 'border-slate-300 shadow-slate-200/50'} relative transition-colors duration-300`}>
-          <ConnectionBanner state={bannerState} unsynced={unsyncedChanges} onSignIn={handleSignIn} />
+          <ConnectionBanner state={bannerState} unsynced={unsyncedChanges} refusal={collabAuthError} onSignIn={handleSignIn} onReload={() => window.location.reload()} />
           <TabBar theme={theme} roomId={roomId} fileLocks={fileLocks} currentUserId={user?.userId} />
           
           <EditorPanel
@@ -931,7 +933,19 @@ export default function RoomPage() {
   const { roomId } = useParams();
   const normalizedRoomId = String(roomId || '').toUpperCase();
 
-  if (COLLAB_ENABLED) {
+  // In a collab build, the room's own flag decides (P2-10): a room pinned to the classic editor opens there.
+  const mode = useRoomMode(normalizedRoomId, COLLAB_ENABLED);
+
+  if (mode === 'loading') {
+    return (
+      <div className="auth-loading-screen">
+        <div className="auth-loading-spinner" />
+        <p className="auth-loading-text">Opening room {normalizedRoomId}...</p>
+      </div>
+    );
+  }
+
+  if (mode === 'collab') {
     // keyed so moving between rooms gets a fresh document and connection
     return <CollabRoom key={normalizedRoomId} roomId={normalizedRoomId} />;
   }

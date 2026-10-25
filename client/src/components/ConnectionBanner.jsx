@@ -6,12 +6,14 @@ import { CloudOff, Loader2, LogIn } from 'lucide-react';
  */
 const plural = (count) => (count === 1 ? '1 change' : `${count} changes`);
 
-export default function ConnectionBanner({ state, unsynced = 0, onSignIn }) {
+export default function ConnectionBanner({ state, unsynced = 0, refusal = '', onSignIn, onReload }) {
   if (!state) return null;
 
   const signedOut = state === 'signed-out';
+  const stopped = signedOut || state === 'refused';
   const message = {
     'signed-out': 'Your session expired, so this room is read-only now. Sign in again to keep editing.',
+    refused: `${refusal || 'The server turned this connection away.'} This room is read-only now; reload to open it again.`,
     offline: 'You are offline. Reconnecting; what you type is kept here and will sync when the connection is back.',
     'offline-unsynced': `You are offline. ${plural(unsynced)} kept here, and will sync when the connection is back.`,
   }[state];
@@ -27,17 +29,17 @@ export default function ConnectionBanner({ state, unsynced = 0, onSignIn }) {
         gap: '8px',
         padding: '6px 14px',
         fontSize: '12px',
-        background: signedOut ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-        borderBottom: `1px solid ${signedOut ? 'rgba(239, 68, 68, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
-        color: signedOut ? 'var(--danger-fg, #b91c1c)' : 'var(--warn-fg)',
+        background: stopped ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+        borderBottom: `1px solid ${stopped ? 'rgba(239, 68, 68, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
+        color: stopped ? 'var(--danger-fg, #b91c1c)' : 'var(--warn-fg)',
       }}
     >
-      {signedOut ? <LogIn size={14} aria-hidden="true" /> : state === 'offline' ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <CloudOff size={14} aria-hidden="true" />}
+      {stopped ? <LogIn size={14} aria-hidden="true" /> : state === 'offline' ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <CloudOff size={14} aria-hidden="true" />}
       <span style={{ flex: 1 }}>{message}</span>
-      {signedOut && (
+      {stopped && (
         <button
           type="button"
-          onClick={onSignIn}
+          onClick={signedOut ? onSignIn : onReload}
           style={{
             border: '1px solid currentColor',
             borderRadius: '6px',
@@ -49,7 +51,7 @@ export default function ConnectionBanner({ state, unsynced = 0, onSignIn }) {
             cursor: 'pointer',
           }}
         >
-          Sign in
+          {signedOut ? 'Sign in' : 'Reload'}
         </button>
       )}
     </div>

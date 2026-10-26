@@ -136,6 +136,31 @@ Rooms that existed before collab are seeded on first load: with no stored
 document, collab builds one from `Room.files` using a fixed Yjs client id, so
 replicas that seed the same room at the same moment merge into one copy.
 
+### 4.3 Presence (P2-07)
+
+In collab mode presence is Yjs awareness on the room's connection, not Socket.IO,
+so it follows the document across replicas through the same Redis channel and is
+never persisted. A client publishes `fileId` (the file it has open), `typing`
+(true from a keystroke to about two seconds of quiet) and `selection` (written by
+y-monaco as Yjs relative positions, so a cursor follows concurrent edits).
+
+Awareness is written by clients, so the collab server rewrites every update in
+`beforeHandleAwareness` (`apps/collab/src/presence.ts`) before relaying it:
+
+- `user` (id, name, colour, glyph) is stamped from the verified token. A client
+  cannot appear as someone else, whatever it sends.
+- Only known fields of the expected shape and size survive. A malformed relative
+  position is dropped, since it would throw inside every peer's editor.
+- A connection can only speak for its own awareness client id.
+
+Colour and avatar glyph are derived from the user id (`colorForUser` in
+`@synapse/room-doc`), so nothing about a participant is kept per room and the same
+person has the same colour everywhere. The price is that two people in a room can
+share a colour (12-colour palette); the name flag on each cursor tells them apart.
+The legacy relay's `userAppearance` map is gone, and `server/tests/vitest/appearance.test.js`
+checks that the relay and the collab path agree. Clients also re-derive the colour
+and strip the name to CSS-safe characters before putting either into a stylesheet.
+
 ## 5. Client state
 
 - Server state: `context/FileContext` (files/tabs) + `context/AuthContext`.
@@ -156,8 +181,8 @@ The room page has two paths, chosen at build time by `VITE_COLLAB_URL`:
   so Sidebar, TabBar, Toolbar and Neura are unchanged. Monaco binds to the file's
   shared `Y.Text`. Tabs, the active file and open folders are per-user.
 
-In collab mode Socket.IO still carries chat, presence and cursors (until P2-07),
-and `save-version`. Not used: `code-change`, `sync-room-state`, `autosave` and file
+In collab mode Socket.IO still carries chat and `save-version`; the people list,
+the "is editing" bar and remote cursors come from awareness (section 4.3). Not used: `code-change`, `sync-room-state`, `autosave` and file
 locks (P2-08 brings locks back as an optional per-room setting). The flag is global
 per client build until P2-10 adds a per-room one, so do not run old and new clients
 against the same rooms.

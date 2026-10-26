@@ -21,9 +21,10 @@ import { getThemeClasses } from '../utils/theme';
 import { createCollaborationSocket } from '../services/socket';
 import { getRoom } from '../services/roomService';
 import { RoomYjsManager } from '../services/yjsRoom';
-import { getContentText, getFileText } from '@synapse/room-doc';
+import { getContentText, getFileText, identityFor } from '@synapse/room-doc';
 import { CollabFileProvider } from '../context/CollabFileProvider';
 import { useRoomCollab } from '../hooks/useRoomCollab';
+import { useLocalPresence, usePeers } from '../hooks/usePresence';
 import { COLLAB_ENABLED } from '../config/apiConfig';
 
 const FILE_LOCK_RENEW_INTERVAL_MS = 15000;
@@ -50,6 +51,10 @@ function RoomSession({ roomId, collab }) {
   const { user, logout } = useAuth();
   const { files, activeFileId, openTabs, updateContent, replaceState, replaceSharedFiles } = useFiles();
   const prevFilesRef = useRef([]);
+  // P2-07: in collab mode presence is Yjs awareness on the room's connection, not Socket.IO.
+  const awareness = collab?.awareness ?? null;
+  const peers = usePeers(awareness, user?.userId);
+  useLocalPresence(awareness, collabDoc, user, activeFileId);
   // P1-10: session chrome from the Zustand store + focused hooks.
   const { theme, toggleTheme } = useRoomTheme();
   const { lockNotice, showLockNotice } = useLockNotice();
@@ -66,7 +71,7 @@ function RoomSession({ roomId, collab }) {
   const setError = useRoomUiStore((s) => s.setError);
   const roomName = useRoomUiStore((s) => s.roomName);
   const setRoomName = useRoomUiStore((s) => s.setRoomName);
-  const [presence, setPresence] = useState({});
+  const [socketPresence, setSocketPresence] = useState({});
   const [yjsManager, setYjsManager] = useState(null);
   const [, setYjsDocVersion] = useState(0);
   const [editingUsers, setEditingUsers] = useState({});
@@ -239,7 +244,7 @@ function RoomSession({ roomId, collab }) {
       setRoomReady(true);
       setError('');
       if (participant) {
-        setPresence((previous) => ({
+        setSocketPresence((previous) => ({
           ...previous,
           [participant.userId]: {
             userId: participant.userId,
@@ -253,7 +258,7 @@ function RoomSession({ roomId, collab }) {
     };
 
     const handleRoomUsers = (nextParticipants) => {
-      setPresence((previous) => {
+      setSocketPresence((previous) => {
         const nextPresence = {};
         nextParticipants.forEach((participant) => {
           nextPresence[participant.userId] = {
@@ -301,7 +306,7 @@ function RoomSession({ roomId, collab }) {
     };
 
     const handleCursorUpdate = (payload) => {
-      setPresence((previous) => ({
+      setSocketPresence((previous) => ({
         ...previous,
         [payload.userId]: {
           ...previous[payload.userId],
@@ -316,7 +321,7 @@ function RoomSession({ roomId, collab }) {
     };
 
     const handleSelectionUpdate = (payload) => {
-      setPresence((previous) => ({
+      setSocketPresence((previous) => ({
         ...previous,
         [payload.userId]: {
           ...previous[payload.userId],
@@ -331,7 +336,7 @@ function RoomSession({ roomId, collab }) {
     };
 
     const handleUserJoined = ({ username, cursorColor, avatarGlyph, userId }) => {
-      setPresence((previous) => ({
+      setSocketPresence((previous) => ({
         ...previous,
         [userId]: {
           ...previous[userId],
@@ -348,7 +353,7 @@ function RoomSession({ roomId, collab }) {
         return;
       }
 
-      setPresence((previous) => {
+      setSocketPresence((previous) => {
         const nextState = { ...previous };
         delete nextState[userId];
         return nextState;
@@ -381,9 +386,11 @@ function RoomSession({ roomId, collab }) {
     socket.on('room-users', handleRoomUsers);
     socket.on('room-state-updated', handleRoomStateUpdated);
     socket.on('remote-code-change', handleRemoteCodeChange);
-    socket.on('user-editing', handleUserEditing);
-    socket.on('cursor-update', handleCursorUpdate);
-    socket.on('selection-update', handleSelectionUpdate);
+    if (!isCollab) {
+      socket.on('user-editing', handleUserEditing);
+      socket.on('cursor-update', handleCursorUpdate);
+      socket.on('selection-update', handleSelectionUpdate);
+    }
     socket.on('user-joined', handleUserJoined);
     socket.on('user-left', handleUserLeft);
     socket.on('room-error', handleRoomError);
@@ -560,8 +567,9 @@ function RoomSession({ roomId, collab }) {
     prevFilesRef.current = files;
   }, [files, yjsManager, roomReady]);
 
+  // Cursors and selections travel as awareness in collab mode (y-monaco), never over Socket.IO.
   const handleCursorMove = (position) => {
-    if (!cursorEmitterRef.current || !activeFileId) {
+    if (isCollab || !cursorEmitterRef.current || !activeFileId) {
       return;
     }
 
@@ -573,7 +581,7 @@ function RoomSession({ roomId, collab }) {
   };
 
   const handleSelectionChange = (selectionRange) => {
-    if (!selectionEmitterRef.current || !activeFileId) {
+    if (isCollab || !selectionEmitterRef.current || !activeFileId) {
       return;
     }
 
@@ -604,18 +612,49 @@ function RoomSession({ roomId, collab }) {
     navigate('/dashboard');
   }, [navigate, roomId, roomReady, isCollab]);
 
+  // The people list. Collab mode derives it from awareness; legacy rooms from the relay.
+  const collaborators = useMemo(() => {
+    if (!isCollab) return Object.values(socketPresence);
+    return peers.map((peer) => {
+      const fileName = files.find((file) => file.id === peer.fileId)?.name;
+      return {
+        userId: peer.userId,
+        username: peer.name,
+        cursorColor: peer.color,
+        avatarGlyph: peer.glyph,
+        isYou: peer.isYou,
+        activity: fileName ? `${peer.typing ? 'Typing in' : 'Viewing'} ${fileName}` : 'Online',
+      };
+    });
+  }, [isCollab, peers, socketPresence, files]);
+
+  const liveEditors = useMemo(() => {
+    if (!isCollab) return editingUsers;
+    return Object.fromEntries(
+      peers
+        .filter((peer) => !peer.isYou && peer.typing && peer.fileId)
+        .map((peer) => [peer.userId, { userId: peer.userId, username: peer.name, cursorColor: peer.color, fileId: peer.fileId }])
+    );
+  }, [isCollab, peers, editingUsers]);
+
   const activeRemotePeers = useMemo(
     () =>
-      Object.values(presence).filter(
-        (peer) =>
-          peer.userId !== user?.userId &&
-          (peer.position?.fileId === activeFileId ||
-            peer.selectionRange?.fileId === activeFileId)
-      ),
-    [activeFileId, presence, user?.userId]
+      isCollab
+        ? []
+        : Object.values(socketPresence).filter(
+            (peer) =>
+              peer.userId !== user?.userId &&
+              (peer.position?.fileId === activeFileId ||
+                peer.selectionRange?.fileId === activeFileId)
+          ),
+    [isCollab, activeFileId, socketPresence, user?.userId]
   );
   const toolbarUser = useMemo(() => {
-    const participant = user?.userId ? presence[user.userId] : null;
+    if (isCollab && user?.userId) {
+      const identity = identityFor({ userId: user.userId, name: user.name ?? '' });
+      return { ...user, username: identity.name, cursorColor: identity.color, avatarGlyph: identity.glyph };
+    }
+    const participant = user?.userId ? socketPresence[user.userId] : null;
     return participant
       ? {
           ...user,
@@ -624,7 +663,7 @@ function RoomSession({ roomId, collab }) {
           avatarGlyph: participant.avatarGlyph,
         }
       : user;
-  }, [presence, user]);
+  }, [isCollab, socketPresence, user]);
 
   if (loadingRoom || collabPending) {
     return (
@@ -673,7 +712,7 @@ function RoomSession({ roomId, collab }) {
       <div className={`flex flex-1 overflow-hidden p-2 gap-2 ${theme === 'dark' ? 'bg-[#0b1410]' : 'bg-[#ebebeb]'}`}>
         <Sidebar 
           theme={theme} 
-          collaborators={Object.values(presence)} 
+          collaborators={collaborators}
           chatMessages={chatMessages}
           typingUsers={Object.values(typingUsers)}
           getSocket={() => socketRef.current}
@@ -691,8 +730,9 @@ function RoomSession({ roomId, collab }) {
             onSelectionChange={handleSelectionChange}
             onLocalChange={handleLocalChange}
             sharedText={sharedText}
+            awareness={awareness}
             remotePeers={activeRemotePeers}
-            editingUsers={editingUsers}
+            editingUsers={liveEditors}
             activeFileId={activeFileId}
             activeFileLock={activeFileLock}
             isReadOnly={isActiveFileLockedByOther}
@@ -707,7 +747,7 @@ function RoomSession({ roomId, collab }) {
 
       <StatusBar
         theme={theme}
-        peersCount={Object.keys(presence).length}
+        peersCount={collaborators.length}
         activeFileLock={activeFileLock}
         currentUserId={user?.userId}
       />

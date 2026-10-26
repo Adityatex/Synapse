@@ -72,38 +72,25 @@ function decodeUpdate(encodedUpdate) {
   return Uint8Array.from(Buffer.from(encodedUpdate, 'base64'));
 }
 
-function hashUserId(userId = '') {
-  return Array.from(String(userId)).reduce(
-    (accumulator, character, index) => accumulator + character.charCodeAt(0) * (index + 1),
-    0
-  );
-}
-
-function findFirstAvailable(items, usedItems) {
-  return items.find((item) => !usedItems.has(item)) || null;
-}
-
-function buildParticipantAppearance(room, userId, username = '') {
-  const existingAppearance = room.userAppearance.get(userId);
-  if (existingAppearance) {
-    return existingAppearance;
+// FNV-1a over the user id. Must stay identical to colorForUser in @synapse/room-doc
+// (presence.ts), which colours collab-mode cursors; tests/appearance.test.js checks it.
+function colorForUser(userId = '') {
+  let hash = 0x811c9dc5;
+  const value = String(userId);
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
   }
+  return CURSOR_COLORS[hash % CURSOR_COLORS.length];
+}
 
-  const activeColors = new Set(
-    Array.from(room.participants.values())
-      .map((participant) => participant.cursorColor)
-      .filter(Boolean)
-  );
-  const hash = hashUserId(`${userId}:${username}`);
-  const fallbackColor = CURSOR_COLORS[hash % CURSOR_COLORS.length];
+// Derived from the user id on every call, so nothing about a participant is remembered per room.
+function buildParticipantAppearance(userId, username = '') {
   const normalizedName = String(username || '').trim();
-  const nextAppearance = {
-    cursorColor: findFirstAvailable(CURSOR_COLORS, activeColors) || fallbackColor,
-    avatarGlyph: normalizedName.charAt(0).toUpperCase() || 'U',
+  return {
+    cursorColor: colorForUser(userId),
+    avatarGlyph: Array.from(normalizedName)[0]?.toUpperCase() || 'U',
   };
-
-  room.userAppearance.set(userId, nextAppearance);
-  return nextAppearance;
 }
 
 function createDefaultRoomState() {
@@ -179,7 +166,6 @@ async function createRoom(owner, roomName = 'Untitled Room') {
     activeFileId: baseState.activeFileId,
     openTabs: baseState.openTabs,
     participants: new Map(),
-    userAppearance: new Map(),
     sharedDocs: new Map(
       baseState.files.map((file) => [file.id, createSharedDoc(file.content)])
     ),
@@ -238,7 +224,7 @@ function addParticipant(roomId, participant) {
 
   const nextParticipant = {
     ...participant,
-    ...buildParticipantAppearance(room, participant.userId, participant.username),
+    ...buildParticipantAppearance(participant.userId, participant.username),
   };
 
   room.participants.set(nextParticipant.socketId, nextParticipant);
@@ -339,7 +325,6 @@ async function loadRoomFromDB(roomId) {
       activeFileId: files[0].id,
       openTabs: files.map(f => f.id),
       participants: new Map(),
-      userAppearance: new Map(),
       sharedDocs: new Map(
         files.map((file) => [file.id, createSharedDoc(file.content)])
       ),
@@ -363,4 +348,6 @@ module.exports = {
   removeParticipant,
   updateRoomState,
   loadRoomFromDB,
+  colorForUser,
+  buildParticipantAppearance,
 };

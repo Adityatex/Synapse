@@ -8,6 +8,7 @@ import { getMonacoLanguage } from '../utils/languageMap';
 import { getThemeClasses } from '../utils/theme';
 import { Loader2 } from 'lucide-react';
 import { MONACO_THEME, defineSynapseThemes } from '../utils/monacoThemes';
+import { remoteCursorCss } from '../utils/remoteCursors';
 
 
 
@@ -167,6 +168,8 @@ export default function EditorPanel({
   onSelectionChange,
   onLocalChange,
   sharedText,
+  // Collab mode (P2-07): y-monaco draws remote cursors and selections from awareness.
+  awareness = null,
   remotePeers = [],
   editingUsers = {},
   activeFileId: activeFileIdProp,
@@ -180,6 +183,7 @@ export default function EditorPanel({
   const decorationsRef = useRef([]);
   const bindingRef = useRef(null);
   const sharedTextRef = useRef(null);
+  const awarenessRef = useRef(null);
 
   // Bumped every time onMount fires — this is what lets the binding
   // effect re-run AFTER the editor reference is set.
@@ -195,6 +199,27 @@ export default function EditorPanel({
   useEffect(() => {
     sharedTextRef.current = sharedText;
   }, [sharedText]);
+
+  useEffect(() => {
+    awarenessRef.current = awareness;
+  }, [awareness]);
+
+  // One stylesheet colours every remote cursor, kept in step with who is in the room.
+  useEffect(() => {
+    if (!awareness) return undefined;
+    const style = document.createElement('style');
+    style.dataset.synapse = 'remote-cursors';
+    document.head.appendChild(style);
+    const render = () => {
+      style.textContent = remoteCursorCss(awareness.getStates(), awareness.clientID);
+    };
+    render();
+    awareness.on('change', render);
+    return () => {
+      awareness.off('change', render);
+      style.remove();
+    };
+  }, [awareness]);
 
   // ─── MonacoBinding ──────────────────────────────────────────────────────────
   //
@@ -221,14 +246,14 @@ export default function EditorPanel({
       bindingRef.current = null;
     }
 
-    const binding = new MonacoBinding(sharedText, model, new Set([editor]));
+    const binding = new MonacoBinding(sharedText, model, new Set([editor]), awareness);
     bindingRef.current = binding;
 
     return () => {
       binding.destroy();
       bindingRef.current = null;
     };
-  }, [sharedText, editorMountKey, activeFileId]);
+  }, [sharedText, editorMountKey, activeFileId, awareness]);
 
   // ─── Remote cursor & selection decorations ──────────────────────────────────
   useEffect(() => {
@@ -356,7 +381,8 @@ export default function EditorPanel({
                 bindingRef.current = new MonacoBinding(
                   currentSharedText,
                   model,
-                  new Set([editor])
+                  new Set([editor]),
+                  awarenessRef.current
                 );
               }
             }

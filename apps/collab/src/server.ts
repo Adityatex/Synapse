@@ -7,6 +7,7 @@ import * as Y from 'yjs';
 import { AuthError, documentNameFor, parseDocumentName, verifyAccessToken, type AuthUser } from './auth.js';
 import type { DocStore } from '@synapse/ydoc-store';
 import type { LegacyRooms } from './legacyRooms.js';
+import { guardAwareness } from './presence.js';
 import type { Logger } from './logger.js';
 import type { RoomAccess } from './roomAccess.js';
 
@@ -124,6 +125,10 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
     async afterUnloadDocument({ documentName }) {
       const roomId = parseDocumentName(documentName);
       if (roomId) store.release?.(roomId);
+    },
+
+    async beforeHandleAwareness(payload) {
+      guardAwareness(payload);
     },
 
     async onDisconnect({ documentName, context, clientsCount }) {

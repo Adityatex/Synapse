@@ -122,6 +122,31 @@ export class MongoDocStore implements DocStore {
     this.persisted.delete(roomId);
   }
 
+  /**
+   * Deletes a room's stored document: every update and snapshot. Only for rolling a room back to the
+   * classic editor (P2-10), after its text has been exported. Nothing may have the room open: a
+   * process that does would write it back.
+   */
+  async purge(roomId: string): Promise<{ updates: number; snapshots: number }> {
+    this.persisted.delete(roomId);
+    const [updates, snapshots] = await Promise.all([this.updates.deleteMany({ roomId }), this.snapshots.deleteMany({ roomId })]);
+    return { updates: updates.deletedCount, snapshots: snapshots.deletedCount };
+  }
+
+  /**
+   * When the room's document last changed in storage (its newest update or snapshot), or null if it has
+   * none. Compaction turns updates into a snapshot, so both count. A rollback uses it to notice a room
+   * that is probably open.
+   */
+  async lastActivityAt(roomId: string): Promise<Date | null> {
+    const [update, snapshot] = await Promise.all([
+      this.updates.find({ roomId }).sort({ seq: -1 }).limit(1).next(),
+      this.snapshots.find({ roomId }).sort({ seq: -1 }).limit(1).next(),
+    ]);
+    const times = [update?.createdAt, snapshot?.createdAt].filter((t): t is Date => t instanceof Date);
+    return times.length ? new Date(Math.max(...times.map((t) => t.getTime()))) : null;
+  }
+
   /** Merges the newest snapshot and the updates after it into a new snapshot. Null if nothing is new. */
   async writeSnapshot(roomId: string): Promise<CompactionResult | null> {
     const snapshot = await this.snapshots.find({ roomId }).sort({ seq: -1 }).limit(1).next();

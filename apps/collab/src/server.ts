@@ -156,6 +156,8 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
       }
       if (decision === 'not-found') throw new AuthError('Room not found.');
       if (decision === 'denied') throw new AuthError('You are not a member of this room.');
+      // P2-10: a room pinned to the classic editor has no collab document; a second one would diverge.
+      if (decision === 'classic') throw new AuthError('This room is set to the classic editor.');
 
       connectionConfig.readOnly = false; // viewers arrive with roles (P3-04)
       logger.info({ event: 'collab.auth', roomId, userId: user.userId }, 'connection authenticated');
@@ -165,9 +167,20 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
     async onLoadDocument({ documentName, document }) {
       const roomId = parseDocumentName(documentName);
       if (!roomId) return;
+      // P2-10: once a room has a document it belongs to collab. Recording that stops the classic editor
+      // writing Room.files; if this fails the next load tries again.
+      const markMigrated = async () => {
+        try {
+          await deps.legacy?.markMigrated(roomId);
+        } catch (err) {
+          logger.error({ err: err instanceof Error ? err.message : String(err), roomId }, 'Could not mark room as migrated');
+        }
+      };
+
       const state = await store.load(roomId);
       if (state) {
         Y.applyUpdate(document, state);
+        await markMigrated();
         return;
       }
       if (!deps.legacy) return;
@@ -175,15 +188,29 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
       // First open since collab: build the document from the room's legacy files.
       // The seed is deterministic, so replicas that race to do this merge into one copy.
       const files = await deps.legacy.loadFiles(roomId);
-      if (files.length === 0) return;
-      Y.applyUpdate(document, buildSeedUpdate(files));
-      await store.store(roomId, document); // persist now: loading does not trigger a store
-      logger.info({ event: 'collab.seeded', roomId, files: files.length }, 'seeded room from legacy files');
+      if (files.length > 0) {
+        Y.applyUpdate(document, buildSeedUpdate(files));
+        await store.store(roomId, document); // persist now: loading does not trigger a store
+        logger.info({ event: 'collab.seeded', roomId, files: files.length }, 'seeded room from legacy files');
+      }
+      await markMigrated();
     },
 
-    async onStoreDocument({ documentName, document }) {
+    async onStoreDocument({ documentName, document, instance }) {
       const roomId = parseDocumentName(documentName);
       if (!roomId) return;
+      // P2-10: a room pinned to the classic editor (a rollback) keeps no document here. A client that had
+      // the room open would otherwise write it back; send it away so it learns why on reconnect.
+      try {
+        if ((await access.settings(roomId))?.collabVersion === 1) {
+          logger.warn({ event: 'collab.pinned.store.dropped', roomId }, 'room is pinned to the classic editor; not saving');
+          instance.closeConnections(documentName);
+          return;
+        }
+      } catch (err) {
+        // If the flag cannot be read, saving is the safer mistake.
+        logger.warn({ err: err instanceof Error ? err.message : String(err), roomId }, 'could not check the room flag before saving');
+      }
       try {
         await store.store(roomId, document);
       } catch (err) {

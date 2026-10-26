@@ -25,7 +25,7 @@ const members = [{ userId: 'ada' }, { userId: 'bob' }];
 const accessFor = (roomId: string) => fakeAccess({ [roomId]: { createdBy: 'ada', members } });
 const snapshot = (doc: Y.Doc) => listNodes(doc).map((n) => `${n.parentId ?? '/'}>${n.id}:${n.name}@${n.order}`);
 const staticLegacy = (files: LegacyFile[]): LegacyRooms & { calls: number } => {
-  const source = { calls: 0, loadFiles: async () => (source.calls++, files) };
+  const source = { calls: 0, loadFiles: async () => (source.calls++, files), markMigrated: async () => {} };
   return source;
 };
 

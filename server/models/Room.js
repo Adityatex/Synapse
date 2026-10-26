@@ -53,6 +53,13 @@ const roomSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // P2-10: which editor owns this room's files. Absent: never migrated, and the first collab client
+  // to open it migrates it. 2: the room lives in the collab server (Room.files is no longer written).
+  // 1: pinned to the classic Socket.IO editor (what a rollback sets); collab refuses the room.
+  collabVersion: {
+    type: Number,
+    enum: [1, 2],
+  },
   // P2-08: when on, members can take exclusive edit locks on files (enforced by the collab server).
   locksEnabled: {
     type: Boolean,

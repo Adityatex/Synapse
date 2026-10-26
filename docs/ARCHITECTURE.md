@@ -222,9 +222,48 @@ The room page has two paths, chosen at build time by `VITE_COLLAB_URL`:
 
 In collab mode Socket.IO still carries chat and `save-version`; the people list,
 the "is editing" bar and remote cursors come from awareness (section 4.3). Not used: `code-change`, `sync-room-state`, `autosave` and the
-Socket.IO file locks (section 4.4 replaces them with an optional per-room setting). The flag is global
-per client build until P2-10 adds a per-room one, so do not run old and new clients
-against the same rooms.
+Socket.IO file locks (section 4.4 replaces them with an optional per-room setting). `VITE_COLLAB_URL` picks the
+editor for the whole client build, and each room's `collabVersion` then decides for that room
+(section 5.3).
+
+### 5.3 Moving rooms to collab, and back (P2-10)
+
+`Room.collabVersion` says which editor owns a room's files:
+
+| value | meaning |
+|---|---|
+| absent | never migrated. The first collab client to open it migrates it |
+| `2` | lives in the collab server |
+| `1` | pinned to the classic Socket.IO editor (what a rollback sets) |
+
+- **Migrating on first open.** When a collab client opens a room with no document, collab builds one
+  from `Room.files` (a fixed Yjs client id makes replicas that race produce one copy, not two) and
+  sets `collabVersion: 2`. A room that already has a document but no flag (a crash between the two
+  steps) is marked on its next open. `Room.files` is left as it was: it is the way back.
+- **The classic editor stands aside.** `join-room` refuses a migrated room ("moved to the new editor");
+  `sync-room-state` and `autosave` only write rooms that are not `collabVersion: 2`, in the Mongo
+  update itself, so a classic tab that was already open cannot overwrite a migrated room. (It keeps
+  working in memory until it reloads; nothing it does is saved.)
+- **Collab clients join Socket.IO for chat only.** They send `join-room` with `collab: true`; the api
+  checks membership, joins the socket to the room and loads nothing: no files into memory (that copy
+  would go stale and show up in the classic editor after a rollback), and a migrated room is allowed.
+  The classic `join-room` is the one that refuses a migrated room.
+- **Collab stands aside for pinned rooms.** A member opening a room with `collabVersion: 1` in collab is
+  refused ("set to the classic editor") and no document is created. A collab-built client reads the
+  flag first and opens a pinned room in the classic editor instead.
+- **Admin tool** (`apps/collab/src/migrate.ts`, built to `dist/migrate.js`):
+  `docker compose exec collab node dist/migrate.js --all --dry-run` then `--all` migrates every room
+  that is neither migrated nor pinned (safe to repeat; one failing room does not stop the rest);
+  `--room ID` does one.
+- **Rollback.** `--rollback ID` writes the room's current text and tree back into `Room.files`, pins
+  it (`collabVersion: 1`) and deletes its stored document, so a later migration starts again from the
+  re-exported text instead of a stale document. Nobody may have the room open: an open room would
+  write itself back. It refuses a room whose document changed in the last two minutes (an update or a
+  snapshot, since compaction turns one into the other) unless `--force`. If a client does have the room
+  open anyway, collab drops its saves (the room is pinned) and sends it away, so it cannot write the
+  document back; the room shows a read-only banner with the reason and a Reload button. `--unpin ID`
+  lets a rolled-back room migrate again. Rolling everything back at once is the client build: unset
+  `VITE_COLLAB_URL`.
 
 ### 5.2 Offline and reconnecting (P2-12)
 

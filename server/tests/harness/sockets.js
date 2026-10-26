@@ -12,12 +12,15 @@ function signToken(user) {
   return jwt.sign(user, process.env.JWT_SECRET, { expiresIn: '1h' });
 }
 
-async function startSocketHarness() {
+// `adapter` (from createSocketAdapter) makes this one of several replicas sharing rooms through
+// Redis; `chat` is passed to createChatHandlers.
+async function startSocketHarness({ adapter, chat } = {}) {
   const httpServer = http.createServer();
-  createSocketServer(httpServer);
+  const io = createSocketServer(httpServer, { chat });
+  if (adapter) io.adapter(adapter.adapter);
   await new Promise((resolve) => httpServer.listen(0, resolve));
   const port = httpServer.address().port;
-  return { httpServer, port };
+  return { httpServer, port, io, adapter };
 }
 
 function connectAuthedClient(port, user) {
@@ -42,7 +45,7 @@ function waitFor(socket, event, timeoutMs = 10_000) {
   });
 }
 
-async function stopSocketHarness({ httpServer, sockets = [] }) {
+async function stopSocketHarness({ httpServer, adapter, sockets = [] }) {
   await Promise.all(
     sockets.map(
       (s) =>
@@ -55,6 +58,7 @@ async function stopSocketHarness({ httpServer, sockets = [] }) {
     )
   );
   await new Promise((resolve) => httpServer.close(() => resolve()));
+  await adapter?.close();
 }
 
 module.exports = { signToken, startSocketHarness, connectAuthedClient, waitFor, stopSocketHarness };

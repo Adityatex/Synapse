@@ -168,6 +168,7 @@ describe.skipIf(!redisAvailable)('compaction through the queue', () => {
     await waitFor(async () => (await db.collection('ydoc_snapshots').countDocuments({ roomId: 'QUIET1' })) === 1);
     await waitFor(async () => (await db.collection('ydoc_updates').countDocuments({ roomId: 'QUIET1' })) === 0);
     expect(await loadText(db, 'QUIET1')).toBe(text(doc));
+    await waitFor(() => outcomes.length >= 1); // the worker reports after the prune is done
     expect(outcomes[0]).toMatchObject({ roomId: 'QUIET1', prunedUpdates: 5 });
   });
 

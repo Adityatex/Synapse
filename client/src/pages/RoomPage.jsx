@@ -19,14 +19,33 @@ import StatusBar from '../components/StatusBar';
 import NeuraPanel from '../components/NeuraPanel';
 import { getThemeClasses } from '../utils/theme';
 import { createCollaborationSocket } from '../services/socket';
-import { getRoom } from '../services/roomService';
+import { getRoom, updateRoomSettings } from '../services/roomService';
 import { RoomYjsManager } from '../services/yjsRoom';
-import { getContentText, getFileText } from '@synapse/room-doc';
+import { getContentText, getFileText, identityFor } from '@synapse/room-doc';
 import { CollabFileProvider } from '../context/CollabFileProvider';
 import { useRoomCollab } from '../hooks/useRoomCollab';
+import { useLocalPresence, usePeers } from '../hooks/usePresence';
 import { COLLAB_ENABLED } from '../config/apiConfig';
 
 const FILE_LOCK_RENEW_INTERVAL_MS = 15000;
+const EDIT_REJECTED_NOTICE_MS = 6000;
+
+function lockDeniedMessage(reason, fileName, holderName) {
+  switch (reason) {
+    case 'held':
+      return `${fileName} is locked by ${holderName || 'another member'}`;
+    case 'disabled':
+      return 'Edit locks are off for this room';
+    case 'limit':
+      return 'Release a lock before taking another';
+    case 'expired':
+      return `Your lock on ${fileName} expired`;
+    case 'unknown-file':
+      return `${fileName} no longer exists`;
+    default:
+      return 'Locks are unavailable right now. Try again in a moment.';
+  }
+}
 
 function getStructureSignature({ files = [] }) {
   return JSON.stringify({
@@ -50,6 +69,10 @@ function RoomSession({ roomId, collab }) {
   const { user, logout } = useAuth();
   const { files, activeFileId, openTabs, updateContent, replaceState, replaceSharedFiles } = useFiles();
   const prevFilesRef = useRef([]);
+  // P2-07: in collab mode presence is Yjs awareness on the room's connection, not Socket.IO.
+  const awareness = collab?.awareness ?? null;
+  const peers = usePeers(awareness, user?.userId);
+  useLocalPresence(awareness, collabDoc, user, activeFileId);
   // P1-10: session chrome from the Zustand store + focused hooks.
   const { theme, toggleTheme } = useRoomTheme();
   const { lockNotice, showLockNotice } = useLockNotice();
@@ -66,13 +89,17 @@ function RoomSession({ roomId, collab }) {
   const setError = useRoomUiStore((s) => s.setError);
   const roomName = useRoomUiStore((s) => s.roomName);
   const setRoomName = useRoomUiStore((s) => s.setRoomName);
-  const [presence, setPresence] = useState({});
+  const [socketPresence, setSocketPresence] = useState({});
   const [yjsManager, setYjsManager] = useState(null);
   const [, setYjsDocVersion] = useState(0);
   const [editingUsers, setEditingUsers] = useState({});
   const [chatMessages, setChatMessages] = useState([]);
   const [typingUsers, setTypingUsers] = useState({});
-  const [fileLocks, setFileLocks] = useState({});
+  const [socketFileLocks, setSocketFileLocks] = useState({});
+  const [roomCreatedBy, setRoomCreatedBy] = useState('');
+  // Set to the value `locksEnabled` had when the creator clicked the toggle, until the server reports a change.
+  const [toggledFrom, setToggledFrom] = useState(null);
+  const toggleTimerRef = useRef(null);
   const socketRef = useRef(null);
   const suppressStructureSyncRef = useRef(null);
   const structureEmitterRef = useRef(null);
@@ -88,6 +115,16 @@ function RoomSession({ roomId, collab }) {
     openTabs: [],
   });
 
+  // Locks come from Socket.IO in legacy rooms and from the collab server's lock state otherwise (P2-08).
+  const collabLocks = collab?.lockState.locks;
+  const fileLocks = useMemo(
+    () =>
+      isCollab
+        ? Object.fromEntries(Object.entries(collabLocks).map(([id, lock]) => [id, { userId: lock.userId, username: lock.name }]))
+        : socketFileLocks,
+    [isCollab, collabLocks, socketFileLocks]
+  );
+  const locksEnabled = isCollab && collab.lockState.enabled;
   const activeFileLock = activeFileId ? fileLocks[activeFileId] || null : null;
   const isActiveFileLockedByOther = Boolean(
     activeFileLock && activeFileLock.userId && activeFileLock.userId !== user?.userId
@@ -234,12 +271,12 @@ function RoomSession({ roomId, collab }) {
       setRoomName(room.roomName || '');
       replaceState(room);
       applySharedDocs(sharedDocs, room.files);
-      setFileLocks(initialFileLocks || {});
+      setSocketFileLocks(initialFileLocks || {});
       setLoadingRoom(false);
       setRoomReady(true);
       setError('');
       if (participant) {
-        setPresence((previous) => ({
+        setSocketPresence((previous) => ({
           ...previous,
           [participant.userId]: {
             userId: participant.userId,
@@ -253,7 +290,7 @@ function RoomSession({ roomId, collab }) {
     };
 
     const handleRoomUsers = (nextParticipants) => {
-      setPresence((previous) => {
+      setSocketPresence((previous) => {
         const nextPresence = {};
         nextParticipants.forEach((participant) => {
           nextPresence[participant.userId] = {
@@ -301,7 +338,7 @@ function RoomSession({ roomId, collab }) {
     };
 
     const handleCursorUpdate = (payload) => {
-      setPresence((previous) => ({
+      setSocketPresence((previous) => ({
         ...previous,
         [payload.userId]: {
           ...previous[payload.userId],
@@ -316,7 +353,7 @@ function RoomSession({ roomId, collab }) {
     };
 
     const handleSelectionUpdate = (payload) => {
-      setPresence((previous) => ({
+      setSocketPresence((previous) => ({
         ...previous,
         [payload.userId]: {
           ...previous[payload.userId],
@@ -331,7 +368,7 @@ function RoomSession({ roomId, collab }) {
     };
 
     const handleUserJoined = ({ username, cursorColor, avatarGlyph, userId }) => {
-      setPresence((previous) => ({
+      setSocketPresence((previous) => ({
         ...previous,
         [userId]: {
           ...previous[userId],
@@ -348,7 +385,7 @@ function RoomSession({ roomId, collab }) {
         return;
       }
 
-      setPresence((previous) => {
+      setSocketPresence((previous) => {
         const nextState = { ...previous };
         delete nextState[userId];
         return nextState;
@@ -362,7 +399,7 @@ function RoomSession({ roomId, collab }) {
     };
 
     const handleFileLocksUpdated = ({ locks = {} }) => {
-      setFileLocks(locks);
+      setSocketFileLocks(locks);
     };
 
     const handleLockDenied = ({ fileId, lockedBy }) => {
@@ -381,9 +418,11 @@ function RoomSession({ roomId, collab }) {
     socket.on('room-users', handleRoomUsers);
     socket.on('room-state-updated', handleRoomStateUpdated);
     socket.on('remote-code-change', handleRemoteCodeChange);
-    socket.on('user-editing', handleUserEditing);
-    socket.on('cursor-update', handleCursorUpdate);
-    socket.on('selection-update', handleSelectionUpdate);
+    if (!isCollab) {
+      socket.on('user-editing', handleUserEditing);
+      socket.on('cursor-update', handleCursorUpdate);
+      socket.on('selection-update', handleSelectionUpdate);
+    }
     socket.on('user-joined', handleUserJoined);
     socket.on('user-left', handleUserLeft);
     socket.on('room-error', handleRoomError);
@@ -450,7 +489,8 @@ function RoomSession({ roomId, collab }) {
 
     async function validateRoom() {
       try {
-        await getRoom(roomId);
+        const { room } = await getRoom(roomId);
+        if (!cancelled) setRoomCreatedBy(room?.createdBy || '');
       } catch (requestError) {
         if (!cancelled) {
           setLoadingRoom(false);
@@ -525,6 +565,69 @@ function RoomSession({ roomId, collab }) {
     ownedLockRef.current = null;
   }, [files, roomId]);
 
+  // --- Focus locks in collab mode (P2-08) ---
+  const lockFn = collab?.lock;
+  const heldIds = useMemo(
+    () => Object.entries(fileLocks).filter(([, lock]) => lock.userId === user?.userId).map(([id]) => id),
+    [fileLocks, user?.userId]
+  );
+  const heldKey = heldIds.join('|');
+  const heldRef = useRef(new Set());
+  const previousFileRef = useRef(null);
+
+  // Keep the locks I hold alive: the server drops one 45 s after its last renewal.
+  useEffect(() => {
+    if (!isCollab || heldKey === '') return undefined;
+    const ids = heldKey.split('|');
+    const timer = window.setInterval(() => ids.forEach((id) => lockFn('renew', id)), FILE_LOCK_RENEW_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [isCollab, heldKey, lockFn]);
+
+  // A lock follows focus: moving to another file gives the old one up.
+  useEffect(() => {
+    heldRef.current = new Set(heldIds);
+  }, [heldIds]);
+  useEffect(() => {
+    const previous = previousFileRef.current;
+    previousFileRef.current = activeFileId;
+    if (isCollab && previous && previous !== activeFileId && heldRef.current.has(previous)) lockFn('release', previous);
+  }, [activeFileId, isCollab, lockFn]);
+
+  // The server refused a lock request: say why.
+  const lockDenied = collab?.denied;
+  useEffect(() => {
+    if (!lockDenied) return;
+    const fileName = latestRoomStateRef.current.files.find((file) => file.id === lockDenied.fileId)?.name || 'This file';
+    showLockNotice(lockDeniedMessage(lockDenied.reason, fileName, lockDenied.holder?.name));
+  }, [lockDenied, showLockNotice]);
+
+  useEffect(() => () => window.clearTimeout(toggleTimerRef.current), []);
+  const handleToggleLocks = useCallback(async () => {
+    setToggledFrom(locksEnabled);
+    window.clearTimeout(toggleTimerRef.current);
+    // The change reaches editors within a couple of seconds; stop waiting for it after a few more.
+    toggleTimerRef.current = window.setTimeout(() => setToggledFrom(null), 6000);
+    try {
+      await updateRoomSettings(roomId, { locksEnabled: !locksEnabled });
+    } catch (toggleError) {
+      setToggledFrom(null);
+      showLockNotice(toggleError.message || 'Could not change the lock setting.');
+    }
+  }, [locksEnabled, roomId, showLockNotice]);
+
+  const lockControls =
+    locksEnabled && activeFileId
+      ? {
+          heldByMe: Boolean(activeFileLock) && !isActiveFileLockedByOther,
+          onAcquire: () => lockFn('acquire', activeFileId),
+          onRelease: () => lockFn('release', activeFileId),
+        }
+      : null;
+  const locksControl =
+    isCollab && roomCreatedBy && roomCreatedBy === user?.userId
+      ? { enabled: locksEnabled, canToggle: true, busy: toggledFrom !== null && toggledFrom === locksEnabled, onToggle: handleToggleLocks }
+      : null;
+
   // getText() returns a STABLE Y.Text reference — no fallback content is
   // provided here so we never pre-seed locally. Content comes exclusively
   // from the server (applySharedStates) to avoid CRDT double-inserts.
@@ -560,8 +663,9 @@ function RoomSession({ roomId, collab }) {
     prevFilesRef.current = files;
   }, [files, yjsManager, roomReady]);
 
+  // Cursors and selections travel as awareness in collab mode (y-monaco), never over Socket.IO.
   const handleCursorMove = (position) => {
-    if (!cursorEmitterRef.current || !activeFileId) {
+    if (isCollab || !cursorEmitterRef.current || !activeFileId) {
       return;
     }
 
@@ -573,7 +677,7 @@ function RoomSession({ roomId, collab }) {
   };
 
   const handleSelectionChange = (selectionRange) => {
-    if (!selectionEmitterRef.current || !activeFileId) {
+    if (isCollab || !selectionEmitterRef.current || !activeFileId) {
       return;
     }
 
@@ -604,18 +708,49 @@ function RoomSession({ roomId, collab }) {
     navigate('/dashboard');
   }, [navigate, roomId, roomReady, isCollab]);
 
+  // The people list. Collab mode derives it from awareness; legacy rooms from the relay.
+  const collaborators = useMemo(() => {
+    if (!isCollab) return Object.values(socketPresence);
+    return peers.map((peer) => {
+      const fileName = files.find((file) => file.id === peer.fileId)?.name;
+      return {
+        userId: peer.userId,
+        username: peer.name,
+        cursorColor: peer.color,
+        avatarGlyph: peer.glyph,
+        isYou: peer.isYou,
+        activity: fileName ? `${peer.typing ? 'Typing in' : 'Viewing'} ${fileName}` : 'Online',
+      };
+    });
+  }, [isCollab, peers, socketPresence, files]);
+
+  const liveEditors = useMemo(() => {
+    if (!isCollab) return editingUsers;
+    return Object.fromEntries(
+      peers
+        .filter((peer) => !peer.isYou && peer.typing && peer.fileId)
+        .map((peer) => [peer.userId, { userId: peer.userId, username: peer.name, cursorColor: peer.color, fileId: peer.fileId }])
+    );
+  }, [isCollab, peers, editingUsers]);
+
   const activeRemotePeers = useMemo(
     () =>
-      Object.values(presence).filter(
-        (peer) =>
-          peer.userId !== user?.userId &&
-          (peer.position?.fileId === activeFileId ||
-            peer.selectionRange?.fileId === activeFileId)
-      ),
-    [activeFileId, presence, user?.userId]
+      isCollab
+        ? []
+        : Object.values(socketPresence).filter(
+            (peer) =>
+              peer.userId !== user?.userId &&
+              (peer.position?.fileId === activeFileId ||
+                peer.selectionRange?.fileId === activeFileId)
+          ),
+    [isCollab, activeFileId, socketPresence, user?.userId]
   );
   const toolbarUser = useMemo(() => {
-    const participant = user?.userId ? presence[user.userId] : null;
+    if (isCollab && user?.userId) {
+      const identity = identityFor({ userId: user.userId, name: user.name ?? '' });
+      return { ...user, username: identity.name, cursorColor: identity.color, avatarGlyph: identity.glyph };
+    }
+    const participant = user?.userId ? socketPresence[user.userId] : null;
     return participant
       ? {
           ...user,
@@ -624,7 +759,7 @@ function RoomSession({ roomId, collab }) {
           avatarGlyph: participant.avatarGlyph,
         }
       : user;
-  }, [presence, user]);
+  }, [isCollab, socketPresence, user]);
 
   if (loadingRoom || collabPending) {
     return (
@@ -668,12 +803,13 @@ function RoomSession({ roomId, collab }) {
         onExitRoom={handleExitRoom}
         onSaveVersion={handleSaveVersion}
         currentUser={toolbarUser}
+        locksControl={locksControl}
       />
 
       <div className={`flex flex-1 overflow-hidden p-2 gap-2 ${theme === 'dark' ? 'bg-[#0b1410]' : 'bg-[#ebebeb]'}`}>
         <Sidebar 
           theme={theme} 
-          collaborators={Object.values(presence)} 
+          collaborators={collaborators}
           chatMessages={chatMessages}
           typingUsers={Object.values(typingUsers)}
           getSocket={() => socketRef.current}
@@ -691,12 +827,14 @@ function RoomSession({ roomId, collab }) {
             onSelectionChange={handleSelectionChange}
             onLocalChange={handleLocalChange}
             sharedText={sharedText}
+            awareness={awareness}
             remotePeers={activeRemotePeers}
-            editingUsers={editingUsers}
+            editingUsers={liveEditors}
             activeFileId={activeFileId}
             activeFileLock={activeFileLock}
             isReadOnly={isActiveFileLockedByOther}
             lockNotice={lockNotice}
+            lockControls={lockControls}
           />
           
           <OutputPanel theme={theme} output={output} />
@@ -707,7 +845,7 @@ function RoomSession({ roomId, collab }) {
 
       <StatusBar
         theme={theme}
-        peersCount={Object.keys(presence).length}
+        peersCount={collaborators.length}
         activeFileLock={activeFileLock}
         currentUserId={user?.userId}
       />
@@ -715,14 +853,44 @@ function RoomSession({ roomId, collab }) {
   );
 }
 
-function CollabRoom({ roomId }) {
+// One attempt at editing the room: a connection, a document and a client id.
+function CollabSession({ roomId, onEditRejected }) {
   const collab = useRoomCollab(roomId);
+  const rejection = collab.rejection;
+
+  useEffect(() => {
+    if (rejection) onEditRejected(rejection);
+  }, [rejection, onEditRejected]);
 
   return (
     <CollabFileProvider doc={collab.doc}>
       <RoomSession roomId={roomId} collab={collab} />
     </CollabFileProvider>
   );
+}
+
+function CollabRoom({ roomId }) {
+  const [attempt, setAttempt] = useState(0);
+  const setLockNotice = useRoomUiStore((s) => s.setLockNotice);
+  const noticeTimerRef = useRef(null);
+
+  useEffect(() => () => window.clearTimeout(noticeTimerRef.current), []);
+
+  // Yjs applies a client's changes in order, so once the server has dropped one of ours (the file
+  // was locked) nothing later from this client can be applied. Starting over with a new document
+  // and client id is the way back; the unsaved edit is lost, as the notice says.
+  const handleEditRejected = useCallback(
+    (rejection) => {
+      const holder = rejection.holders[0]?.name || 'another member';
+      setLockNotice(`Your last edit was not saved: ${holder} has the file locked.`);
+      window.clearTimeout(noticeTimerRef.current);
+      noticeTimerRef.current = window.setTimeout(() => setLockNotice(''), EDIT_REJECTED_NOTICE_MS);
+      setAttempt((count) => count + 1);
+    },
+    [setLockNotice]
+  );
+
+  return <CollabSession key={attempt} roomId={roomId} onEditRejected={handleEditRejected} />;
 }
 
 export default function RoomPage() {

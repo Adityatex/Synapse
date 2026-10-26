@@ -53,6 +53,11 @@ const roomSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // P2-08: when on, members can take exclusive edit locks on files (enforced by the collab server).
+  locksEnabled: {
+    type: Boolean,
+    default: false,
+  },
   files: [fileSchema],
   versions: [versionSchema],
   members: {

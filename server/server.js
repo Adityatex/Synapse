@@ -38,6 +38,7 @@ try {
 const { logger } = require('./lib/logger');
 const { initSentry, captureException, getRelease } = require('./lib/sentry');
 const { initRedis, redisHealth, closeRedis } = require('./lib/redis');
+const { createSocketAdapter } = require('./lib/socketAdapter');
 
 initSentry();
 
@@ -192,7 +193,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-createSocketServer(server);
+const io = createSocketServer(server);
+// P2-11: with Redis, every replica's sockets share rooms (set up in the entrypoint block below).
+let socketAdapter = null;
 
 function startServerIfNeeded() {
   if (serverStarted) {
@@ -285,6 +288,8 @@ mongoose.connection.on('error', (err) => {
 
 if (require.main === module) {
   initRedis();
+  socketAdapter = createSocketAdapter();
+  if (socketAdapter) io.adapter(socketAdapter.adapter);
   connectToMongoWithRetry().catch((err) => {
     logger.error({ err: err.message }, 'MongoDB bootstrap error');
     startServerIfNeeded();
@@ -310,6 +315,7 @@ async function shutdown(signal) {
   }
 
   await closeRedis();
+  await socketAdapter?.close();
 
   server.close(() => {
     process.exit(0);

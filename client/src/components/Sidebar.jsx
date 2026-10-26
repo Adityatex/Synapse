@@ -788,7 +788,7 @@ export default function Sidebar({
                         <span className={`text-[11px] font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'} truncate`}>
                           {user.username || user.name} {user.isYou && <span className="text-accent-fg font-normal">(You)</span>}
                         </span>
-                        <span className={`text-[10px] ${t.textMuted}`}>{isOnline ? 'Online' : 'Offline'}</span>
+                        <span className={`text-[10px] ${t.textMuted} truncate`}>{user.activity || (isOnline ? 'Online' : 'Offline')}</span>
                       </div>
                     </div>
                   );

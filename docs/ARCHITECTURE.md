@@ -73,10 +73,33 @@ client → helmet → requestId → pino-http → cors → express.json(1mb)
 
 `socketManager` (JWT handshake → `socket.data.user`): `join-room`,
 `code-change` (Yjs base64 updates via `applyDocumentUpdate`), presence
-(`cursor-move`, `selection-change`), chat (CRUD + reactions + escaped
-regex search), locks, `sync-room-state`/`autosave`/`save-version`.
+(`cursor-move`, `selection-change`), chat (`socket/chatHandlers.js`, section 4.0), locks, `sync-room-state`/`autosave`/`save-version`.
 Client `RoomYjsManager` binds `Y.Text` per file; `EditorPanel` lazy-loads
 Monaco (P1-11).
+
+### 4.0 Chat across replicas (P2-11)
+
+Chat is the part of Socket.IO that stays after P2 (collaboration moves to `apps/collab`), so
+it has to work with more than one `api` replica. With `REDIS_URL` set, `server.js` installs
+`@socket.io/redis-adapter` (`lib/socketAdapter.js`) and a message emitted to a room through one
+replica reaches that room's sockets on all of them. Messages are saved to MongoDB first and
+emitted as plain JSON (`toWire`): the adapter encodes for the other replicas as well as for local
+sockets, and a Mongoose document would arrive there with its ObjectIds as buffers.
+
+- **Redis outage:** the adapter publishes without waiting for the result, so a failed publish would
+  be an unhandled rejection. The publisher fails soft instead: chat keeps working on the replica
+  the sender is on (and is saved), and delivery to the other replicas resumes when Redis returns.
+  Without `REDIS_URL` nothing changes.
+- **Membership on every chat event:** each handler in `socket/chatHandlers.js` first checks that the
+  socket speaks only in the room it joined through `join-room` (whose guard checked membership),
+  never in a room named by the payload, and that the user is still a member (creator, listed
+  member, or a legacy room with no members; the same rule as the HTTP guard, read from the database
+  so it holds on every replica, kept for 10 s so typing indicators do not cost a query each). If
+  the check fails or cannot be made, the event is dropped and logged. Before this, send, typing,
+  history and search trusted the `roomId` in the payload.
+- **Not covered:** the legacy in-memory room state (participants, Socket.IO file locks, shared docs)
+  is still per replica; it goes with the legacy editing path (P2-14). In collab mode presence and
+  locks are on the collab server and do work across replicas.
 
 ### 4.1 Collab persistence (P2-03, P2-04)
 
@@ -159,6 +182,70 @@ Rooms that existed before collab are seeded on first load: with no stored
 document, collab builds one from `Room.files` using a fixed Yjs client id, so
 replicas that seed the same room at the same moment merge into one copy.
 
+### 4.3 Presence (P2-07)
+
+In collab mode presence is Yjs awareness on the room's connection, not Socket.IO,
+so it follows the document across replicas through the same Redis channel and is
+never persisted. A client publishes `fileId` (the file it has open), `typing`
+(true from a keystroke to about two seconds of quiet) and `selection` (written by
+y-monaco as Yjs relative positions, so a cursor follows concurrent edits).
+
+Awareness is written by clients, so the collab server rewrites every update in
+`beforeHandleAwareness` (`apps/collab/src/presence.ts`) before relaying it:
+
+- `user` (id, name, colour, glyph) is stamped from the verified token. A client
+  cannot appear as someone else, whatever it sends.
+- Only known fields of the expected shape and size survive. A malformed relative
+  position is dropped, since it would throw inside every peer's editor.
+- A connection can only speak for its own awareness client id.
+
+Colour and avatar glyph are derived from the user id (`colorForUser` in
+`@synapse/room-doc`), so nothing about a participant is kept per room and the same
+person has the same colour everywhere. The price is that two people in a room can
+share a colour (12-colour palette); the name flag on each cursor tells them apart.
+The legacy relay's `userAppearance` map is gone, and `server/tests/vitest/appearance.test.js`
+checks that the relay and the collab path agree. Clients also re-derive the colour
+and strip the name to CSS-safe characters before putting either into a stylesheet.
+
+### 4.4 Focus locks (P2-08)
+
+Off by default. The room creator turns them on (`PATCH /api/rooms/:id/settings`,
+`locksEnabled` on the `rooms` document, which collab reads, cached for 2 s). While
+on, a member can lock a file; edits to that file's text from anyone else are dropped
+by the collab server. Files nobody has locked stay open to everyone and merge as
+usual. Only text is protected: renaming, moving or deleting a locked file is not.
+
+- **Where locks live:** Redis (`synapse:locks:<roomId>`, a hash of file to holder),
+  not the document, because they are transient and every replica must agree. Each
+  operation is a Lua script that reads Redis' own clock, so replicas with skewed
+  clocks agree on expiry and two replicas cannot both take a lock. Without Redis
+  (single-instance dev) an in-memory store is used.
+- **Expiry:** a lock lasts 45 s from its last renewal. The client renews every 15 s
+  while it holds one, gives it up when the member moves to another file, and
+  closing the connection releases the member's locks at once.
+- **Protocol:** Hocuspocus stateless messages. Clients send `locks.acquire|renew|
+  release|sync`; the server sends `locks.snapshot` (to a new connection, to the room
+  on any change, and from a 2 s tick that also announces expiry and the creator
+  switching the setting), `locks.denied` (to the requester) and `locks.rejected`.
+- **Enforcement:** `beforeHandleMessage` takes each sync update, asks
+  `touchedFileIds` (room-doc) which files it writes to by following item origins to
+  the owning text, so it costs the size of the update rather than the room, and
+  rejects it if one of them is locked by someone else. Hocuspocus already drops
+  edits from a read-only connection and answers "not saved", so the connection is
+  made read-only for that one message instead of being closed.
+- **After a rejection the client must start over.** Yjs applies a client's changes in
+  order, so nothing later from that client (even to another file) can be applied
+  behind the dropped one. `CollabRoom` therefore remounts with a new document and
+  client id and says the last edit was not saved. The UI makes a locked file
+  read-only, so this only happens in a race (the lock was taken a moment ago) or from
+  a modified client. An offline client that edited a locked file loses its unsent
+  edits the same way; P2-12 should look at keeping them.
+- **Failure policy:** if the lock state cannot be read (Redis or Mongo down), edits
+  are allowed: losing exclusivity for a while beats freezing every room. If it can be
+  read but an update cannot be attributed to a file, it is refused whenever someone
+  else holds a lock.
+- A member can hold at most 5 locks, and can only lock files that exist.
+
 ## 5. Client state
 
 - Server state: `context/FileContext` (files/tabs) + `context/AuthContext`.
@@ -179,9 +266,9 @@ The room page has two paths, chosen at build time by `VITE_COLLAB_URL`:
   so Sidebar, TabBar, Toolbar and Neura are unchanged. Monaco binds to the file's
   shared `Y.Text`. Tabs, the active file and open folders are per-user.
 
-In collab mode Socket.IO still carries chat, presence and cursors (until P2-07),
-and `save-version`. Not used: `code-change`, `sync-room-state`, `autosave` and file
-locks (P2-08 brings locks back as an optional per-room setting). The flag is global
+In collab mode Socket.IO still carries chat and `save-version`; the people list,
+the "is editing" bar and remote cursors come from awareness (section 4.3). Not used: `code-change`, `sync-room-state`, `autosave` and the
+Socket.IO file locks (section 4.4 replaces them with an optional per-room setting). The flag is global
 per client build until P2-10 adds a per-room one, so do not run old and new clients
 against the same rooms.
 

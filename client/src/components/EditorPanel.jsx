@@ -8,6 +8,7 @@ import { getMonacoLanguage } from '../utils/languageMap';
 import { getThemeClasses } from '../utils/theme';
 import { Loader2 } from 'lucide-react';
 import { MONACO_THEME, defineSynapseThemes } from '../utils/monacoThemes';
+import { remoteCursorCss } from '../utils/remoteCursors';
 
 
 
@@ -133,14 +134,26 @@ function EditingIndicatorBar({ editingUsers = {}, activeFileId }) {
   );
 }
 
-function FileLockBanner({ activeFileLock, isReadOnly, lockNotice }) {
-  if (!activeFileLock && !lockNotice) return null;
+// `lockControls` (collab mode, P2-08) is set when the room has edit locks on:
+// { heldByMe, onAcquire, onRelease }. Without it the banner only reports lock state.
+function FileLockBanner({ activeFileLock, isReadOnly, lockNotice, lockControls = null }) {
+  if (!activeFileLock && !lockNotice && !lockControls) return null;
 
-  const message = isReadOnly && activeFileLock
-    ? `${activeFileLock.username || 'Another user'} is editing this file. View-only mode is active.`
-    : activeFileLock
-      ? 'You hold the edit lock for this file.'
-      : lockNotice;
+  const message = lockNotice
+    ? lockNotice
+    : isReadOnly && activeFileLock
+      ? `${activeFileLock.username || 'Another user'} is editing this file. View-only mode is active.`
+      : activeFileLock
+        ? 'You hold the edit lock for this file.'
+        : 'Edit locks are on in this room. Lock this file to keep others from editing it.';
+
+  const action = !lockControls
+    ? null
+    : lockControls.heldByMe
+      ? { label: 'Release lock', onClick: lockControls.onRelease }
+      : !activeFileLock
+        ? { label: 'Lock file', onClick: lockControls.onAcquire }
+        : null;
 
   return (
     <div
@@ -156,7 +169,25 @@ function FileLockBanner({ activeFileLock, isReadOnly, lockNotice }) {
       }}
     >
       <span style={{ fontWeight: 700 }}>{isReadOnly ? 'Locked' : 'Lock'}</span>
-      <span>{message}</span>
+      <span style={{ flex: 1 }}>{message}</span>
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          style={{
+            border: '1px solid var(--line)',
+            borderRadius: '6px',
+            padding: '2px 10px',
+            fontSize: '12px',
+            fontWeight: 600,
+            background: 'var(--surface-1)',
+            color: 'inherit',
+            cursor: 'pointer',
+          }}
+        >
+          {action.label}
+        </button>
+      )}
     </div>
   );
 }
@@ -167,12 +198,15 @@ export default function EditorPanel({
   onSelectionChange,
   onLocalChange,
   sharedText,
+  // Collab mode (P2-07): y-monaco draws remote cursors and selections from awareness.
+  awareness = null,
   remotePeers = [],
   editingUsers = {},
   activeFileId: activeFileIdProp,
   activeFileLock = null,
   isReadOnly = false,
   lockNotice = '',
+  lockControls = null,
 }) {
   const { activeFile, updateContent, jumpTarget } = useFiles();
   const editorRef = useRef(null);
@@ -180,6 +214,7 @@ export default function EditorPanel({
   const decorationsRef = useRef([]);
   const bindingRef = useRef(null);
   const sharedTextRef = useRef(null);
+  const awarenessRef = useRef(null);
 
   // Bumped every time onMount fires — this is what lets the binding
   // effect re-run AFTER the editor reference is set.
@@ -195,6 +230,27 @@ export default function EditorPanel({
   useEffect(() => {
     sharedTextRef.current = sharedText;
   }, [sharedText]);
+
+  useEffect(() => {
+    awarenessRef.current = awareness;
+  }, [awareness]);
+
+  // One stylesheet colours every remote cursor, kept in step with who is in the room.
+  useEffect(() => {
+    if (!awareness) return undefined;
+    const style = document.createElement('style');
+    style.dataset.synapse = 'remote-cursors';
+    document.head.appendChild(style);
+    const render = () => {
+      style.textContent = remoteCursorCss(awareness.getStates(), awareness.clientID);
+    };
+    render();
+    awareness.on('change', render);
+    return () => {
+      awareness.off('change', render);
+      style.remove();
+    };
+  }, [awareness]);
 
   // ─── MonacoBinding ──────────────────────────────────────────────────────────
   //
@@ -221,14 +277,14 @@ export default function EditorPanel({
       bindingRef.current = null;
     }
 
-    const binding = new MonacoBinding(sharedText, model, new Set([editor]));
+    const binding = new MonacoBinding(sharedText, model, new Set([editor]), awareness);
     bindingRef.current = binding;
 
     return () => {
       binding.destroy();
       bindingRef.current = null;
     };
-  }, [sharedText, editorMountKey, activeFileId]);
+  }, [sharedText, editorMountKey, activeFileId, awareness]);
 
   // ─── Remote cursor & selection decorations ──────────────────────────────────
   useEffect(() => {
@@ -314,7 +370,7 @@ export default function EditorPanel({
     <div className={`flex-1 overflow-hidden flex flex-col ${t.editorBg}`}>
       {/* Real-time "who is editing" indicator */}
       <EditingIndicatorBar editingUsers={editingUsers} activeFileId={activeFileId} />
-      <FileLockBanner activeFileLock={activeFileLock} isReadOnly={isReadOnly} lockNotice={lockNotice} />
+      <FileLockBanner activeFileLock={activeFileLock} isReadOnly={isReadOnly} lockNotice={lockNotice} lockControls={lockControls} />
 
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <Suspense
@@ -356,7 +412,8 @@ export default function EditorPanel({
                 bindingRef.current = new MonacoBinding(
                   currentSharedText,
                   model,
-                  new Set([editor])
+                  new Set([editor]),
+                  awarenessRef.current
                 );
               }
             }

@@ -79,6 +79,11 @@ export const createRoomSchema = z.object({
 });
 export type CreateRoomRequest = z.infer<typeof createRoomSchema>;
 
+export const updateRoomSettingsSchema = z.object({
+  locksEnabled: z.boolean(),
+});
+export type UpdateRoomSettingsRequest = z.infer<typeof updateRoomSettingsSchema>;
+
 export const inviteMemberSchema = z
   .object({
     userId: userIdSchema.optional(),

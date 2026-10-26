@@ -33,7 +33,11 @@ export const randomRoomId = () => Math.random().toString(36).slice(2, 10).toUppe
 export const tokenFor = (userId: string) => jwt.sign({ userId, name: userId, email: `${userId}@x.io` }, SECRET);
 
 export function fakeAccess(rooms: Record<string, RoomAccessRecord>): RoomAccess {
-  return { check: async (roomId, userId) => decideAccess(rooms[roomId] ?? null, userId) };
+  return {
+    check: async (roomId, userId) => decideAccess(rooms[roomId] ?? null, userId),
+    // Read on every call, so a test can flip `locksEnabled` on the record mid-run.
+    settings: async (roomId) => (rooms[roomId] ? { locksEnabled: rooms[roomId].locksEnabled === true } : null),
+  };
 }
 
 export async function startServer(opts: {
@@ -43,6 +47,7 @@ export async function startServer(opts: {
   redisUrl?: string;
   storeDebounceMs?: number;
   projection?: CollabDeps['projection'];
+  locks?: CollabDeps['locks'];
 }): Promise<Server<CollabContext>> {
   const server = createCollabServer({ jwtSecret: SECRET, logger, store: new MemoryDocStore(), ...opts });
   await server.listen(await freePort());
@@ -50,12 +55,20 @@ export async function startServer(opts: {
   return server;
 }
 
-export type Client = { doc: Y.Doc; provider: HocuspocusProvider; synced: Promise<void>; denied: Promise<string> };
+export type Client = {
+  doc: Y.Doc;
+  provider: HocuspocusProvider;
+  synced: Promise<void>;
+  denied: Promise<string>;
+  /** Stateless messages from the server, parsed, oldest first. */
+  messages: Array<Record<string, any>>;
+};
 
 export function connect(server: Server<CollabContext>, roomId: string, token?: string, documentName = documentNameFor(roomId)): Client {
   const doc = new Y.Doc();
   let resolveSynced!: () => void;
   let resolveDenied!: (reason: string) => void;
+  const messages: Client['messages'] = [];
   const synced = new Promise<void>((r) => (resolveSynced = r));
   const denied = new Promise<string>((r) => (resolveDenied = r));
   const provider = new HocuspocusProvider({
@@ -65,9 +78,16 @@ export function connect(server: Server<CollabContext>, roomId: string, token?: s
     token: token ?? '',
     onSynced: () => resolveSynced(),
     onAuthenticationFailed: ({ reason }) => resolveDenied(reason),
+    onStateless: ({ payload }) => {
+      try {
+        messages.push(JSON.parse(payload));
+      } catch {
+        /* not ours */
+      }
+    },
   });
   providers.push(provider);
-  return { doc, provider, synced, denied };
+  return { doc, provider, synced, denied, messages };
 }
 
 export async function waitFor(check: () => boolean | Promise<boolean>, ms = 8000): Promise<void> {

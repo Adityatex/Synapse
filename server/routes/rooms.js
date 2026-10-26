@@ -6,20 +6,10 @@ const { validateBody } = require('../middleware/validate');
 const Room = require('../models/Room');
 const User = require('../models/User');
 const { createRoom, getRoom, getRoomSnapshot } = require('../socket/roomStore');
-const { recordRoomMembership } = require('../lib/roomMembership');
+const { recordRoomMembership, isRoomMember } = require('../lib/roomMembership');
 const { signRoomInvite, verifyRoomInvite } = require('../lib/roomInvites');
 
 const router = express.Router();
-
-// P0-16: invite-only guard. Creator + recorded members may access.
-// Legacy rooms with an empty members list are grandfathered (any authed user
-// may join once, which records membership for subsequent joins).
-function isRoomMember(dbRoom, userId) {
-  if (!dbRoom || !userId) return false;
-  if (dbRoom.createdBy === userId) return true;
-  if (!Array.isArray(dbRoom.members) || dbRoom.members.length === 0) return true;
-  return dbRoom.members.some((m) => m.userId === userId);
-}
 
 // Who is in each room right now (in-memory presence), for the dashboard.
 function withLivePresence(rooms) {
@@ -204,6 +194,7 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
             roomName: dbRoom.roomName,
             createdAt: dbRoom.createdAt,
             createdBy: dbRoom.createdBy,
+            locksEnabled: dbRoom.locksEnabled === true,
             participantCount: 0,
           },
         });
@@ -213,8 +204,9 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch room.', requestId: req.id });
     }
   } else {
+    let dbRoom = null;
     try {
-      const dbRoom = await Room.findOne({ roomId });
+      dbRoom = await Room.findOne({ roomId });
       if (dbRoom && !isRoomMember(dbRoom, req.user.userId)) {
         return res.status(403).json({ error: 'You are not a member of this room.', requestId: req.id });
       }
@@ -227,6 +219,7 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
         roomName: room.roomName,
         createdAt: room.createdAt,
         createdBy: room.createdBy,
+        locksEnabled: dbRoom?.locksEnabled === true,
         participantCount: room.participants ? room.participants.length : 0,
       },
     });
@@ -236,6 +229,33 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
     error: 'Room not found.',
     requestId: req.id,
   });
+});
+
+// P2-08: the creator switches focus locks on or off for the room. The collab server reads the
+// flag from the same collection, so the change reaches editors within a couple of seconds.
+router.patch('/:roomId/settings', authMiddleware, validateBody('updateRoomSettingsSchema'), async (req, res) => {
+  const roomId = String(req.params.roomId || '').trim().toUpperCase();
+
+  try {
+    const room = await Room.findOne({ roomId }).select({ createdBy: 1 });
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found.', requestId: req.id });
+    }
+    if (room.createdBy !== req.user.userId) {
+      return res.status(403).json({ error: 'Only the room creator can change room settings.', requestId: req.id });
+    }
+
+    // validateBody lets a request through when it cannot find the schema, so check here as well.
+    const { locksEnabled } = req.validatedBody ?? req.body ?? {};
+    if (typeof locksEnabled !== 'boolean') {
+      return res.status(400).json({ error: 'locksEnabled must be true or false.', requestId: req.id });
+    }
+    await Room.updateOne({ roomId }, { $set: { locksEnabled } });
+    return res.json({ roomId, locksEnabled });
+  } catch (error) {
+    logger.error({ err: error.message || error, requestId: req.id }, 'Update room settings error');
+    return res.status(500).json({ error: 'Failed to update room settings.', requestId: req.id });
+  }
 });
 
 router.delete('/:roomId', authMiddleware, async (req, res) => {

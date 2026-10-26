@@ -73,10 +73,33 @@ client → helmet → requestId → pino-http → cors → express.json(1mb)
 
 `socketManager` (JWT handshake → `socket.data.user`): `join-room`,
 `code-change` (Yjs base64 updates via `applyDocumentUpdate`), presence
-(`cursor-move`, `selection-change`), chat (CRUD + reactions + escaped
-regex search), locks, `sync-room-state`/`autosave`/`save-version`.
+(`cursor-move`, `selection-change`), chat (`socket/chatHandlers.js`, section 4.0), locks, `sync-room-state`/`autosave`/`save-version`.
 Client `RoomYjsManager` binds `Y.Text` per file; `EditorPanel` lazy-loads
 Monaco (P1-11).
+
+### 4.0 Chat across replicas (P2-11)
+
+Chat is the part of Socket.IO that stays after P2 (collaboration moves to `apps/collab`), so
+it has to work with more than one `api` replica. With `REDIS_URL` set, `server.js` installs
+`@socket.io/redis-adapter` (`lib/socketAdapter.js`) and a message emitted to a room through one
+replica reaches that room's sockets on all of them. Messages are saved to MongoDB first and
+emitted as plain JSON (`toWire`): the adapter encodes for the other replicas as well as for local
+sockets, and a Mongoose document would arrive there with its ObjectIds as buffers.
+
+- **Redis outage:** the adapter publishes without waiting for the result, so a failed publish would
+  be an unhandled rejection. The publisher fails soft instead: chat keeps working on the replica
+  the sender is on (and is saved), and delivery to the other replicas resumes when Redis returns.
+  Without `REDIS_URL` nothing changes.
+- **Membership on every chat event:** each handler in `socket/chatHandlers.js` first checks that the
+  socket speaks only in the room it joined through `join-room` (whose guard checked membership),
+  never in a room named by the payload, and that the user is still a member (creator, listed
+  member, or a legacy room with no members; the same rule as the HTTP guard, read from the database
+  so it holds on every replica, kept for 10 s so typing indicators do not cost a query each). If
+  the check fails or cannot be made, the event is dropped and logged. Before this, send, typing,
+  history and search trusted the `roomId` in the payload.
+- **Not covered:** the legacy in-memory room state (participants, Socket.IO file locks, shared docs)
+  is still per replica; it goes with the legacy editing path (P2-14). In collab mode presence and
+  locks are on the collab server and do work across replicas.
 
 ### 4.1 Collab persistence (P2-03, P2-04)
 

@@ -222,14 +222,17 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
         }
       };
 
+      // A read-only open (the projection, P2-09) must change nothing: it does not seed a legacy room
+      // and does not mark it migrated, however it is opened.
+      const readOnly = Boolean((context as { projection?: boolean } | undefined)?.projection);
+
       const state = await store.load(roomId);
       if (state) {
         Y.applyUpdate(document, state);
-        await markMigrated();
+        if (!readOnly) await markMigrated();
         return;
       }
-      // A read-only open (the projection) must not turn a legacy room into a collab room just by looking.
-      if (!deps.legacy || (context as { projection?: boolean } | undefined)?.projection) return;
+      if (!deps.legacy || readOnly) return;
 
       // First open since collab: build the document from the room's legacy files.
       // The seed is deterministic, so replicas that race to do this merge into one copy.

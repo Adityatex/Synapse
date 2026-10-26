@@ -76,6 +76,40 @@ importers:
         specifier: ^5.0.2
         version: 5.0.2(@opentelemetry/api@1.9.1)(@types/node@26.6.3)(vite@6.4.3(@types/node@26.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15))
 
+  apps/loadtest:
+    dependencies:
+      '@hocuspocus/provider':
+        specifier: ^4.7.1
+        version: 4.7.1(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)
+      '@synapse/ydoc-store':
+        specifier: workspace:*
+        version: link:../../packages/ydoc-store
+      jsonwebtoken:
+        specifier: ^9.0.3
+        version: 9.0.3
+      mongodb:
+        specifier: ^7.7.0
+        version: 7.7.0
+      yjs:
+        specifier: ^13.6.33
+        version: 13.6.33
+    devDependencies:
+      '@types/jsonwebtoken':
+        specifier: ^9.0.10
+        version: 9.0.10
+      '@types/node':
+        specifier: ^26.6.3
+        version: 26.6.3
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.2
+        version: 5.0.2(@opentelemetry/api@1.9.1)(@types/node@26.6.3)(vite@6.4.3(@types/node@26.6.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15))
+
   apps/worker:
     dependencies:
       '@synapse/ydoc-store':

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { HocuspocusProvider } from '@hocuspocus/provider';
+import { HocuspocusProvider, HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 import * as Y from 'yjs';
 import { COLLAB_URL } from '../config/apiConfig';
 import { getToken } from '../services/authService';
@@ -40,6 +40,8 @@ export interface RoomCollab {
   /** Presence channel of this connection (P2-07); null until the provider exists. */
   awareness: CollabAwareness | null;
   status: CollabStatus;
+  /** Changes made here that the server has not confirmed yet: typed offline, or in flight. */
+  unsynced: number;
   /** True once the server's copy of the room has been received. */
   synced: boolean;
   /** Why the server refused us (expired token, not a member, unknown room), or ''. */
@@ -80,6 +82,7 @@ export function useRoomCollab(roomId: string): RoomCollab {
   const [awareness, setAwareness] = useState<CollabAwareness | null>(null);
   const [status, setStatus] = useState<CollabStatus>('connecting');
   const [synced, setSynced] = useState(false);
+  const [unsynced, setUnsynced] = useState(0);
   const [authError, setAuthError] = useState('');
   const [lockState, setLockState] = useState<LockState>(NO_LOCKS);
   const [denied, setDenied] = useState<LockDenied | null>(null);
@@ -89,8 +92,20 @@ export function useRoomCollab(roomId: string): RoomCollab {
 
   useEffect(() => {
     let current = true;
-    const provider = new HocuspocusProvider({
+    // After the network drops the socket keeps retrying, backing off from 1 s up to 10 s so a connection
+    // that comes back is noticed quickly. Changes made meanwhile stay in the document and are sent when
+    // it reconnects (Yjs merges them with what others did).
+    const socket = new HocuspocusProviderWebsocket({
       url: COLLAB_URL,
+      delay: 1000,
+      factor: 2,
+      minDelay: 1000,
+      maxDelay: 10_000,
+      jitter: true,
+      maxAttempts: 0,
+    });
+    const provider = new HocuspocusProvider({
+      websocketProvider: socket,
       name: `room:${roomId}`,
       document: doc,
       // A function, so a reconnect after the token was refreshed sends the new one.
@@ -103,6 +118,7 @@ export function useRoomCollab(roomId: string): RoomCollab {
         setAwareness(provider.awareness);
       },
       onSynced: () => setSynced(true),
+      onUnsyncedChanges: ({ number }) => current && setUnsynced(number),
       onAuthenticationFailed: ({ reason }) => setAuthError(reason || 'Access to this room was refused.'),
       onStateless: ({ payload }) => {
         if (!current) return;
@@ -123,11 +139,14 @@ export function useRoomCollab(roomId: string): RoomCollab {
         }
       },
     });
+    // A socket we supply is not attached for us.
+    provider.attach();
     providerRef.current = provider;
     return () => {
       current = false;
       providerRef.current = null;
       provider.destroy();
+      socket.destroy();
     };
   }, [doc, roomId]);
 
@@ -141,5 +160,5 @@ export function useRoomCollab(roomId: string): RoomCollab {
     }
   }, []);
 
-  return { doc, awareness, status, synced, authError, lockState, denied, rejection, lock };
+  return { doc, awareness, status, unsynced, synced, authError, lockState, denied, rejection, lock };
 }

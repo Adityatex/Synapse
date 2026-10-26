@@ -106,7 +106,12 @@ describe('GET /rooms/:id/files', () => {
   it('does not turn a legacy room into a collab room by reading it', async () => {
     const roomId = randomRoomId();
     const legacyFiles: LegacyFile[] = [{ id: 'welcome-py', name: 'main.py', content: 'legacy text', updatedAt: 1 }];
-    const legacy: LegacyRooms & { calls: number } = { calls: 0, loadFiles: async () => (legacy.calls++, legacyFiles) };
+    const legacy: LegacyRooms & { calls: number; marked: number } = {
+      calls: 0,
+      marked: 0,
+      loadFiles: async () => (legacy.calls++, legacyFiles),
+      markMigrated: async () => void legacy.marked++,
+    };
     // Like the Mongo store, this one does not persist a document that has nothing in it.
     const store = new (class extends MemoryDocStore {
       override async store(room: string, document: Y.Doc) {
@@ -118,11 +123,13 @@ describe('GET /rooms/:id/files', () => {
     const { body } = await getFiles(server, roomId, tokenFor('ada'));
     expect(body.files).toEqual([]); // the caller falls back to what the client has
     expect(legacy.calls).toBe(0);
+    expect(legacy.marked).toBe(0); // reading does not migrate it either (P2-10)
 
-    // A real client opening the room still seeds it.
+    // A real client opening the room still seeds it, and that is what migrates it.
     const ada = connect(server, roomId, tokenFor('ada'));
     await ada.synced;
     expect(legacy.calls).toBe(1);
+    expect(legacy.marked).toBeGreaterThan(0);
     expect(getContentText(ada.doc, 'welcome-py').toString()).toBe('legacy text');
   });
 

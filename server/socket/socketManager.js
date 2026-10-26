@@ -182,21 +182,24 @@ function createSocketServer(httpServer, { chat: chatOptions } = {}) {
   io.on('connection', (socket) => {
     // P0-03: never trust userId/username from the payload — identity always
     // comes from the verified JWT (socket.data.user).
-    socket.on('join-room', async ({ roomId } = {}) => {
+    socket.on('join-room', async ({ roomId, collab } = {}) => {
       // P1-05: validate shape before normalizing.
-      const joinCheck = validateSocketPayload('joinRoomSchema', { roomId });
+      const joinCheck = validateSocketPayload('joinRoomSchema', { roomId, collab });
       if (!joinCheck.ok) {
         denyInvalid(socket, 'join-room', joinCheck);
         return;
       }
       const normalizedRoomId = normalizeRoomId(joinCheck.data.roomId);
-      let room = getRoom(normalizedRoomId);
+      // P2-10: a client that edits through the collab server joins only for chat. It must not load the
+      // room's files into this process (that copy would go stale), and it may join a migrated room.
+      const viaCollab = joinCheck.data.collab === true;
+      let room = viaCollab ? null : getRoom(normalizedRoomId);
 
-      if (!room) {
+      if (!room && !viaCollab) {
         room = await loadRoomFromDB(normalizedRoomId);
       }
 
-      if (!normalizedRoomId || !room) {
+      if (!normalizedRoomId || (!room && !viaCollab)) {
         socket.emit('room-error', {
           message: 'Room not found. Check the invite code and try again.',
         });
@@ -205,11 +208,22 @@ function createSocketServer(httpServer, { chat: chatOptions } = {}) {
 
       // P0-16: invite-only guard — only creator/members may join.
       // Legacy rooms with an empty members list are grandfathered once.
+      let dbRoom = null;
       try {
-        const dbRoom = await RoomModel.findOne({ roomId: normalizedRoomId }).select({
+        dbRoom = await RoomModel.findOne({ roomId: normalizedRoomId }).select({
+          roomName: 1,
           createdBy: 1,
           members: 1,
+          collabVersion: 1,
         });
+        // P2-10: a migrated room's files live in the collab server; the classic editor must not open it.
+        if (!viaCollab && dbRoom?.collabVersion === 2) {
+          socket.emit('room-error', {
+            message: 'This room has moved to the new editor. Reload the page to open it.',
+            code: 'room-migrated',
+          });
+          return;
+        }
         if (dbRoom) {
           const userId = socket.data.user.userId;
           const isCreator = dbRoom.createdBy === userId;
@@ -226,6 +240,10 @@ function createSocketServer(httpServer, { chat: chatOptions } = {}) {
         logger.error({ err: err.message || err }, 'Room join guard DB check failed');
         // Fail open on DB error to avoid locking out users during outages;
         // HTTP guard remains the enforcement point.
+      }
+      if (viaCollab && !dbRoom) {
+        socket.emit('room-error', { message: 'Room not found. Check the invite code and try again.' });
+        return;
       }
 
       if (socket.data.roomId && socket.data.roomId !== normalizedRoomId) {
@@ -244,24 +262,26 @@ function createSocketServer(httpServer, { chat: chatOptions } = {}) {
         joinedAt: Date.now(),
       };
 
-      const snapshot = addParticipant(normalizedRoomId, participant);
-      const currentParticipant = snapshot.participants.find(
-        (nextParticipant) => nextParticipant.socketId === socket.id
-      );
+      const snapshot = viaCollab ? null : addParticipant(normalizedRoomId, participant);
+      const currentParticipant = snapshot
+        ? snapshot.participants.find((nextParticipant) => nextParticipant.socketId === socket.id)
+        : participant;
       socket.data.participant = currentParticipant;
 
       await recordRoomMembership(normalizedRoomId, currentParticipant);
 
       socket.emit('room-joined', {
-        room: {
-          roomId: snapshot.roomId,
-          roomName: snapshot.roomName,
-          files: snapshot.files,
-          activeFileId: snapshot.activeFileId,
-          openTabs: snapshot.openTabs,
-        },
-        sharedDocs: snapshot.sharedDocs,
-        fileLocks: serializeRoomLocks(normalizedRoomId),
+        room: snapshot
+          ? {
+              roomId: snapshot.roomId,
+              roomName: snapshot.roomName,
+              files: snapshot.files,
+              activeFileId: snapshot.activeFileId,
+              openTabs: snapshot.openTabs,
+            }
+          : { roomId: normalizedRoomId, roomName: dbRoom.roomName || '', files: [], activeFileId: null, openTabs: [] },
+        sharedDocs: snapshot ? snapshot.sharedDocs : {},
+        fileLocks: viaCollab ? {} : serializeRoomLocks(normalizedRoomId),
         participant: currentParticipant,
       });
 
@@ -347,7 +367,8 @@ function createSocketServer(httpServer, { chat: chatOptions } = {}) {
 
       try {
         await RoomModel.updateOne(
-          { roomId },
+          // P2-10: never overwrite the files of a room that has moved to the collab server.
+          { roomId, collabVersion: { $ne: 2 } },
           {
             $set: { 
               files: snapshot.files.map(f => ({ 
@@ -388,7 +409,7 @@ function createSocketServer(httpServer, { chat: chatOptions } = {}) {
 
       try {
         await RoomModel.updateOne(
-          { roomId: activeRoomId, "files.id": fileId },
+          { roomId: activeRoomId, collabVersion: { $ne: 2 }, "files.id": fileId },
           {
             $set: {
               "files.$.content": content,

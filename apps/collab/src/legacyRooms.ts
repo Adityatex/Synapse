@@ -4,10 +4,16 @@ import type { Db } from 'mongodb';
 /** Where a room's files lived before collab: the api's `Room.files`. */
 export interface LegacyRooms {
   loadFiles(roomId: string): Promise<LegacyFile[]>;
+  /**
+   * Records that the room now lives in collab (`collabVersion: 2`), which stops the classic editor
+   * writing its files. Never overrides a room pinned to the classic editor (`collabVersion: 1`).
+   */
+  markMigrated(roomId: string): Promise<void>;
 }
 
 interface RoomWithFiles {
   roomId: string;
+  collabVersion?: number | null;
   files?: Array<{
     id: string;
     name: string;
@@ -25,6 +31,9 @@ export function createMongoLegacyRooms(db: Db): LegacyRooms {
     async loadFiles(roomId) {
       const room = await rooms.findOne({ roomId }, { projection: { files: 1 } });
       return room?.files ?? [];
+    },
+    async markMigrated(roomId) {
+      await rooms.updateOne({ roomId, collabVersion: { $nin: [1, 2] } }, { $set: { collabVersion: 2 } });
     },
   };
 }

@@ -195,6 +195,7 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
             createdAt: dbRoom.createdAt,
             createdBy: dbRoom.createdBy,
             locksEnabled: dbRoom.locksEnabled === true,
+            collabVersion: dbRoom.collabVersion ?? null,
             participantCount: 0,
           },
         });
@@ -220,6 +221,7 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
         createdAt: room.createdAt,
         createdBy: room.createdBy,
         locksEnabled: dbRoom?.locksEnabled === true,
+        collabVersion: dbRoom?.collabVersion ?? null,
         participantCount: room.participants ? room.participants.length : 0,
       },
     });

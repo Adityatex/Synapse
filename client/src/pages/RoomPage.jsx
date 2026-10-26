@@ -25,6 +25,10 @@ import { getContentText, getFileText, identityFor } from '@synapse/room-doc';
 import { CollabFileProvider } from '../context/CollabFileProvider';
 import { useRoomCollab } from '../hooks/useRoomCollab';
 import { useLocalPresence, usePeers } from '../hooks/usePresence';
+import { useRoomMode } from '../hooks/useRoomMode';
+import ConnectionBanner from '../components/ConnectionBanner';
+import { connectionBannerState } from '../utils/connectionState';
+import { rememberReturnTo } from '../utils/returnTo';
 import { COLLAB_ENABLED } from '../config/apiConfig';
 
 const FILE_LOCK_RENEW_INTERVAL_MS = 15000;
@@ -244,7 +248,8 @@ function RoomSession({ roomId, collab }) {
       setConnectionState('connected');
       setError('');
       // P0-03: identity comes from the JWT — only roomId is sent.
-      socket.emit('join-room', { roomId });
+      // A collab client joins for chat only (P2-10): its files are not loaded into the api.
+      socket.emit('join-room', isCollab ? { roomId, collab: true } : { roomId });
     };
 
     const handleDisconnect = () => {
@@ -639,15 +644,41 @@ function RoomSession({ roomId, collab }) {
         ? yjsManager.getText(activeFileId)
         : null;
 
-  // The collab server refused us (expired token, not a member, unknown room).
+  // The collab server refused us. At join (expired token, not a member, unknown room) that ends the
+  // visit. If it happens after the room was open (the sign-in ran out while we were offline), the
+  // editor stays on screen, read-only, with a banner (P2-12).
   const collabAuthError = collab?.authError || '';
+  const authLost = Boolean(collabAuthError) && Boolean(collab?.synced);
+  const refusedAtJoin = Boolean(collabAuthError) && !authLost;
   useEffect(() => {
-    if (!collabAuthError) return;
+    if (!refusedAtJoin) return;
     setLoadingRoom(false);
     setRoomReady(false);
     setError(collabAuthError);
-  }, [collabAuthError, setError, setLoadingRoom, setRoomReady]);
+  }, [refusedAtJoin, collabAuthError, setError, setLoadingRoom, setRoomReady]);
   const collabPending = isCollab && !collab.synced && !collabAuthError;
+
+  const handleSignIn = useCallback(() => {
+    rememberReturnTo(`/room/${roomId}`);
+    logout();
+    navigate('/login');
+  }, [logout, navigate, roomId]);
+
+  // Closing the tab while changes are still only here would lose them.
+  const unsyncedChanges = collab?.unsynced ?? 0;
+  useEffect(() => {
+    if (unsyncedChanges === 0) return undefined;
+    const warn = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [unsyncedChanges]);
+
+  const bannerState = isCollab
+    ? connectionBannerState({ status: collab.status, synced: collab.synced, unsynced: unsyncedChanges, authLost, refusal: collabAuthError })
+    : null;
 
   // Detect newly created files (present in current files but not previous)
   // and seed their Y.Doc locally so the editor isn't blank before the
@@ -765,7 +796,11 @@ function RoomSession({ roomId, collab }) {
     return (
       <div className="auth-loading-screen">
         <div className="auth-loading-spinner" />
-        <p className="auth-loading-text">Connecting to room {roomId}...</p>
+        <p className="auth-loading-text">
+          {isCollab && collab.status === 'disconnected'
+            ? 'Cannot reach the collaboration server. Retrying...'
+            : `Connecting to room ${roomId}...`}
+        </p>
       </div>
     );
   }
@@ -819,6 +854,7 @@ function RoomSession({ roomId, collab }) {
         />
 
         <main className={`flex-1 min-w-0 flex flex-col ${t.editorBg} overflow-hidden rounded-xl border shadow-lg ${theme === 'dark' ? 'border-white/10 shadow-black/50' : 'border-slate-300 shadow-slate-200/50'} relative transition-colors duration-300`}>
+          <ConnectionBanner state={bannerState} unsynced={unsyncedChanges} refusal={collabAuthError} onSignIn={handleSignIn} onReload={() => window.location.reload()} />
           <TabBar theme={theme} roomId={roomId} fileLocks={fileLocks} currentUserId={user?.userId} />
           
           <EditorPanel
@@ -832,7 +868,7 @@ function RoomSession({ roomId, collab }) {
             editingUsers={liveEditors}
             activeFileId={activeFileId}
             activeFileLock={activeFileLock}
-            isReadOnly={isActiveFileLockedByOther}
+            isReadOnly={isActiveFileLockedByOther || authLost}
             lockNotice={lockNotice}
             lockControls={lockControls}
           />
@@ -863,7 +899,7 @@ function CollabSession({ roomId, onEditRejected }) {
   }, [rejection, onEditRejected]);
 
   return (
-    <CollabFileProvider doc={collab.doc}>
+    <CollabFileProvider doc={collab.doc} readOnly={Boolean(collab.authError) && collab.synced}>
       <RoomSession roomId={roomId} collab={collab} />
     </CollabFileProvider>
   );
@@ -897,7 +933,19 @@ export default function RoomPage() {
   const { roomId } = useParams();
   const normalizedRoomId = String(roomId || '').toUpperCase();
 
-  if (COLLAB_ENABLED) {
+  // In a collab build, the room's own flag decides (P2-10): a room pinned to the classic editor opens there.
+  const mode = useRoomMode(normalizedRoomId, COLLAB_ENABLED);
+
+  if (mode === 'loading') {
+    return (
+      <div className="auth-loading-screen">
+        <div className="auth-loading-spinner" />
+        <p className="auth-loading-text">Opening room {normalizedRoomId}...</p>
+      </div>
+    );
+  }
+
+  if (mode === 'collab') {
     // keyed so moving between rooms gets a fresh document and connection
     return <CollabRoom key={normalizedRoomId} roomId={normalizedRoomId} />;
   }

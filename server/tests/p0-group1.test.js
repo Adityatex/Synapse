@@ -229,7 +229,8 @@ describe('P0-04: chat search regex is escaped', () => {
   });
 
   it('search handler uses escapeRegExp with a length cap (static check)', () => {
-    const socketSrc = fs.readFileSync(path.join(__dirname, '..', 'socket', 'socketManager.js'), 'utf8');
+    // P2-11: the chat handlers moved out of socketManager.
+    const socketSrc = fs.readFileSync(path.join(__dirname, '..', 'socket', 'chatHandlers.js'), 'utf8');
     assert.ok(socketSrc.includes('escapeRegExp(String(query).slice(0, 200))'), 'search must escape + cap query');
     assert.ok(!socketSrc.includes('{ $regex: query,'), 'raw query must not reach $regex');
   });

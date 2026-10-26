@@ -6,20 +6,10 @@ const { validateBody } = require('../middleware/validate');
 const Room = require('../models/Room');
 const User = require('../models/User');
 const { createRoom, getRoom, getRoomSnapshot } = require('../socket/roomStore');
-const { recordRoomMembership } = require('../lib/roomMembership');
+const { recordRoomMembership, isRoomMember } = require('../lib/roomMembership');
 const { signRoomInvite, verifyRoomInvite } = require('../lib/roomInvites');
 
 const router = express.Router();
-
-// P0-16: invite-only guard. Creator + recorded members may access.
-// Legacy rooms with an empty members list are grandfathered (any authed user
-// may join once, which records membership for subsequent joins).
-function isRoomMember(dbRoom, userId) {
-  if (!dbRoom || !userId) return false;
-  if (dbRoom.createdBy === userId) return true;
-  if (!Array.isArray(dbRoom.members) || dbRoom.members.length === 0) return true;
-  return dbRoom.members.some((m) => m.userId === userId);
-}
 
 // Who is in each room right now (in-memory presence), for the dashboard.
 function withLivePresence(rooms) {

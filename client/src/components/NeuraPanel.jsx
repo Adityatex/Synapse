@@ -131,7 +131,7 @@ function AssistantMessage({ content, theme }) {
   );
 }
 
-export default function NeuraPanel({ theme }) {
+export default function NeuraPanel({ theme, roomId = null }) {
   const { files, activeFile } = useFiles();
   const panelRef = useRef(null);
   const resizeStateRef = useRef(null);
@@ -207,6 +207,8 @@ export default function NeuraPanel({ theme }) {
 
   const fileContext = useMemo(
     () => ({
+      // In a room the server builds the file list and the active file's text from the room itself.
+      ...(roomId ? { roomId } : {}),
       activeFile: activeFile
         ? {
             id: activeFile.id,
@@ -219,7 +221,7 @@ export default function NeuraPanel({ theme }) {
         name: file.name,
       })),
     }),
-    [activeFile, files]
+    [activeFile, files, roomId]
   );
 
   const upsertConversation = (conversation, options = {}) => {

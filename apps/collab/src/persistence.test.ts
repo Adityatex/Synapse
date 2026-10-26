@@ -75,3 +75,31 @@ describe('collab restart (acceptance: reconnecting client sees identical content
     expect(text(takeover.doc)).toBe('written mid-session');
   });
 });
+
+describe('reading a room that nobody has open (P2-09 projection)', () => {
+  it('does not write anything to the store', async () => {
+    const { db, newStore } = await freshDb();
+    const roomId = randomRoomId();
+    const access = fakeAccess({ [roomId]: { createdBy: 'ada', members: [{ userId: 'ada' }] } });
+
+    const server = await startServer({ access, store: newStore(), storeDebounceMs: 20 });
+    const a = connect(server, roomId, tokenFor('ada'));
+    await a.synced;
+    a.doc.getText('content:main').insert(0, 'kept');
+    await waitFor(() => a.provider.unsyncedChanges === 0);
+    a.provider.destroy();
+    await waitFor(() => server.hocuspocus.getDocumentsCount() === 0);
+    const rows = () => db.collection('ydoc_updates').countDocuments({ roomId });
+    const before = await rows();
+    expect(before).toBeGreaterThan(0);
+
+    for (let i = 0; i < 3; i++) {
+      const res = await fetch(`${server.webSocketURL.replace(/^ws/, 'http')}/rooms/${roomId}/files?fresh=1`, {
+        headers: { Authorization: `Bearer ${tokenFor('ada')}` },
+      });
+      expect(res.status).toBe(200);
+    }
+    await waitFor(() => server.hocuspocus.getDocumentsCount() === 0);
+    expect(await rows()).toBe(before); // three reads, no new rows
+  });
+});

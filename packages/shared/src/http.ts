@@ -36,11 +36,20 @@ export const loginVerifyOtpSchema = z.object({
 export type LoginVerifyOtp = z.infer<typeof loginVerifyOtpSchema>;
 
 // --- Execute (Judge0) ---
-export const executeSchema = z.object({
-  source_code: z.string().min(1).max(200_000),
-  language_id: z.coerce.number().int().min(1).max(200),
-  stdin: z.string().max(100_000).optional().default(''),
-});
+// Either the code itself, or the room and file to read it from (P2-09): the server then runs what
+// is in the room's live document instead of trusting the text the client sends.
+export const executeSchema = z
+  .object({
+    source_code: z.string().min(1).max(200_000).optional(),
+    language_id: z.coerce.number().int().min(1).max(200),
+    stdin: z.string().max(100_000).optional().default(''),
+    roomId: roomIdSchema.optional(),
+    fileId: z.string().trim().min(1).max(256).optional(),
+  })
+  .refine((v) => Boolean(v.source_code) || Boolean(v.roomId && v.fileId), {
+    message: 'source_code, or a roomId and fileId, is required',
+    path: ['source_code'],
+  });
 export type ExecuteRequest = z.infer<typeof executeSchema>;
 
 // --- AI chat ---

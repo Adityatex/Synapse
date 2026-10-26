@@ -12,7 +12,7 @@ const {
 } = require('./roomStore');
 const RoomModel = require('../models/Room');
 const { recordRoomMembership } = require('../lib/roomMembership');
-const MessageModel = require('../models/Message');
+const { createChatHandlers, postSystemMessage, escapeRegExp, normalizeRoomId } = require('./chatHandlers');
 // P1-05: socket payload validation against @synapse/shared contracts.
 const { validateSocketPayload } = require('../middleware/validate');
 
@@ -22,16 +22,6 @@ function denyInvalid(socket, event, result) {
     event,
   });
   return false;
-}
-
-function normalizeRoomId(roomId) {
-  return String(roomId || '').trim().toUpperCase();
-}
-
-// escape user input before $regex so patterns like ".*" or "(a+)+$"
-// are matched literally and cannot cause regex injection / ReDoS.
-function escapeRegExp(value) {
-  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function verifySocketUser(socket, next) {
@@ -170,7 +160,7 @@ function releaseLocksForSocket(io, socket) {
   });
 }
 
-function createSocketServer(httpServer) {
+function createSocketServer(httpServer, { chat: chatOptions } = {}) {
   const allowedOrigins = (process.env.CORS_ORIGIN || process.env.CLIENT_URL || '')
     .split(',')
     .map((origin) => origin.trim())
@@ -185,6 +175,9 @@ function createSocketServer(httpServer) {
   });
 
   io.use(verifySocketUser);
+
+  // P2-11: chat events live in their own module.
+  const chat = createChatHandlers(io, chatOptions);
 
   io.on('connection', (socket) => {
     // P0-03: never trust userId/username from the payload — identity always
@@ -300,19 +293,7 @@ function createSocketServer(httpServer) {
       });
       emitParticipants(io, normalizedRoomId);
 
-      // Generate System Message
-      try {
-        const sysMsg = await MessageModel.create({
-          roomId: normalizedRoomId,
-          senderId: 'system',
-          senderName: 'System',
-          type: 'system',
-          content: `${currentParticipant.username} joined the room.`
-        });
-        io.to(normalizedRoomId).emit('chat-message', sysMsg);
-      } catch (err) {
-        logger.error({ err: err.message || err }, 'Error creating system join message');
-      }
+      await postSystemMessage(io, normalizedRoomId, `${currentParticipant.username} joined the room.`);
     });
 
     socket.on('leave-room', async () => {
@@ -335,199 +316,11 @@ function createSocketServer(httpServer) {
       emitParticipants(io, roomId);
 
       if (removal?.removedParticipant?.username) {
-        MessageModel.create({
-          roomId,
-          senderId: 'system',
-          senderName: 'System',
-          type: 'system',
-          content: `${removal.removedParticipant.username} left the room.`
-        }).then(sysMsg => io.to(roomId).emit('chat-message', sysMsg))
-          .catch(err => logger.error({ err: err.message || err }, 'Error creating system leave message'));
+        void postSystemMessage(io, roomId, `${removal.removedParticipant.username} left the room.`);
       }
     });
 
-    // ─── CHAT ROOM FEATURES ───────────────────────────────────────────────────
-
-    socket.on('send-chat-message', async (payload = {}) => {
-      const check = validateSocketPayload('chatMessageSchema', payload);
-      if (!check.ok) return;
-      const { roomId, content, type = 'user', replyTo } = check.data;
-      const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
-      if (!activeRoomId || !content) return;
-
-      try {
-        const msgData = {
-          roomId: activeRoomId,
-          senderId: socket.data.user.userId || socket.data.participant?.userId || 'unknown-id',
-          senderName: socket.data.participant?.username || socket.data.user?.name || 'Unknown User',
-          type,
-          content
-        };
-        if (replyTo && replyTo.messageId) {
-          msgData.replyTo = {
-            messageId: replyTo.messageId,
-            senderName: replyTo.senderName || '',
-            content: replyTo.content || ''
-          };
-        }
-        const newMessage = await MessageModel.create(msgData);
-        io.to(activeRoomId).emit('chat-message', newMessage);
-      } catch (err) {
-        logger.error({ err: err.message || err }, 'Error saving chat message:');
-      }
-    });
-
-    socket.on('typing-indicator', ({ roomId, isTyping }) => {
-      const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
-      if (!activeRoomId) return;
-
-      socket.to(activeRoomId).emit('user-typing', {
-        userId: socket.data.user.userId,
-        username: socket.data.user.name,
-        isTyping
-      });
-    });
-
-    socket.on('request-chat-history', async ({ roomId, limit = 50, beforeTimestamp }) => {
-      const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
-      if (!activeRoomId) return;
-
-      try {
-        const query = { roomId: activeRoomId };
-        if (beforeTimestamp) {
-          query.timestamp = { $lt: new Date(beforeTimestamp) };
-        }
-        const history = await MessageModel.find(query)
-          .sort({ timestamp: -1 })
-          .limit(limit);
-        
-        socket.emit('chat-history', history.reverse());
-      } catch (err) {
-        logger.error({ err: err.message || err }, 'Error fetching chat history:');
-      }
-    });
-
-    // ─── EDIT MESSAGE ──────────────────────────────────────────────────────────
-
-    socket.on('edit-chat-message', async ({ messageId, content }) => {
-      const activeRoomId = normalizeRoomId(socket.data.roomId);
-      if (!activeRoomId || !messageId || !content) return;
-      try {
-        const msg = await MessageModel.findById(messageId);
-        if (!msg || msg.roomId !== activeRoomId) return;
-        // Only the sender can edit
-        const senderId = socket.data.user.userId || socket.data.participant?.userId;
-        if (msg.senderId !== senderId) return;
-        msg.content = content;
-        msg.edited = true;
-        await msg.save();
-        io.to(activeRoomId).emit('chat-message-updated', msg);
-      } catch (err) {
-        logger.error({ err: err.message || err }, 'Error editing message:');
-      }
-    });
-
-    // ─── DELETE MESSAGE ────────────────────────────────────────────────────────
-
-    socket.on('delete-chat-message', async ({ messageId }) => {
-      const activeRoomId = normalizeRoomId(socket.data.roomId);
-      if (!activeRoomId || !messageId) return;
-      try {
-        const msg = await MessageModel.findById(messageId);
-        if (!msg || msg.roomId !== activeRoomId) return;
-        const senderId = socket.data.user.userId || socket.data.participant?.userId;
-        if (msg.senderId !== senderId) return;
-        msg.deleted = true;
-        msg.content = 'This message was deleted.';
-        await msg.save();
-        io.to(activeRoomId).emit('chat-message-updated', msg);
-      } catch (err) {
-        logger.error({ err: err.message || err }, 'Error deleting message:');
-      }
-    });
-
-    // ─── PIN MESSAGE ───────────────────────────────────────────────────────────
-
-    socket.on('pin-chat-message', async ({ messageId }) => {
-      const activeRoomId = normalizeRoomId(socket.data.roomId);
-      if (!activeRoomId || !messageId) return;
-      try {
-        const msg = await MessageModel.findById(messageId);
-        if (!msg || msg.roomId !== activeRoomId) return;
-        msg.pinned = !msg.pinned;
-        await msg.save();
-        io.to(activeRoomId).emit('chat-message-updated', msg);
-        // Broadcast system notification
-        const action = msg.pinned ? 'pinned' : 'unpinned';
-        const sysName = socket.data.participant?.username || socket.data.user?.name || 'Someone';
-        const sysMsg = await MessageModel.create({
-          roomId: activeRoomId,
-          senderId: 'system',
-          senderName: 'System',
-          type: 'system',
-          content: `${sysName} ${action} a message.`
-        });
-        io.to(activeRoomId).emit('chat-message', sysMsg);
-      } catch (err) {
-        logger.error({ err: err.message || err }, 'Error pinning message:');
-      }
-    });
-
-    // ─── REACT TO MESSAGE ──────────────────────────────────────────────────────
-
-    socket.on('react-chat-message', async ({ messageId, emoji }) => {
-      const activeRoomId = normalizeRoomId(socket.data.roomId);
-      if (!activeRoomId || !messageId || !emoji) return;
-      try {
-        const msg = await MessageModel.findById(messageId);
-        if (!msg || msg.roomId !== activeRoomId) return;
-        const userId = socket.data.user.userId || socket.data.participant?.userId;
-        const username = socket.data.participant?.username || socket.data.user?.name || 'Unknown';
-        if (!msg.reactions) msg.reactions = new Map();
-        const existing = msg.reactions.get(emoji) || [];
-        const alreadyReacted = existing.findIndex(r => r.userId === userId);
-        if (alreadyReacted >= 0) {
-          existing.splice(alreadyReacted, 1);
-          if (existing.length === 0) msg.reactions.delete(emoji);
-          else msg.reactions.set(emoji, existing);
-        } else {
-          existing.push({ userId, username });
-          msg.reactions.set(emoji, existing);
-        }
-        msg.markModified('reactions');
-        await msg.save();
-        io.to(activeRoomId).emit('chat-message-updated', msg);
-      } catch (err) {
-        logger.error({ err: err.message || err }, 'Error reacting to message:');
-      }
-    });
-
-    // ─── SEARCH MESSAGES ───────────────────────────────────────────────────────
-
-    socket.on('search-chat-messages', async (payload = {}) => {
-      const check = validateSocketPayload('searchChatMessagesSchema', payload);
-      if (!check.ok) return;
-      const { roomId, query } = check.data;
-      const activeRoomId = normalizeRoomId(roomId || socket.data.roomId);
-      if (!activeRoomId || !query) return;
-      try {
-        // P0-04: treat the query as literal text (cap length to bound regex work).
-        const safeQuery = escapeRegExp(String(query).slice(0, 200));
-        const results = await MessageModel.find({
-          roomId: activeRoomId,
-          deleted: { $ne: true },
-          $or: [
-            { content: { $regex: safeQuery, $options: 'i' } },
-            { senderName: { $regex: safeQuery, $options: 'i' } }
-          ]
-        }).sort({ timestamp: -1 }).limit(50);
-        socket.emit('chat-search-results', results.reverse());
-      } catch (err) {
-        logger.error({ err: err.message || err }, 'Error searching messages:');
-      }
-    });
-
-    // ─────────────────────────────────────────────────────────────────────────
+    chat.register(socket);
 
     socket.on('sync-room-state', async (rawPayload = {}) => {
       const roomId = socket.data.roomId;

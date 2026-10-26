@@ -14,6 +14,16 @@ describe('shared HTTP contracts', () => {
     assert.equal(shared.executeSchema.safeParse({ source_code: 'x' }).success, false);
   });
 
+  it('executeSchema takes a room file instead of code (P2-09), but needs one or the other', () => {
+    const ok = (body) => shared.executeSchema.safeParse(body).success;
+    assert.equal(ok({ roomId: 'ABC123', fileId: 'main', language_id: 71 }), true);
+    assert.equal(ok({ roomId: 'ABC123', fileId: 'main', source_code: 'print(1)', language_id: 71 }), true);
+    assert.equal(ok({ roomId: 'ABC123', language_id: 71 }), false, 'a room without a file');
+    assert.equal(ok({ fileId: 'main', language_id: 71 }), false, 'a file without a room');
+    assert.equal(ok({ language_id: 71 }), false, 'nothing to run');
+    assert.equal(ok({ roomId: 'not a room!', fileId: 'main', language_id: 71 }), false);
+  });
+
   it('OTP contracts enforce email + pin shape', () => {
     assert.equal(
       shared.signupRequestOtpSchema.safeParse({ name: 'A', email: 'a@x.com', password: 'secret12' }).success,

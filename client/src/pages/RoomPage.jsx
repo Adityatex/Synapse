@@ -876,7 +876,7 @@ function RoomSession({ roomId, collab }) {
           <OutputPanel theme={theme} output={output} />
         </main>
 
-        <NeuraPanel theme={theme} />
+        <NeuraPanel theme={theme} roomId={roomId} />
       </div>
 
       <StatusBar

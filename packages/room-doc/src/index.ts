@@ -15,5 +15,7 @@ export {
   sanitizePresence,
 } from './presence.js';
 export type { PresenceSelection, PresenceState, PresenceUser, RelativePositionJSON } from './presence.js';
+export { touchedFileIds } from './touched.js';
+export type { TouchedFiles } from './touched.js';
 export { buildSeedUpdate, SEED_CLIENT_ID } from './seed.js';
 export type { LegacyFile } from './seed.js';

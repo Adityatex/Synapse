@@ -59,6 +59,7 @@ describe('authentication and room access', () => {
         check: async () => {
           throw new Error('mongo down');
         },
+        settings: async () => null,
       },
     });
     const client = connect(server, randomRoomId(), tokenFor('ada'));

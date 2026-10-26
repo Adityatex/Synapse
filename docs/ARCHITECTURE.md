@@ -138,6 +138,29 @@ Durability window: edits are persisted 2 s after the last change (10 s max
 under continuous typing) and on last disconnect / graceful shutdown. A
 hard-killed process can lose at most that window server-side.
 
+### 4.1.1 Plain-text projection (P2-09)
+
+Run and Neura used to take the code from whatever the browser sent. In a room they now read it
+from the room's live document, through `GET /rooms/:id/files` on the collab server, which
+returns `{ files: [{ id, name, path, content }], content, source }` (`projectRoom` in
+`@synapse/room-doc`; `content` is every file under a `--- path ---` line, for AI context).
+
+- **Live, not saved:** it reads this replica's copy of the document when the room is loaded. If it is
+  not, the room is opened through a read-only direct connection, which loads the stored state and, with
+  Redis, syncs with the replica that has it live (it waits `syncWaitMs`, 150 ms, for that answer).
+  Saving trails typing by 2 to 10 s, so reading the store would run stale code.
+- **Never seeds, never writes:** a read of a room that was never opened in collab does not build a
+  document from `Room.files` (the direct connection is marked `PROJECTION_CONTEXT`), and the real
+  store appends nothing when the document is unchanged, so a read leaves no trace.
+- **Cached 5 s in Redis** (`synapse:projection:<roomId>`) so a burst of AI questions costs one read.
+  Run passes `fresh=1` and skips the cache; it must run what is on screen. Membership is checked
+  before the cache is looked at.
+- **Who asks:** the api (`server/lib/roomFiles.js`, `COLLAB_INTERNAL_URL`) passes on the caller's own
+  token, so collab applies the same membership rule as everywhere else and there is no service
+  secret. If the room cannot be read, is not configured, or has nothing in it (a legacy room that
+  has never been opened in collab), the api uses what the client sent, which is what the person is
+  looking at. A request may now name `roomId` and `fileId` instead of `source_code`.
+
 ### 4.2 Room document model (P2-06)
 
 `@synapse/room-doc` defines what is inside a room's Y.Doc: `files`

@@ -16,6 +16,8 @@ services:
       CORS_ORIGIN: http://localhost:5173
       # P2-02: the api connects and reports Redis state on /api/health.
       REDIS_URL: redis://redis:6379
+      # P2-09: Run and Neura read a room's files from the collab server.
+      COLLAB_INTERNAL_URL: http://collab:5001
       # Catch OTP mail locally instead of Gmail:
       SMTP_HOST: mailpit
       SMTP_PORT: 1025

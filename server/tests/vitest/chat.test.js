@@ -200,8 +200,10 @@ describe('chat', () => {
       await Message.insertMany(Array.from({ length: 130 }, (_, i) => ({ roomId: 'CHAT01', senderId: 'ada', senderName: 'Ada', content: `m${i}` })));
       const history = record(a, 'chat-history');
       a.emit('request-chat-history', { limit: 100000 });
-      await until(() => history.length >= 1);
-      expect(history.at(-1)).toHaveLength(100);
+      // The no-payload request above is answered too (50 rows, or fewer), possibly after the insert,
+      // so wait for the reply to the capped request rather than for the first reply.
+      await until(() => history.some((page) => page.length === 100));
+      expect(Math.max(...history.map((page) => page.length))).toBe(100); // never more than the cap
     });
   });
 

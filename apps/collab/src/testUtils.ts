@@ -46,6 +46,7 @@ export async function startServer(opts: {
   legacy?: LegacyRooms;
   redisUrl?: string;
   storeDebounceMs?: number;
+  projection?: CollabDeps['projection'];
   locks?: CollabDeps['locks'];
 }): Promise<Server<CollabContext>> {
   const server = createCollabServer({ jwtSecret: SECRET, logger, store: new MemoryDocStore(), ...opts });

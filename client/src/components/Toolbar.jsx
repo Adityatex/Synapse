@@ -67,7 +67,8 @@ export default function Toolbar({
       const result = await executeCode(
         activeFile.content,
         currentLang.id,
-        stdinValue
+        stdinValue,
+        roomId ? { roomId, fileId: activeFile.id } : null
       );
       setOutput({
         ...result,
@@ -86,7 +87,7 @@ export default function Toolbar({
     } finally {
       setIsRunning(false);
     }
-  }, [activeFile, currentLang, stdinValue, isRunning, setOutput]);
+  }, [activeFile, currentLang, stdinValue, isRunning, setOutput, roomId]);
 
   const handleSave = () => {
     if (onSaveVersion) {

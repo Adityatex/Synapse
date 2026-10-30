@@ -5,8 +5,8 @@ import type { Db } from 'mongodb';
 export interface LegacyRooms {
   loadFiles(roomId: string): Promise<LegacyFile[]>;
   /**
-   * Records that the room now lives in collab (`collabVersion: 2`), which stops the classic editor
-   * writing its files. Never overrides a room pinned to the classic editor (`collabVersion: 1`).
+   * Records that the room now lives in collab (`collabVersion: 2`), so a later open knows it was
+   * migrated and `migrate --all` skips it.
    */
   markMigrated(roomId: string): Promise<void>;
 }
@@ -33,7 +33,7 @@ export function createMongoLegacyRooms(db: Db): LegacyRooms {
       return room?.files ?? [];
     },
     async markMigrated(roomId) {
-      await rooms.updateOne({ roomId, collabVersion: { $nin: [1, 2] } }, { $set: { collabVersion: 2 } });
+      await rooms.updateOne({ roomId, collabVersion: { $ne: 2 } }, { $set: { collabVersion: 2 } });
     },
   };
 }

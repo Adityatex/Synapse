@@ -10,8 +10,6 @@ import { Loader2 } from 'lucide-react';
 import { MONACO_THEME, defineSynapseThemes } from '../utils/monacoThemes';
 import { remoteCursorCss } from '../utils/remoteCursors';
 
-
-
 function hexToRgba(color, alpha) {
   const normalized = color.replace('#', '');
   const expanded =
@@ -26,49 +24,6 @@ function hexToRgba(color, alpha) {
   const blue = parseInt(expanded.slice(4, 6), 16);
 
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-}
-
-function ensurePresenceStyle(userId, cursorColor) {
-  if (typeof document === 'undefined') return;
-
-  const safeId = String(userId).replace(/[^a-zA-Z0-9_-]/g, '-');
-  const styleId = `presence-style-${safeId}`;
-  // Always recreate if color changed (remove old style)
-  const existing = document.getElementById(styleId);
-  if (existing) return;
-
-  const style = document.createElement('style');
-  style.id = styleId;
-  style.textContent = `
-    /* Colored cursor line — full height of the line */
-    .presence-cursor-${safeId} {
-      border-left: 3px solid ${cursorColor} !important;
-      margin-left: -2px;
-      box-shadow: 0 0 6px 1px ${hexToRgba(cursorColor, 0.55)};
-      pointer-events: none;
-      position: relative;
-    }
-    /* Small colored dot at the top of the cursor line */
-    .presence-cursor-${safeId}::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: -5px;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: ${cursorColor};
-      box-shadow: 0 0 5px 1px ${hexToRgba(cursorColor, 0.7)};
-      pointer-events: none;
-      z-index: 100;
-    }
-    /* Selection highlight */
-    .presence-selection-${safeId} {
-      background: ${hexToRgba(cursorColor, 0.2)} !important;
-      border-radius: 2px;
-    }
-  `;
-  document.head.appendChild(style);
 }
 
 /** Animated "who is typing" bar */
@@ -194,13 +149,10 @@ function FileLockBanner({ activeFileLock, isReadOnly, lockNotice, lockControls =
 
 export default function EditorPanel({
   theme,
-  onCursorMove,
-  onSelectionChange,
-  onLocalChange,
+  // The room's shared Y.Text, with its awareness: y-monaco draws remote cursors and selections from
+  // awareness (P2-07). The solo editor passes neither and edits the file's own content.
   sharedText,
-  // Collab mode (P2-07): y-monaco draws remote cursors and selections from awareness.
   awareness = null,
-  remotePeers = [],
   editingUsers = {},
   activeFileId: activeFileIdProp,
   activeFileLock = null,
@@ -211,7 +163,6 @@ export default function EditorPanel({
   const { activeFile, updateContent, jumpTarget } = useFiles();
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
-  const decorationsRef = useRef([]);
   const bindingRef = useRef(null);
   const sharedTextRef = useRef(null);
   const awarenessRef = useRef(null);
@@ -286,66 +237,6 @@ export default function EditorPanel({
     };
   }, [sharedText, editorMountKey, activeFileId, awareness]);
 
-  // ─── Remote cursor & selection decorations ──────────────────────────────────
-  useEffect(() => {
-    const editor = editorRef.current;
-    const monaco = monacoRef.current;
-    if (!editor || !monaco || !activeFileId) return undefined;
-
-    const nextDecorations = remotePeers.flatMap((peer) => {
-      if (!peer?.userId || !peer?.cursorColor) return [];
-
-      ensurePresenceStyle(peer.userId, peer.cursorColor);
-      const safeId = String(peer.userId).replace(/[^a-zA-Z0-9_-]/g, '-');
-      const decorations = [];
-
-      if (
-        peer.selectionRange?.startLineNumber &&
-        peer.selectionRange?.startColumn &&
-        peer.selectionRange?.endLineNumber &&
-        peer.selectionRange?.endColumn
-      ) {
-        decorations.push({
-          range: new monaco.Range(
-            peer.selectionRange.startLineNumber,
-            peer.selectionRange.startColumn,
-            peer.selectionRange.endLineNumber,
-            peer.selectionRange.endColumn
-          ),
-          options: { className: `presence-selection-${safeId}` },
-        });
-      }
-
-      if (peer.position?.lineNumber && peer.position?.column) {
-        decorations.push({
-          range: new monaco.Range(
-            peer.position.lineNumber,
-            peer.position.column,
-            peer.position.lineNumber,
-            peer.position.column + 1
-          ),
-          options: {
-            className: `presence-cursor-${safeId}`,
-            hoverMessage: { value: `${peer.username || 'Anonymous'} is editing here` },
-          },
-        });
-      }
-
-      return decorations;
-    });
-
-    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, nextDecorations);
-
-    return () => {
-      if (editorRef.current) {
-        decorationsRef.current = editorRef.current.deltaDecorations(
-          decorationsRef.current,
-          []
-        );
-      }
-    };
-  }, [remotePeers, activeFileId]);
-
   // ─── Scroll to line on jumpTarget change ────────────────────────────────────
   useEffect(() => {
     if (!editorRef.current || !jumpTarget || jumpTarget.fileId !== activeFileId) return;
@@ -391,9 +282,6 @@ export default function EditorPanel({
             if (!sharedText && activeFileId && updateContent) {
               updateContent(activeFileId, value || '', { updatedAt: Date.now() });
             }
-            if (onLocalChange && activeFileId) {
-              onLocalChange(activeFileId, value || '');
-            }
           }}
           onMount={(editor, monaco) => {
             editorRef.current = editor;
@@ -422,16 +310,6 @@ export default function EditorPanel({
             // the now-valid editorRef.current (handles the case where sharedText
             // arrives AFTER the editor mounts).
             setEditorMountKey((k) => k + 1);
-
-            editor.onDidChangeCursorSelection((event) => {
-              onCursorMove?.(event.selection.getPosition());
-              onSelectionChange?.({
-                startLineNumber: event.selection.startLineNumber,
-                startColumn: event.selection.startColumn,
-                endLineNumber: event.selection.endLineNumber,
-                endColumn: event.selection.endColumn,
-              });
-            });
           }}
           loading={
             <div

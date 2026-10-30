@@ -356,3 +356,12 @@ then smoke-tests `/api/health`) and `uptime.yml` get their triggers back.
   `tests/harness/sockets.js` (ephemeral-port server + JWT clients).
 - Models use `mongoose.models.X || model(...)` so vitest module
   re-evaluation never throws `OverwriteModelError`.
+
+### 8.1 Load test (P2-13)
+
+`apps/loadtest` drives editors against several collab replicas and checks propagation latency,
+divergence (every editor, a late joiner and the stored document must hold the same text, with no
+edit missing) and each replica's memory (`/health` reports it). It fails itself if its own event loop
+is starved, since its latencies would then be its own. See `apps/loadtest/README.md`; the replicas
+come from `docker-compose.loadtest.yml`. Results are kept in `docs/load-tests/`; the first run
+(local, 2 replicas, 10 minutes) met the latency and divergence targets and did not show flat memory.

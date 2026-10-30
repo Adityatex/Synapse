@@ -5,19 +5,14 @@ export interface RoomAccessRecord {
   members?: Array<{ userId?: string }>;
   /** P2-08: when true, members can take exclusive edit locks on files. Off unless the creator turns it on. */
   locksEnabled?: boolean;
-  /** P2-10: absent = never migrated, 2 = lives in collab, 1 = pinned to the classic editor. */
-  collabVersion?: number | null;
 }
 
 /** Per-room settings the api owns and collab only reads. */
 export interface RoomSettings {
   locksEnabled: boolean;
-  /** P2-10: 1 = pinned to the classic editor, so collab must not keep a document for the room. */
-  collabVersion: number | null;
 }
 
-/** 'classic': a member, but the room is pinned to the classic editor, so collab does not serve it. */
-export type AccessDecision = 'allowed' | 'denied' | 'not-found' | 'classic';
+export type AccessDecision = 'allowed' | 'denied' | 'not-found';
 
 /**
  * Mirrors the api's invite-only rule (server/routes/rooms.js isRoomMember):
@@ -28,9 +23,7 @@ export function decideAccess(room: RoomAccessRecord | null, userId: string): Acc
   if (!room) return 'not-found';
   const members = Array.isArray(room.members) ? room.members : [];
   const isMember = room.createdBy === userId || members.length === 0 || members.some((m) => m.userId === userId);
-  if (!isMember) return 'denied';
-  // Only a member is told how the room is set up.
-  return room.collabVersion === 1 ? 'classic' : 'allowed';
+  return isMember ? 'allowed' : 'denied';
 }
 
 export interface RoomAccess {
@@ -44,12 +37,12 @@ export function createMongoRoomAccess(db: Db): RoomAccess {
   const rooms = db.collection<RoomAccessRecord & { roomId: string }>('rooms');
   return {
     async check(roomId, userId) {
-      const room = await rooms.findOne({ roomId }, { projection: { createdBy: 1, members: 1, collabVersion: 1 } });
+      const room = await rooms.findOne({ roomId }, { projection: { createdBy: 1, members: 1 } });
       return decideAccess(room, userId);
     },
     async settings(roomId) {
-      const room = await rooms.findOne({ roomId }, { projection: { locksEnabled: 1, collabVersion: 1 } });
-      return room ? { locksEnabled: room.locksEnabled === true, collabVersion: room.collabVersion ?? null } : null;
+      const room = await rooms.findOne({ roomId }, { projection: { locksEnabled: 1 } });
+      return room ? { locksEnabled: room.locksEnabled === true } : null;
     },
   };
 }

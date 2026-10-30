@@ -10,6 +10,7 @@ import {
   Code2,
   LayoutGrid,
   Play,
+  History,
   Check,
   ChevronDown,
   Keyboard,
@@ -33,7 +34,9 @@ export default function Toolbar({
   onExitRoom,
   onExit,
   currentUser,
-  // Collab mode, creator only (P2-08): { enabled, canToggle, busy, onToggle }.
+  // Rooms only (P2-15): opens the file's version history. The solo editor has none, so no button.
+  onOpenHistory = null,
+  // Creator only (P2-08): { enabled, canToggle, busy, onToggle }.
   locksControl = null
 }) {
   const { activeFile, renameFile } = useFiles();
@@ -150,6 +153,20 @@ export default function Toolbar({
               ))}
             </div>
           </div>
+
+          {/* Version history (rooms only, P2-15) */}
+          {onOpenHistory && (
+            <button
+              type="button"
+              onClick={onOpenHistory}
+              disabled={!activeFile}
+              title="Version history of this file"
+              className={`flex items-center gap-2 px-3 py-1 rounded-md border transition-colors text-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${theme === 'dark' ? 'bg-white/5 border-white/5 hover:bg-white/10 text-slate-300' : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'}`}
+            >
+              <History size={14} />
+              <span>History</span>
+            </button>
+          )}
 
           {/* Std In Button */}
           <div className="relative">

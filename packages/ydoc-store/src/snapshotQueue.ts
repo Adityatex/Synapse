@@ -1,5 +1,6 @@
 import { Queue, Worker, type ConnectionOptions, type Job } from 'bullmq';
-import type { CompactionResult, MongoDocStore } from './mongoDocStore.js';
+import type { CompactionResult } from './docStore.js';
+import type { MongoDocStore } from './mongoDocStore.js';
 
 /**
  * Keeps ydoc_updates bounded (P2-05). Collab enqueues a `compact` job for a room
@@ -111,6 +112,60 @@ export async function compactRoom(store: Pick<MongoDocStore, 'writeSnapshot' | '
   // Prune even when nothing new was snapshotted: another worker may have written the snapshot.
   const prunedUpdates = await store.pruneCoveredUpdates(roomId);
   return { roomId, snapshot, prunedUpdates };
+}
+
+export interface InProcessSchedulerOptions {
+  store: Pick<MongoDocStore, 'writeSnapshot' | 'pruneCoveredUpdates'>;
+  policy?: Partial<Pick<SnapshotPolicy, 'updatesThreshold' | 'quietDelayMs'>>;
+  onError?: (err: Error) => void;
+  onCompacted?: (outcome: CompactionOutcome) => void;
+}
+
+/**
+ * The same schedule as the queue, run inside the collab process, for a deployment with no Redis
+ * (the single-container image). Without it nothing would ever snapshot, and so a room's history
+ * (P2-15) would stay empty and its update log would only grow. It is for one process: two of them
+ * would compact the same room twice, which is safe but wasteful, and Redis plus the worker is the
+ * way to run several.
+ */
+export function createInProcessScheduler(options: InProcessSchedulerOptions): SnapshotScheduler {
+  const policy = { ...DEFAULT_SNAPSHOT_POLICY, ...options.policy };
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const running = new Map<string, Promise<void>>();
+  let closed = false;
+
+  const run = (roomId: string): void => {
+    const timer = timers.get(roomId);
+    if (timer) clearTimeout(timer);
+    timers.delete(roomId);
+    if (closed || running.has(roomId)) return;
+    const job = compactRoom(options.store, roomId)
+      .then((outcome) => options.onCompacted?.(outcome))
+      // A failed run is not retried by itself: the next appended update schedules another.
+      .catch((err: unknown) => options.onError?.(err instanceof Error ? err : new Error(String(err))))
+      .finally(() => running.delete(roomId));
+    running.set(roomId, job);
+  };
+
+  return {
+    noteAppend(roomId, updatesSinceSnapshot) {
+      if (closed) return;
+      if (updatesSinceSnapshot >= policy.updatesThreshold) {
+        run(roomId);
+        return;
+      }
+      if (timers.has(roomId)) return;
+      const timer = setTimeout(() => run(roomId), policy.quietDelayMs);
+      timer.unref?.();
+      timers.set(roomId, timer);
+    },
+    async close() {
+      closed = true;
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
+      await Promise.all(running.values());
+    },
+  };
 }
 
 export interface SnapshotWorkerOptions {

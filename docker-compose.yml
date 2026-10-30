@@ -54,8 +54,8 @@ services:
     # container, so plain nodemon never sees server edits.
     command: pnpm exec nodemon --legacy-watch server.js
 
-  # P2-06: the collaboration server the client connects to when VITE_COLLAB_URL is set
-  # (ws://localhost:5001). Production-style image: rebuild with `docker compose up -d --build collab`.
+  # P2-06: the collaboration server the client connects to (ws://localhost:5001 in dev,
+  # or VITE_COLLAB_URL). Production-style image: rebuild with `docker compose up -d --build collab`.
   collab:
     build:
       context: .

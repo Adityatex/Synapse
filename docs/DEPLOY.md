@@ -10,9 +10,18 @@ built client on a single origin. It runs two ways:
 | Config | `docker-compose.demo.yml` | `fly.toml` |
 | Secrets | `server/.env` | `bash scripts/fly-secrets.sh <app>` (from `server/.env`) |
 
-**Single instance only.** Rooms, presence and locks live in server memory until
-Phase 2 (Hocuspocus + Redis). Run exactly one container/machine, and remember
-that every restart or deploy drops open rooms. Don't deploy during a demo.
+**One container runs both servers.** The image starts the api (port 8080) and the collab server
+(port 5001, inside the container) through `scripts/start-prod.js`; the api passes `/collab`
+WebSocket upgrades on to it, so 8080 is the only port to publish. If either process dies the
+container exits, so the platform restarts both. Rooms are saved in MongoDB (the collab server
+writes a room's document 2 s after the last edit, 10 s at most while typing), so a restart keeps
+the work but drops every open connection: clients reconnect on their own and merge what they typed
+meanwhile (P2-12). Don't deploy during a demo.
+
+What the single container does *not* do: compact room documents (that needs Redis and the
+`apps/worker` process, which the image does not run) or share rooms between machines. Without
+`REDIS_URL` the document history only grows (fine for a demo); for more than one machine, run the
+collab image (`apps/collab/Dockerfile`) and the worker separately.
 
 ## A. Public demo via Cloudflare Tunnel
 
@@ -61,7 +70,8 @@ fly status                            # expect 1 machine, state "started"
 2. Sign up with a real inbox → OTP email arrives → logged in.
 3. Create a room, click **Invite** (copies a signed link, valid 7 days), open it in
    an incognito window and log in as a **second account**. You land in the room.
-4. Type in one window, see it in the other. Cursors and presence show.
+4. Type in one window, see it in the other. Cursors and presence show. (The browser's network tab shows
+   a WebSocket to `/collab`.)
 5. Run code (default file is Python: `print("hello")`). Output appears.
 6. Ask Neura (AI panel) a question. A reply appears.
 

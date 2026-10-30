@@ -14,9 +14,10 @@ primary_region = 'bom'
   LOG_LEVEL = 'info'
   CORS_ORIGIN = 'https://synapse-app.fly.dev'
 
-# Rooms, presence and locks live in server memory until Phase 2, so this app
-# must run exactly ONE always-on machine: a second machine splits rooms, and
-# auto-stop wipes them. Deploy with --ha=false and never `fly scale count` >1.
+# The image runs the api and the collab server together. Without Redis the collab
+# server cannot share a room between machines, so run exactly ONE always-on machine
+# (a second one would split rooms) and never auto-stop it. Deploy with --ha=false and
+# never `fly scale count` >1. Memory: both processes share the 512 MB.
 [http_service]
   internal_port = 8080
   force_https = true

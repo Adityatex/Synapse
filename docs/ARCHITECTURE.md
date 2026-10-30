@@ -18,10 +18,10 @@ Synapse/
 │   └── src/{server,auth,roomAccess,docStore,config}.ts
 ├── server/                 # Express 5 + Socket.IO API (CJS runtime, P1-02 incremental TS)
 │   ├── config/env.js       # boot-time zod env validation (P0-06)
-│   ├── lib/{logger,errors,sentry}.js
+│   ├── lib/{logger,errors,sentry,createRoom,livePresence,collabProxy}.js
 │   ├── middleware/{auth,rateLimits,requestId,validate}.js
 │   ├── routes/{auth,execute,ai,rooms}.js
-│   ├── socket/{socketManager,roomStore}.js
+│   ├── socket/{socketManager,chatHandlers}.js   # chat and the join only; editing is apps/collab (P2-14)
 │   └── tests/{*.test.js (node), vitest/**, harness/**}
 ├── client/                 # React 19 + Vite (incremental TS, P1-03)
 │   └── src/{stores/roomUiStore.ts, hooks/useRoom*, config/apiConfig.ts, ...}
@@ -61,21 +61,25 @@ client → helmet → requestId → pino-http → cors → express.json(1mb)
 - OTP signup/login (`routes/auth.js`): bcrypt(password,12) → hashed OTP
   records (`sha256`, expiry + attempt cap) → JWT 7d. Rate limits per
   email/IP (P0-02).
-- Rooms: `roomStore` (in-memory Yjs docs + participants) + `Room` Mongo
-  doc (files, members, versions). **Invite-only** (P0-16): creator is the
+- Rooms: the `Room` Mongo doc (members, settings, and `files`/`versions`, which nothing writes
+  any more: `files` is the seed a room's collab document is built from, until P3-06 moves it out).
+  `lib/createRoom.js` creates one with its starter file. **Invite-only** (P0-16): creator is the
   first member; `POST /:roomId/invite` (creator-only) adds members;
   HTTP `GET /:roomId` and socket `join-room` deny non-members
   (`403` / `room-error`); legacy member-less rooms are grandfathered once.
-- File locks (45s TTL, heartbeat) are checked on `code-change` against
-  `socket.data.user.userId`.
+- Who is in a room right now (the dashboard's faces) is read from the connected sockets
+  (`lib/livePresence.js`, `io.fetchSockets()`, which spans replicas with the Redis adapter).
+- File locks are the collab server's (section 4.4).
 
 ## 4. Realtime
 
-`socketManager` (JWT handshake → `socket.data.user`): `join-room`,
-`code-change` (Yjs base64 updates via `applyDocumentUpdate`), presence
-(`cursor-move`, `selection-change`), chat (`socket/chatHandlers.js`, section 4.0), locks, `sync-room-state`/`autosave`/`save-version`.
-Client `RoomYjsManager` binds `Y.Text` per file; `EditorPanel` lazy-loads
-Monaco (P1-11).
+Two servers carry a room. `apps/collab` (Hocuspocus) carries the editing: the files and their
+text, cursors and presence, and locks (sections 4.1 to 4.4). `socketManager` (JWT handshake →
+`socket.data.user`) carries the rest: `join-room` / `leave-room` (a member joins the room's chat; the
+guard of section 3) and chat (`socket/chatHandlers.js`, section 4.0). The old Socket.IO editing relay
+(`roomStore`, `code-change`, `sync-room-state`, `autosave`, `save-version`, cursor events and file
+locks) was deleted in P2-14; `EditorPanel` lazy-loads Monaco (P1-11) and binds it to the file's
+shared `Y.Text`. Version history returns on top of snapshots in P2-15.
 
 ### 4.0 Chat across replicas (P2-11)
 
@@ -97,13 +101,13 @@ sockets, and a Mongoose document would arrive there with its ObjectIds as buffer
   so it holds on every replica, kept for 10 s so typing indicators do not cost a query each). If
   the check fails or cannot be made, the event is dropped and logged. Before this, send, typing,
   history and search trusted the `roomId` in the payload.
-- **Not covered:** the legacy in-memory room state (participants, Socket.IO file locks, shared docs)
-  is still per replica; it goes with the legacy editing path (P2-14). In collab mode presence and
-  locks are on the collab server and do work across replicas.
+- **Nothing else is per replica:** the api holds no room state in memory any more (P2-14), so a replica
+  can be added or lost without a room noticing. Presence and locks are on the collab server and work
+  across its replicas.
 
 ### 4.1 Collab persistence (P2-03, P2-04)
 
-`apps/collab` is the target replacement for the relay above (cut over in P2-06).
+`apps/collab` is where rooms are edited (it replaced the Socket.IO relay, P2-06 and P2-14).
 One Y.Doc per room, persisted in two collections:
 
 - `ydoc_updates { roomId, seq, update, createdAt }` — append-only Yjs diffs.
@@ -203,8 +207,8 @@ Colour and avatar glyph are derived from the user id (`colorForUser` in
 `@synapse/room-doc`), so nothing about a participant is kept per room and the same
 person has the same colour everywhere. The price is that two people in a room can
 share a colour (12-colour palette); the name flag on each cursor tells them apart.
-The legacy relay's `userAppearance` map is gone, and `server/tests/vitest/appearance.test.js`
-checks that the relay and the collab path agree. Clients also re-derive the colour
+The old relay's `userAppearance` map is gone (the dashboard colours its faces with the same `colorForUser`).
+Clients also re-derive the colour
 and strip the name to CSS-safe characters before putting either into a stylesheet.
 
 ### 4.4 Focus locks (P2-08)
@@ -255,61 +259,42 @@ usual. Only text is protected: renaming, moving or deleting a locked file is not
 - Code splitting (P1-11): all pages `React.lazy` + `Suspense`; Monaco
   lazy inside `EditorPanel`.
 
-### 5.1 Collab mode (P2-06)
+### 5.1 The room page (P2-06, P2-14)
 
-The room page has two paths, chosen at build time by `VITE_COLLAB_URL`:
+The room page edits through `apps/collab`. `useRoomCollab` connects to it and `CollabFileProvider`
+provides the `useFiles()` interface, backed by the room's Y.Doc through `@synapse/room-doc`, so Sidebar,
+TabBar, Toolbar and Neura read files the same way the solo editor's `FileProvider` gives them. Monaco binds to
+the file's shared `Y.Text`. Tabs, the active file and open folders are per-user. There is no other
+editing path: the flag that chose between this and the Socket.IO relay (`VITE_COLLAB_URL` as an on/off
+switch) is gone.
 
-- **unset (default)**: the legacy Socket.IO relay, unchanged.
-- **set** (e.g. `ws://localhost:5001`): `useRoomCollab` connects to `apps/collab`
-  and `CollabFileProvider` replaces `FileProvider`. It exposes the same
-  `useFiles()` interface, backed by the room's Y.Doc through `@synapse/room-doc`,
-  so Sidebar, TabBar, Toolbar and Neura are unchanged. Monaco binds to the file's
-  shared `Y.Text`. Tabs, the active file and open folders are per-user.
+Socket.IO still carries chat and the join (which also gives the dashboard its "who is here" faces); the
+people list, the "is editing" bar and remote cursors come from awareness (section 4.3), and locks are the
+per-room setting of section 4.4.
 
-In collab mode Socket.IO still carries chat and `save-version`; the people list,
-the "is editing" bar and remote cursors come from awareness (section 4.3). Not used: `code-change`, `sync-room-state`, `autosave` and the
-Socket.IO file locks (section 4.4 replaces them with an optional per-room setting). `VITE_COLLAB_URL` picks the
-editor for the whole client build, and each room's `collabVersion` then decides for that room
-(section 5.3).
+**Where the client finds the collab server** (`config/apiConfig.ts`): `VITE_COLLAB_URL` if set; otherwise
+`ws://<page host>:5001` in dev (the port docker compose publishes), and `wss://<page origin>/collab` in a
+build. In the production image the api passes `/collab` WebSocket upgrades on to the collab server
+(`server/lib/collabProxy.js`, target `COLLAB_INTERNAL_URL`), so one published port serves everything.
 
-### 5.3 Moving rooms to collab, and back (P2-10)
+### 5.3 Moving older rooms into collab (P2-10, P2-14)
 
-`Room.collabVersion` says which editor owns a room's files:
+Rooms made before collab have their files in `Room.files`. `Room.collabVersion: 2` says a room's document
+exists in the collab server; anything else (absent, or the `1` an old rollback left) means not migrated yet.
 
-| value | meaning |
-|---|---|
-| absent | never migrated. The first collab client to open it migrates it |
-| `2` | lives in the collab server |
-| `1` | pinned to the classic Socket.IO editor (what a rollback sets) |
-
-- **Migrating on first open.** When a collab client opens a room with no document, collab builds one
-  from `Room.files` (a fixed Yjs client id makes replicas that race produce one copy, not two) and
-  sets `collabVersion: 2`. A room that already has a document but no flag (a crash between the two
-  steps) is marked on its next open. `Room.files` is left as it was: it is the way back.
-- **The classic editor stands aside.** `join-room` refuses a migrated room ("moved to the new editor");
-  `sync-room-state` and `autosave` only write rooms that are not `collabVersion: 2`, in the Mongo
-  update itself, so a classic tab that was already open cannot overwrite a migrated room. (It keeps
-  working in memory until it reloads; nothing it does is saved.)
-- **Collab clients join Socket.IO for chat only.** They send `join-room` with `collab: true`; the api
-  checks membership, joins the socket to the room and loads nothing: no files into memory (that copy
-  would go stale and show up in the classic editor after a rollback), and a migrated room is allowed.
-  The classic `join-room` is the one that refuses a migrated room.
-- **Collab stands aside for pinned rooms.** A member opening a room with `collabVersion: 1` in collab is
-  refused ("set to the classic editor") and no document is created. A collab-built client reads the
-  flag first and opens a pinned room in the classic editor instead.
+- **Migrating on first open.** When a client opens a room with no document, collab builds one from
+  `Room.files` (a fixed Yjs client id makes replicas that race produce one copy, not two) and sets
+  `collabVersion: 2`. A room that already has a document but no flag (a crash between the two steps) is
+  marked on its next open. `Room.files` is left as it was; it is only read, and only until P3-06.
+- **New rooms** are created by the api with one starter file in `Room.files` (`lib/createRoom.js`), which
+  is what the first open seeds the document from.
+- **Chat joins** (`join-room`) load nothing into the api: the files are the collab server's.
 - **Admin tool** (`apps/collab/src/migrate.ts`, built to `dist/migrate.js`):
   `docker compose exec collab node dist/migrate.js --all --dry-run` then `--all` migrates every room
-  that is neither migrated nor pinned (safe to repeat; one failing room does not stop the rest);
-  `--room ID` does one.
-- **Rollback.** `--rollback ID` writes the room's current text and tree back into `Room.files`, pins
-  it (`collabVersion: 1`) and deletes its stored document, so a later migration starts again from the
-  re-exported text instead of a stale document. Nobody may have the room open: an open room would
-  write itself back. It refuses a room whose document changed in the last two minutes (an update or a
-  snapshot, since compaction turns one into the other) unless `--force`. If a client does have the room
-  open anyway, collab drops its saves (the room is pinned) and sends it away, so it cannot write the
-  document back; the room shows a read-only banner with the reason and a Reload button. `--unpin ID`
-  lets a rolled-back room migrate again. Rolling everything back at once is the client build: unset
-  `VITE_COLLAB_URL`.
+  that is not migrated yet (safe to repeat; one failing room does not stop the rest); `--room ID` does one.
+- **No way back.** The classic editor, `collabVersion: 1` pinning and `--rollback` / `--unpin` were removed
+  in P2-14. Going back means deploying an older build, which still has the Socket.IO editor and finds
+  the text as of the last time the old editor saved it, not as it is in collab.
 
 ### 5.2 Offline and reconnecting (P2-12)
 
@@ -334,8 +319,8 @@ repeated outages).
   part of this).
 - The Socket.IO connection that carries chat reconnects on its own, separately.
 
-Run it locally: `docker compose up -d --build` (starts `collab` on :5001), put
-`VITE_COLLAB_URL=ws://localhost:5001` in `client/.env.local`, then `pnpm dev`.
+Run it locally: `docker compose up -d --build` (starts `collab` on :5001), then `pnpm dev`. The client finds
+the collab server on port 5001 of the page's host; set `VITE_COLLAB_URL` to point it elsewhere.
 
 ## 6. TypeScript plan (P1-02 / P1-03)
 
@@ -353,7 +338,7 @@ Run it locally: `docker compose up -d --build` (starts `collab` on :5001), put
 | Env | Backend | Frontend | DB |
 |---|---|---|---|
 | local (compose) | `api:5000` | vite `:5173` | `mongo:27017/synapse`, redis, mailpit `:8025` |
-| demo (`docker-compose.demo.yml`) | prod image `:8080` + Cloudflare quick tunnel | served by the API | Atlas |
+| demo (`docker-compose.demo.yml`) | prod image `:8080` (api + collab server, `/collab` proxied) + Cloudflare quick tunnel | served by the API | Atlas |
 | staging | _paused_ — planned `synapse-staging.fly.dev` | — | Atlas staging |
 | prod | Fly.io (`fly.toml`, ready, not yet created) | served by the API | Atlas |
 

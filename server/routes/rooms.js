@@ -7,6 +7,7 @@ const Room = require('../models/Room');
 const User = require('../models/User');
 const { createRoom } = require('../lib/createRoom');
 const { liveParticipantsByRoom } = require('../lib/livePresence');
+const { requestRoomHistory } = require('../lib/roomHistory');
 const { recordRoomMembership, isRoomMember } = require('../lib/roomMembership');
 const { signRoomInvite, verifyRoomInvite } = require('../lib/roomInvites');
 
@@ -195,6 +196,56 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
     logger.error({ err: e.message || e, requestId: req.id }, 'DB fetch error');
     return res.status(500).json({ error: 'Failed to fetch room.', requestId: req.id });
   }
+});
+
+// P2-15: a file's version history lives in the collab server; these pass the request on with the caller's token.
+//   GET  /:roomId/history?fileId=&limit=          the file's versions, newest first
+//   GET  /:roomId/history/:seq?fileId=            one version's text
+//   POST /:roomId/history/:seq/restore {fileId}   put that text back
+const sendHistory = (res, { status, body }) => res.status(status).json(body);
+const isVersionId = (value) => /^\d{1,12}$/.test(String(value));
+
+router.get('/:roomId/history', authMiddleware, async (req, res) => {
+  sendHistory(
+    res,
+    await requestRoomHistory({
+      method: 'GET',
+      roomId: req.params.roomId,
+      fileId: typeof req.query.fileId === 'string' ? req.query.fileId : '',
+      limit: typeof req.query.limit === 'string' ? req.query.limit : undefined,
+      authorization: req.get('authorization'),
+    })
+  );
+});
+
+router.get('/:roomId/history/:seq', authMiddleware, async (req, res) => {
+  if (!isVersionId(req.params.seq)) return res.status(404).json({ error: 'That version does not exist.' });
+  sendHistory(
+    res,
+    await requestRoomHistory({
+      method: 'GET',
+      roomId: req.params.roomId,
+      seq: req.params.seq,
+      fileId: typeof req.query.fileId === 'string' ? req.query.fileId : '',
+      authorization: req.get('authorization'),
+    })
+  );
+});
+
+router.post('/:roomId/history/:seq/restore', authMiddleware, async (req, res) => {
+  if (!isVersionId(req.params.seq)) return res.status(404).json({ error: 'That version does not exist.' });
+  const fileId = typeof req.body?.fileId === 'string' ? req.body.fileId : '';
+  sendHistory(
+    res,
+    await requestRoomHistory({
+      method: 'POST',
+      roomId: req.params.roomId,
+      seq: req.params.seq,
+      fileId,
+      restore: true,
+      authorization: req.get('authorization'),
+    })
+  );
 });
 
 // P2-08: the creator switches focus locks on or off for the room. The collab server reads the

@@ -1,6 +1,6 @@
 import { Binary, type Collection, type Db } from 'mongodb';
 import * as Y from 'yjs';
-import type { DocStore } from './docStore.js';
+import type { CompactionResult, DocStore, SnapshotHistory, SnapshotInfo, SnapshotMeta } from './docStore.js';
 
 /**
  * MongoDB persistence for room documents (P2-04).
@@ -33,6 +33,8 @@ interface SnapshotDoc {
   seq: number;
   state: Binary;
   createdAt: Date;
+  /** Set when the snapshot was taken for a reason other than compaction (P2-15). */
+  meta?: SnapshotMeta;
 }
 
 // Each collision means another writer got that seq, so attempts needed <= concurrent writers.
@@ -46,12 +48,6 @@ const isEmptyUpdate = (u: Uint8Array): boolean => u.length === 2 && u[0] === 0 &
 
 const isDuplicateKey = (err: unknown): boolean => typeof err === 'object' && err !== null && (err as { code?: number }).code === 11000;
 
-export interface CompactionResult {
-  snapshotSeq: number;
-  updatesMerged: number;
-  snapshotBytes: number;
-}
-
 export interface AppendInfo {
   seq: number;
   /** Updates written since the newest snapshot, including this one (the length of the tail a load must merge). */
@@ -63,7 +59,7 @@ export interface MongoDocStoreOptions {
   onAppend?: (roomId: string, info: AppendInfo) => void;
 }
 
-export class MongoDocStore implements DocStore {
+export class MongoDocStore implements DocStore, SnapshotHistory {
   private readonly updates: Collection<UpdateDoc>;
   private readonly snapshots: Collection<SnapshotDoc>;
   /** State vector this process last persisted (or loaded) per room, so writes are diffs. */
@@ -122,33 +118,23 @@ export class MongoDocStore implements DocStore {
     this.persisted.delete(roomId);
   }
 
-  /**
-   * Deletes a room's stored document: every update and snapshot. Only for rolling a room back to the
-   * classic editor (P2-10), after its text has been exported. Nothing may have the room open: a
-   * process that does would write it back.
-   */
-  async purge(roomId: string): Promise<{ updates: number; snapshots: number }> {
-    this.persisted.delete(roomId);
-    const [updates, snapshots] = await Promise.all([this.updates.deleteMany({ roomId }), this.snapshots.deleteMany({ roomId })]);
-    return { updates: updates.deletedCount, snapshots: snapshots.deletedCount };
+  /** Newest first, without their state (which can be large). */
+  async listSnapshots(roomId: string, limit: number): Promise<SnapshotInfo[]> {
+    const docs = await this.snapshots
+      .find({ roomId }, { projection: { seq: 1, createdAt: 1, meta: 1 } })
+      .sort({ seq: -1 })
+      .limit(limit)
+      .toArray();
+    return docs.map(({ seq, createdAt, meta }) => ({ seq, createdAt, ...(meta ? { meta } : {}) }));
   }
 
-  /**
-   * When the room's document last changed in storage (its newest update or snapshot), or null if it has
-   * none. Compaction turns updates into a snapshot, so both count. A rollback uses it to notice a room
-   * that is probably open.
-   */
-  async lastActivityAt(roomId: string): Promise<Date | null> {
-    const [update, snapshot] = await Promise.all([
-      this.updates.find({ roomId }).sort({ seq: -1 }).limit(1).next(),
-      this.snapshots.find({ roomId }).sort({ seq: -1 }).limit(1).next(),
-    ]);
-    const times = [update?.createdAt, snapshot?.createdAt].filter((t): t is Date => t instanceof Date);
-    return times.length ? new Date(Math.max(...times.map((t) => t.getTime()))) : null;
+  async loadSnapshot(roomId: string, seq: number): Promise<Uint8Array | null> {
+    const snapshot = await this.snapshots.findOne({ roomId, seq });
+    return snapshot ? bytes(snapshot.state) : null;
   }
 
   /** Merges the newest snapshot and the updates after it into a new snapshot. Null if nothing is new. */
-  async writeSnapshot(roomId: string): Promise<CompactionResult | null> {
+  async writeSnapshot(roomId: string, meta?: SnapshotMeta): Promise<CompactionResult | null> {
     const snapshot = await this.snapshots.find({ roomId }).sort({ seq: -1 }).limit(1).next();
     const base = snapshot?.seq ?? 0;
     const tail = await this.updates
@@ -161,7 +147,7 @@ export class MongoDocStore implements DocStore {
     const through = tail[tail.length - 1].seq;
     const state = Y.mergeUpdates([...(snapshot ? [bytes(snapshot.state)] : []), ...tail.map((u) => bytes(u.update))]);
     try {
-      await this.snapshots.insertOne({ roomId, seq: through, state: new Binary(state), createdAt: new Date() });
+      await this.snapshots.insertOne({ roomId, seq: through, state: new Binary(state), createdAt: new Date(), ...(meta ? { meta } : {}) });
     } catch (err) {
       if (isDuplicateKey(err)) return null; // another worker snapshotted the same point
       throw err;

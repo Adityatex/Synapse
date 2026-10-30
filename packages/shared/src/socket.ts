@@ -16,26 +16,6 @@ export const joinRoomSchema = z.object({
 });
 export type JoinRoomPayload = z.infer<typeof joinRoomSchema>;
 
-export const codeChangeSchema = z.object({
-  roomId: roomIdSchema.optional(),
-  fileId: z.string().trim().min(1).max(256),
-  // base64-encoded Yjs update
-  changes: z.string().min(1).max(2_000_000),
-});
-export type CodeChangePayload = z.infer<typeof codeChangeSchema>;
-
-export const cursorMoveSchema = z.object({
-  roomId: roomIdSchema.optional(),
-  position: z.record(z.unknown()),
-});
-export type CursorMovePayload = z.infer<typeof cursorMoveSchema>;
-
-export const selectionChangeSchema = z.object({
-  roomId: roomIdSchema.optional(),
-  selectionRange: z.record(z.unknown()),
-});
-export type SelectionChangePayload = z.infer<typeof selectionChangeSchema>;
-
 export const chatMessageSchema = z.object({
   roomId: roomIdSchema.optional(),
   content: z.string().trim().min(1).max(8_000),
@@ -81,41 +61,5 @@ export const searchChatMessagesSchema = z.object({
   query: z.string().trim().min(1).max(200),
 });
 export type SearchChatMessagesPayload = z.infer<typeof searchChatMessagesSchema>;
-
-export const fileLockSchema = z.object({
-  roomId: roomIdSchema.optional(),
-  fileId: z.string().trim().min(1).max(256),
-});
-export type FileLockPayload = z.infer<typeof fileLockSchema>;
-
-export const syncRoomStateSchema = z.object({
-  files: z
-    .array(
-      z.object({
-        id: z.string().trim().min(1).max(256),
-        name: z.string().trim().min(1).max(256),
-        type: z.enum(['file', 'folder']).optional().default('file'),
-        parentId: z.string().trim().max(256).nullable().optional().default(null),
-        order: z.number().optional().default(0),
-        content: z.string().max(2_000_000).optional().default(''),
-        updatedAt: z.number().optional(),
-      })
-    )
-    .max(500)
-    .optional(),
-  activeFileId: z.string().trim().max(256).optional(),
-  openTabs: z.array(z.string().trim().max(256)).max(100).optional(),
-});
-export type SyncRoomStatePayload = z.infer<typeof syncRoomStateSchema>;
-
-export const autosaveSchema = z.object({
-  roomId: roomIdSchema.optional(),
-  fileId: z.string().trim().min(1).max(256),
-  content: z.string().max(2_000_000),
-});
-export type AutosavePayload = z.infer<typeof autosaveSchema>;
-
-export const saveVersionSchema = autosaveSchema;
-export type SaveVersionPayload = z.infer<typeof saveVersionSchema>;
 
 export { userIdSchema };

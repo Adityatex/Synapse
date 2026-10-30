@@ -4,7 +4,7 @@ const { logger } = require('./logger');
 
 /**
  * A room's files as plain text, read from the collab server (P2-09). The api never reads the text
- * from `Room.files` (that copy is only as fresh as the legacy autosave) and never trusts the text
+ * from `Room.files` (the seed a room was made from, which nothing updates any more) and never trusts the text
  * a client sends when the room can be asked instead.
  *
  * The collab server checks that the caller is a member, so the caller's own token is passed on.

@@ -51,6 +51,7 @@ async function main(): Promise<void> {
     store,
     legacy: createMongoLegacyRooms(mongo.db()),
     redisUrl: config.REDIS_URL || undefined,
+    redisRepairIntervalMs: config.COLLAB_REDIS_REPAIR_MS,
     connectionsPerMin: config.COLLAB_CONNECTIONS_PER_MIN,
     release: config.APP_RELEASE,
   });

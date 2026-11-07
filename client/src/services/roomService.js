@@ -56,6 +56,23 @@ export function updateRoomSettings(roomId, settings) {
   });
 }
 
+const roomPath = (roomId) => `/${String(roomId).trim().toUpperCase()}`;
+
+/** A file's saved versions, newest first (P2-15). */
+export function listVersions(roomId, fileId) {
+  return request(`${roomPath(roomId)}/history?fileId=${encodeURIComponent(fileId)}`);
+}
+
+/** One saved version of a file: its text, name, time and who made it, if a restore did. */
+export function getVersion(roomId, seq, fileId) {
+  return request(`${roomPath(roomId)}/history/${seq}?fileId=${encodeURIComponent(fileId)}`);
+}
+
+/** Puts a saved version's text back as the file's current text. The room sees it as an ordinary edit. */
+export function restoreVersion(roomId, seq, fileId) {
+  return request(`${roomPath(roomId)}/history/${seq}/restore`, { method: 'POST', body: JSON.stringify({ fileId }) });
+}
+
 export function getRecentRooms(userId) {
   return request(`/recent/${encodeURIComponent(userId)}`);
 }

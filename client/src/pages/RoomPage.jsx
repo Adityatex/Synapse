@@ -14,6 +14,7 @@ import Toolbar from '../components/Toolbar';
 import OutputPanel from '../components/OutputPanel';
 import StatusBar from '../components/StatusBar';
 import NeuraPanel from '../components/NeuraPanel';
+import HistoryPanel from '../components/HistoryPanel';
 import { getThemeClasses } from '../utils/theme';
 import { createCollaborationSocket } from '../services/socket';
 import { getRoom, updateRoomSettings } from '../services/roomService';
@@ -277,6 +278,10 @@ function RoomSession({ roomId, collab }) {
   // The file's shared Y.Text. Content comes from the document alone, so nothing is pre-seeded locally.
   const sharedText = activeFileId ? getContentText(collabDoc, activeFileId) : null;
 
+  // Version history (P2-15): compared with what the file says right now.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const getCurrentText = useCallback(() => (activeFileId ? getContentText(collabDoc, activeFileId).toString() : ''), [collabDoc, activeFileId]);
+
   // The collab server refused us. At join (expired token, not a member, unknown room) that ends the
   // visit. If it happens after the room was open (the sign-in ran out while we were offline), the
   // editor stays on screen, read-only, with a banner (P2-12).
@@ -405,6 +410,7 @@ function RoomSession({ roomId, collab }) {
         onExitRoom={handleExitRoom}
         currentUser={toolbarUser}
         locksControl={locksControl}
+        onOpenHistory={() => setHistoryOpen(true)}
       />
 
       <div className={`flex flex-1 overflow-hidden p-2 gap-2 ${theme === 'dark' ? 'bg-[#0b1410]' : 'bg-[#ebebeb]'}`}>
@@ -440,6 +446,19 @@ function RoomSession({ roomId, collab }) {
 
         <NeuraPanel theme={theme} roomId={roomId} />
       </div>
+
+      {historyOpen && activeFileId && (
+        <HistoryPanel
+          key={activeFileId}
+          onClose={() => setHistoryOpen(false)}
+          theme={theme}
+          roomId={roomId}
+          fileId={activeFileId}
+          fileName={files.find((file) => file.id === activeFileId)?.name || ''}
+          getCurrentText={getCurrentText}
+          canRestore={!authLost}
+        />
+      )}
 
       <StatusBar
         theme={theme}

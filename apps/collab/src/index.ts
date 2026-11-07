@@ -1,6 +1,6 @@
 import { MongoClient } from 'mongodb';
 import { loadConfig, type CollabConfig } from './config.js';
-import { MongoDocStore, connectionFromUrl, createSnapshotScheduler, type SnapshotScheduler } from '@synapse/ydoc-store';
+import { MongoDocStore, connectionFromUrl, createInProcessScheduler, createSnapshotScheduler, type SnapshotScheduler } from '@synapse/ydoc-store';
 import { createMongoLegacyRooms } from './legacyRooms.js';
 import { createLogger } from './logger.js';
 import { createMongoRoomAccess } from './roomAccess.js';
@@ -20,20 +20,28 @@ async function main(): Promise<void> {
   await mongo.connect();
   logger.info('Connected to MongoDB');
 
-  // Compaction keeps ydoc_updates bounded (P2-05). It needs Redis for the queue; without it
-  // a single-instance dev setup still works, it just never compacts.
-  const scheduler: SnapshotScheduler | null = config.REDIS_URL
-    ? createSnapshotScheduler({
-        connection: connectionFromUrl(config.REDIS_URL),
-        policy: { updatesThreshold: config.SNAPSHOT_UPDATES_THRESHOLD, quietDelayMs: config.SNAPSHOT_DELAY_MS },
-        onError: (err) => logger.warn({ err: err.message }, 'snapshot queue error'),
-      })
-    : null;
-  if (!scheduler) logger.warn('REDIS_URL is not set: room documents will not be compacted');
-
+  // Compaction keeps ydoc_updates bounded (P2-05) and makes the snapshots a room's history is built from
+  // (P2-15). With Redis the work goes through a queue to the worker process, so several collab replicas
+  // share it. Without Redis (a single process: dev, the one-container image) it runs here, on the same
+  // schedule.
+  let scheduler: SnapshotScheduler | null = null;
   const store = new MongoDocStore(mongo.db(), {
     onAppend: (roomId, info) => scheduler?.noteAppend(roomId, info.updatesSinceSnapshot),
   });
+  const policy = { updatesThreshold: config.SNAPSHOT_UPDATES_THRESHOLD, quietDelayMs: config.SNAPSHOT_DELAY_MS };
+  scheduler = config.REDIS_URL
+    ? createSnapshotScheduler({
+        connection: connectionFromUrl(config.REDIS_URL),
+        policy,
+        onError: (err) => logger.warn({ err: err.message }, 'snapshot queue error'),
+      })
+    : createInProcessScheduler({
+        store,
+        policy,
+        onError: (err) => logger.warn({ err: err.message }, 'compaction failed'),
+        onCompacted: (outcome) => logger.info({ event: 'collab.compacted', roomId: outcome.roomId, snapshot: outcome.snapshot?.snapshotSeq, pruned: outcome.prunedUpdates }, 'room compacted'),
+      });
+  if (!config.REDIS_URL) logger.info('REDIS_URL is not set: room documents are compacted in this process');
   await store.ensureIndexes();
 
   const server = createCollabServer({

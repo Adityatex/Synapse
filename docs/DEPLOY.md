@@ -18,10 +18,10 @@ writes a room's document 2 s after the last edit, 10 s at most while typing), so
 the work but drops every open connection: clients reconnect on their own and merge what they typed
 meanwhile (P2-12). Don't deploy during a demo.
 
-What the single container does *not* do: compact room documents (that needs Redis and the
-`apps/worker` process, which the image does not run) or share rooms between machines. Without
-`REDIS_URL` the document history only grows (fine for a demo); for more than one machine, run the
-collab image (`apps/collab/Dockerfile`) and the worker separately.
+Without `REDIS_URL` the collab server compacts room documents itself (the schedule of the worker, in
+its own process), which keeps the update log bounded and makes the snapshots a file's version history is
+built from. What the single container does *not* do is share rooms between machines: for more than one,
+run the collab image (`apps/collab/Dockerfile`) and the worker separately, with Redis.
 
 ## A. Public demo via Cloudflare Tunnel
 
@@ -73,6 +73,7 @@ fly status                            # expect 1 machine, state "started"
 4. Type in one window, see it in the other. Cursors and presence show. (The browser's network tab shows
    a WebSocket to `/collab`.)
 5. Run code (default file is Python: `print("hello")`). Output appears.
+   (Version history, the History button, fills in a few minutes after people start editing.)
 6. Ask Neura (AI panel) a question. A reply appears.
 
 ## Demo day

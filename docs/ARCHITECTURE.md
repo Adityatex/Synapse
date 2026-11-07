@@ -134,7 +134,9 @@ kept (last 100) until the dead-letter queue and Bull Board arrive in P4-01.
 Compaction is idempotent and safe against concurrent writers, so the queue only
 needs to be at-least-once. Tunables: `SNAPSHOT_UPDATES_THRESHOLD`,
 `SNAPSHOT_DELAY_MS` (collab), `SNAPSHOT_CONCURRENCY` (worker). Without
-`REDIS_URL` collab still runs but never compacts.
+`REDIS_URL` (one process: dev, the one-container image) collab compacts in its own process on the same
+schedule (`createInProcessScheduler`), so version history (section 4.5) works there too; with several
+replicas, use Redis and the worker.
 Soak result: 3000 edits from two simulated replicas peaked at 501 updates in the
 collection (limit 1000) with 5 compactions.
 
@@ -249,6 +251,41 @@ usual. Only text is protected: renaming, moving or deleting a locked file is not
   read but an update cannot be attributed to a file, it is refused whenever someone
   else holds a lock.
 - A member can hold at most 5 locks, and can only lock files that exist.
+
+### 4.5 Version history (P2-15)
+
+A file's history is made from the room's snapshots, which compaction writes and which are kept (only the
+updates they cover are pruned). A snapshot is the whole room as it was when compaction ran, so a file's
+versions are its text in each snapshot, leaving out the ones where it did not change. Versions are
+therefore a few minutes apart while people edit (`SNAPSHOT_DELAY_MS`, default five minutes after the
+first un-compacted update) or a burst of 500 updates apart, not per keystroke.
+
+The collab server serves it, and the api passes requests on with the caller's own token
+(`server/lib/roomHistory.js`), as it does for the plain-text projection:
+
+| | |
+|---|---|
+| `GET /api/rooms/:id/history?fileId=&limit=` | the file's versions, newest first (`seq`, time, size, `kind`, and who for a restore) |
+| `GET /api/rooms/:id/history/:seq?fileId=` | one version's text |
+| `POST /api/rooms/:id/history/:seq/restore` `{fileId}` | put that text back |
+
+- **Listing** reads at most 100 snapshots (`MAX_SCAN`), newest first, and drops those where the file is the
+  same as in the next older one, unless a restore made them.
+- **Restore is an ordinary edit, never a rewrite of what is stored.** The difference between the live text
+  and the old one (the span between their common start and end, not the whole file) is applied to the live
+  document in one transaction through a direct connection, so people connected see it like anyone's typing,
+  cursors outside the span stay put, and other replicas get it through Redis. It is refused (409) if
+  someone else holds the file's lock, or if the file was deleted since; a file that already has that text
+  is left alone.
+- **Two snapshots surround a restore** (`SnapshotMeta`): the room as it was just before, if anything had
+  been typed since the last snapshot (`restore-point`; otherwise the last snapshot already is that state),
+  and the room right after (`restore`, with who did it and which version it came from). That is how the
+  restore appears in the history and how it is undone: restore the version from before it.
+- **Membership is the only permission today** (roles arrive with P3-04). The client's panel
+  (`HistoryPanel`) shows each version as a diff against the file now.
+- **Not done:** snapshots are never deleted, and each holds the whole room, so a busy room's history grows
+  with every compaction. A retention policy (for example keep every version for a day, then thin out) belongs
+  with P4's storage limits.
 
 ## 5. Client state
 

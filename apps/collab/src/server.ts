@@ -6,7 +6,7 @@ import { buildSeedUpdate } from '@synapse/room-doc';
 import type { IncomingMessage as HttpRequest, ServerResponse } from 'node:http';
 import * as Y from 'yjs';
 import { AuthError, documentNameFor, parseDocumentName, verifyAccessToken, type AuthUser } from './auth.js';
-import type { DocStore } from '@synapse/ydoc-store';
+import type { DocStore, SnapshotHistory } from '@synapse/ydoc-store';
 import type { LegacyRooms } from './legacyRooms.js';
 import { LockService, lockRequestSchema, snapshotSignature, type LockMessage, type LockOutcome } from './lockService.js';
 import { MemoryLockStore, RedisLockStore, type LockStore } from './locks.js';
@@ -14,6 +14,7 @@ import { guardAwareness } from './presence.js';
 import type { Logger } from './logger.js';
 import type { RoomAccess } from './roomAccess.js';
 import { createProjectionService, type ProjectionOptions } from './projectionService.js';
+import { DEFAULT_LIMIT, HistoryError, MAX_SCAN, createHistoryService } from './history.js';
 
 /** Per-connection data set by onAuthenticate and read by every later hook. */
 export interface CollabContext {
@@ -63,6 +64,8 @@ function writableUpdate(raw: Uint8Array): Uint8Array | null {
 const encode = (message: LockMessage) => JSON.stringify(message);
 
 const FILES_ROUTE = /^\/rooms\/([A-Za-z0-9]{4,32})\/files$/;
+const HISTORY_ROUTE = /^\/rooms\/([A-Za-z0-9]{4,32})\/history(?:\/(\d{1,12})(\/restore)?)?$/;
+const MAX_BODY_BYTES = 2_048;
 
 // Persist after 2 s of quiet, and never leave a busy document unsaved for over 10 s.
 const DEFAULT_STORE_DEBOUNCE_MS = 2_000;
@@ -144,35 +147,119 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
     },
   });
 
+  const history = createHistoryService({
+    store: store as DocStore & SnapshotHistory,
+    locks: lockService,
+    logger,
+    syncs: Boolean(redisUrl),
+    syncWaitMs: deps.projection?.syncWaitMs,
+  });
+  const supportsHistory = typeof (store as Partial<SnapshotHistory>).listSnapshots === 'function';
+
+  const sendJson = (response: ServerResponse, status: number, body: unknown) => {
+    response.writeHead(status, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify(body));
+  };
+
+  /** Who is asking, and may they see this room? Answers the request itself and returns null if not. */
+  async function authorizeRequest(request: HttpRequest, response: ServerResponse, roomParam: string): Promise<{ user: AuthUser; roomId: string } | null> {
+    let user: AuthUser;
+    try {
+      user = verifyAccessToken((request.headers.authorization ?? '').replace(/^Bearer\s+/i, ''), jwtSecret);
+    } catch {
+      sendJson(response, 401, { error: 'Authentication required.' });
+      return null;
+    }
+    const roomId = roomParam.toUpperCase();
+    let decision;
+    try {
+      decision = await access.check(roomId, user.userId);
+    } catch (err) {
+      logger.error({ err: err instanceof Error ? err.message : String(err), roomId }, 'Room access check failed');
+      sendJson(response, 503, { error: 'Could not verify room access.' });
+      return null;
+    }
+    if (decision === 'not-found') {
+      sendJson(response, 404, { error: 'Room not found.' });
+      return null;
+    }
+    if (decision === 'denied') {
+      sendJson(response, 403, { error: 'You are not a member of this room.' });
+      return null;
+    }
+    return { user, roomId };
+  }
+
+  async function readJsonBody(request: HttpRequest): Promise<unknown> {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of request) {
+      size += (chunk as Buffer).length;
+      if (size > MAX_BODY_BYTES) throw new Error('body too large');
+      chunks.push(chunk as Buffer);
+    }
+    return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
+  }
+
   /** GET /rooms/:id/files: the room as plain text for a member (P2-09). */
   async function serveRoomFiles(request: HttpRequest, response: ServerResponse, instance: Hocuspocus, roomParam: string) {
-    const send = (status: number, body: unknown) => {
-      response.writeHead(status, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify(body));
-    };
     try {
-      let user;
-      try {
-        user = verifyAccessToken((request.headers.authorization ?? '').replace(/^Bearer\s+/i, ''), jwtSecret);
-      } catch {
-        return send(401, { error: 'Authentication required.' });
-      }
-      const roomId = roomParam.toUpperCase();
-      let decision;
-      try {
-        decision = await access.check(roomId, user.userId);
-      } catch (err) {
-        logger.error({ err: err instanceof Error ? err.message : String(err), roomId }, 'Room access check failed');
-        return send(503, { error: 'Could not verify room access.' });
-      }
-      if (decision === 'not-found') return send(404, { error: 'Room not found.' });
-      if (decision === 'denied') return send(403, { error: 'You are not a member of this room.' });
-
+      const who = await authorizeRequest(request, response, roomParam);
+      if (!who) return;
       const fresh = new URL(request.url ?? '', 'http://collab').searchParams.get('fresh') === '1';
-      return send(200, { roomId, ...(await projection.read(instance, roomId, { fresh })) });
+      return sendJson(response, 200, { roomId: who.roomId, ...(await projection.read(instance, who.roomId, { fresh })) });
     } catch (err) {
       logger.error({ err: err instanceof Error ? err.message : String(err), roomParam }, 'Room projection failed');
-      return send(500, { error: 'Could not read the room.' });
+      return sendJson(response, 500, { error: 'Could not read the room.' });
+    }
+  }
+
+  /**
+   * A file's version history (P2-15), for a member:
+   *   GET  /rooms/:id/history?fileId=&limit=         the versions, newest first
+   *   GET  /rooms/:id/history/:seq?fileId=           one version's text
+   *   POST /rooms/:id/history/:seq/restore {fileId}  put that text back
+   */
+  async function serveHistory(request: HttpRequest, response: ServerResponse, instance: Hocuspocus, match: RegExpExecArray) {
+    const [, roomParam, seqParam, restoreSuffix] = match;
+    try {
+      const who = await authorizeRequest(request, response, roomParam);
+      if (!who) return;
+      if (!supportsHistory) return sendJson(response, 501, { error: 'Version history is not available.' });
+
+      const seq = seqParam === undefined ? null : Number(seqParam);
+      const query = new URL(request.url ?? '', 'http://collab').searchParams;
+      let fileId = query.get('fileId') ?? '';
+
+      if (restoreSuffix) {
+        if (request.method !== 'POST') return sendJson(response, 405, { error: 'Use POST.' });
+        let body: { fileId?: unknown };
+        try {
+          body = (await readJsonBody(request)) as { fileId?: unknown };
+        } catch {
+          return sendJson(response, 400, { error: 'Send a JSON body with a fileId.' });
+        }
+        fileId = typeof body.fileId === 'string' ? body.fileId : '';
+      } else if (request.method !== 'GET') {
+        return sendJson(response, 405, { error: 'Use GET.' });
+      }
+      if (!fileId || fileId.length > 100) return sendJson(response, 400, { error: 'A fileId is required.' });
+
+      if (seq === null) {
+        const limit = Math.min(Math.max(Number(query.get('limit')) || DEFAULT_LIMIT, 1), MAX_SCAN);
+        return sendJson(response, 200, { roomId: who.roomId, fileId, versions: await history.list(who.roomId, fileId, limit) });
+      }
+      if (restoreSuffix) {
+        const result = await history.restore(instance, who.roomId, seq, fileId, { userId: who.user.userId, name: who.user.name || 'Someone' });
+        return sendJson(response, 200, { roomId: who.roomId, fileId, ...result });
+      }
+      return sendJson(response, 200, { roomId: who.roomId, fileId, version: await history.preview(who.roomId, seq, fileId) });
+    } catch (err) {
+      if (err instanceof HistoryError) {
+        return sendJson(response, err.status, { error: err.message, code: err.code, ...(err.holder ? { holder: err.holder } : {}) });
+      }
+      logger.error({ err: err instanceof Error ? err.message : String(err), roomParam }, 'Room history failed');
+      return sendJson(response, 500, { error: 'Could not read the room history.' });
     }
   }
 
@@ -341,8 +428,11 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
     async onRequest({ request, response, instance }) {
       const path = (request.url ?? '').split('?')[0];
       const files = request.method === 'GET' ? FILES_ROUTE.exec(path) : null;
+      const historyRoute = HISTORY_ROUTE.exec(path);
       if (files) {
         await serveRoomFiles(request, response, instance, files[1]);
+      } else if (historyRoute) {
+        await serveHistory(request, response, instance, historyRoute);
       } else if (path === '/health') {
         const body = {
           status: 'ok',

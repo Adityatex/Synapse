@@ -1,5 +1,4 @@
 import { IncomingMessage, MessageType, Server, type Connection, type Extension, type Hocuspocus } from '@hocuspocus/server';
-import { Redis as RedisExtension } from '@hocuspocus/extension-redis';
 import { Throttle } from '@hocuspocus/extension-throttle';
 import { checkRedisHealth, createRedisClient } from '@synapse/redis';
 import { buildSeedUpdate } from '@synapse/room-doc';
@@ -11,6 +10,7 @@ import type { LegacyRooms } from './legacyRooms.js';
 import { LockService, lockRequestSchema, snapshotSignature, type LockMessage, type LockOutcome } from './lockService.js';
 import { MemoryLockStore, RedisLockStore, type LockStore } from './locks.js';
 import { guardAwareness } from './presence.js';
+import { UpdateRedis } from './redisSync.js';
 import type { Logger } from './logger.js';
 import type { RoomAccess } from './roomAccess.js';
 import { createProjectionService, type ProjectionOptions } from './projectionService.js';
@@ -31,6 +31,8 @@ export interface CollabDeps {
   legacy?: LegacyRooms;
   /** Without a Redis URL the server runs single-instance. */
   redisUrl?: string;
+  /** How often an open document asks the other replicas for updates it may have missed (default 30 s; 0 = never). */
+  redisRepairIntervalMs?: number;
   connectionsPerMin?: number;
   release?: string;
   /** Quiet period before a changed document is persisted. Tests shorten it. */
@@ -83,8 +85,10 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
   const storeDebounceMs = deps.storeDebounceMs ?? DEFAULT_STORE_DEBOUNCE_MS;
 
   const redis = redisUrl
-    ? new RedisExtension({
+    ? new UpdateRedis({
         prefix: 'synapse:hocuspocus',
+        repairIntervalMs: deps.redisRepairIntervalMs,
+        onError: (err, context) => logger.warn({ err: err instanceof Error ? err.message : String(err) }, `Redis sync: ${context} failed`),
         // Pub/sub clients must queue commands across reconnects, unlike the
         // fail-fast default used for request-path calls.
         createClient: () =>

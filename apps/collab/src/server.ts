@@ -63,6 +63,12 @@ function writableUpdate(raw: Uint8Array): Uint8Array | null {
 
 const encode = (message: LockMessage) => JSON.stringify(message);
 
+const MB = 1024 * 1024;
+const processMemory = () => {
+  const { rss, heapUsed } = process.memoryUsage();
+  return { rssMb: Math.round(rss / MB), heapUsedMb: Math.round(heapUsed / MB) };
+};
+
 const FILES_ROUTE = /^\/rooms\/([A-Za-z0-9]{4,32})\/files$/;
 const HISTORY_ROUTE = /^\/rooms\/([A-Za-z0-9]{4,32})\/history(?:\/(\d{1,12})(\/restore)?)?$/;
 const MAX_BODY_BYTES = 2_048;
@@ -441,6 +447,8 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
           uptimeSec: Math.round((Date.now() - startedAt) / 1000),
           documents: instance.getDocumentsCount(),
           connections: instance.getConnectionsCount(),
+          // For the load test (P2-13) and anyone watching a replica: is memory steady under load?
+          memory: processMemory(),
           redis: await checkRedisHealth(redis?.pub),
         };
         response.writeHead(200, { 'Content-Type': 'application/json' });

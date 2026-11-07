@@ -107,6 +107,8 @@ describe('health endpoint', () => {
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body).toMatchObject({ status: 'ok', service: 'collab', redis: { status: 'disabled' } });
+    expect(body.memory.rssMb).toBeGreaterThan(0);
+    expect(body.memory.heapUsedMb).toBeGreaterThan(0);
   });
 });
 

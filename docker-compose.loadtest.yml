@@ -1,0 +1,13 @@
+# P2-13: a second collab replica, for the load test (apps/loadtest).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.loadtest.yml up -d --build collab collab-2
+#
+# Both replicas share Mongo and Redis, as in production; the test connects editors to both
+# (ws://localhost:5001 and ws://localhost:5002). Not needed for ordinary development.
+services:
+  collab-2:
+    extends:
+      file: docker-compose.yml
+      service: collab
+    ports: !override
+      - '5002:5001'

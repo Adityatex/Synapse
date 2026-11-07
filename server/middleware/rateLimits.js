@@ -61,7 +61,7 @@ function rateLimitHandler(retryMinutes) {
 
 const otpRequestByEmailLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
-  limit: 3,
+  limit: envLimit('RATE_LIMIT_OTP_EMAIL_PER_10MIN', 3),
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: emailKeyGenerator,
@@ -81,7 +81,7 @@ const otpRequestByIpLimiter = rateLimit({
 
 const otpVerifyLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
-  limit: 10,
+  limit: envLimit('RATE_LIMIT_OTP_VERIFY_PER_10MIN', 10),
   standardHeaders: true,
   legacyHeaders: false,
   // Key by email when present so brute-force against one account is capped,

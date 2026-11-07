@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { ChevronDown, Search, Trash2 } from 'lucide-react';
 import { createRoom, deleteRoom, getRecentRooms, getRoom, getSharedRooms } from '../services/roomService';
+import { colorForUser } from '@synapse/room-doc';
 import { getAvatarStyle, getUserInitial } from '../utils/avatar';
 import { parseRoomTarget } from '../utils/roomLinks';
 import TopNav from '../components/TopNav';
@@ -44,7 +45,7 @@ function LiveFaces({ live }) {
   return (
     <span className="dash-faces" aria-hidden="true">
       {live.slice(0, 3).map((p) => (
-        <span key={p.userId} className="dash-face" style={getAvatarStyle({ userId: p.userId }, p.color)}>
+        <span key={p.userId} className="dash-face" style={getAvatarStyle({ userId: p.userId }, colorForUser(p.userId))}>
           {getUserInitial(p.username)}
         </span>
       ))}

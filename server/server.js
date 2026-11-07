@@ -39,6 +39,7 @@ const { logger } = require('./lib/logger');
 const { initSentry, captureException, getRelease } = require('./lib/sentry');
 const { initRedis, redisHealth, closeRedis } = require('./lib/redis');
 const { createSocketAdapter } = require('./lib/socketAdapter');
+const { attachCollabProxy } = require('./lib/collabProxy');
 
 initSentry();
 
@@ -102,7 +103,7 @@ if (fs.existsSync(CLIENT_INDEX_HTML)) {
   app.use(express.static(CLIENT_DIST_DIR, { index: false, maxAge: '1h' }));
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    if (req.path.startsWith('/api/') || req.path === '/api' || req.path.startsWith('/socket.io')) return next();
+    if (req.path.startsWith('/api/') || req.path === '/api' || req.path.startsWith('/socket.io') || req.path.startsWith('/collab')) return next();
     if (!req.accepts('html')) return next();
     res.set('Cache-Control', 'no-cache');
     return res.sendFile(CLIENT_INDEX_HTML);
@@ -194,6 +195,11 @@ app.use((err, req, res, next) => {
 });
 
 const io = createSocketServer(server);
+// P2-14: browsers reach the collab server through this port (/collab) when it runs beside the api, as it
+// does in the production image. Without COLLAB_INTERNAL_URL nothing is proxied.
+if (process.env.COLLAB_INTERNAL_URL && attachCollabProxy(server, process.env.COLLAB_INTERNAL_URL)) {
+  logger.info({ target: process.env.COLLAB_INTERNAL_URL }, 'Proxying /collab WebSocket upgrades to the collab server');
+}
 // P2-11: with Redis, every replica's sockets share rooms (set up in the entrypoint block below).
 let socketAdapter = null;
 

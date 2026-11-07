@@ -53,9 +53,9 @@ const roomSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  // P2-10: which editor owns this room's files. Absent: never migrated, and the first collab client
-  // to open it migrates it. 2: the room lives in the collab server (Room.files is no longer written).
-  // 1: pinned to the classic Socket.IO editor (what a rollback sets); collab refuses the room.
+  // P2-10: 2 once the room lives in the collab server. Absent (or the 1 an old rollback left): not
+  // migrated yet, and the first collab client to open it builds its document from `files`. Nothing
+  // writes `files` or `versions` any more (P2-14); they stay as the seed for old rooms until P3-06.
   collabVersion: {
     type: Number,
     enum: [1, 2],

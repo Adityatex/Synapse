@@ -16,7 +16,6 @@ const { validateEnv } = require('../config/env');
 const { requestIdMiddleware } = require('../middleware/requestId');
 const authHelpers = require('../routes/auth');
 const { isRoomMember } = require('../routes/rooms');
-const roomStore = require('../socket/roomStore');
 
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -161,14 +160,7 @@ describe('P0-12: OTP helpers', () => {
   });
 });
 
-describe('P0-12/P0-16: roomStore + invite guard (no DB)', () => {
-  it('unknown rooms return null without throwing', () => {
-    assert.equal(roomStore.getRoomSnapshot('NOPEXX'), null);
-    assert.equal(roomStore.addParticipant('NOPEXX', { socketId: 's', userId: 'u' }), null);
-    assert.equal(roomStore.applyDocumentUpdate('NOPEXX', 'f', 'AAAA'), null);
-    assert.equal(roomStore.removeParticipant('NOPEXX', 's'), null);
-  });
-
+describe('P0-16: invite guard (no DB)', () => {
   it('isRoomMember: creator and members pass, strangers fail', () => {
     const room = { createdBy: 'creator-1', members: [{ userId: 'member-2' }] };
     assert.equal(isRoomMember(room, 'creator-1'), true);

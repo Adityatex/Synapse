@@ -5,7 +5,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { createMongoLegacyRooms } from './legacyRooms.js';
-import { migrateAll, migrateRoom, rollbackRoom, unpinRoom, type MigrationDeps } from './migration.js';
+import { migrateAll, migrateRoom, type MigrationDeps } from './migration.js';
 import { createMongoRoomAccess } from './roomAccess.js';
 import { closeAll, connect, randomRoomId, startServer, tokenFor, waitFor } from './testUtils.js';
 
@@ -83,7 +83,7 @@ describe('migrateRoom', () => {
       ['main.py', '# Python 3\nprint("Hello, Synapse!")'],
     ]);
     expect(await flagOf(deps.db, roomId)).toBe(2);
-    // The classic copy is left as it was: it is the way back.
+    // Room.files is left as it was: it is only read, and only until P3-06 moves it out.
     expect((await deps.db.collection('rooms').findOne({ roomId }))?.files).toHaveLength(3);
   });
 
@@ -110,17 +110,22 @@ describe('migrateRoom', () => {
     expect(await flagOf(deps.db, roomId)).toBe(2);
   });
 
-  it('writes nothing in a dry run, leaves a pinned room alone, and reports an unknown room', async () => {
+  it('writes nothing in a dry run, and reports an unknown room', async () => {
     const deps = await fresh();
     const roomId = await legacyRoom(deps.db);
     expect(await migrateRoom(deps, roomId, { dryRun: true })).toBe('migrated');
     expect(await flagOf(deps.db, roomId)).toBeNull();
     expect(await documentOf(deps.store, roomId)).toBeNull();
 
-    const pinned = await legacyRoom(deps.db, { collabVersion: 1 });
-    expect(await migrateRoom(deps, pinned)).toBe('pinned');
-    expect(await documentOf(deps.store, pinned)).toBeNull();
     expect(await migrateRoom(deps, 'NOSUCHROOM')).toBe('not-found');
+  });
+
+  it('migrates a room that an old rollback left with collabVersion 1, from its Room.files', async () => {
+    const deps = await fresh();
+    const roomId = await legacyRoom(deps.db, { collabVersion: 1 });
+    expect(await migrateRoom(deps, roomId)).toBe('migrated');
+    expect(shape((await documentOf(deps.store, roomId))!)).toHaveLength(2);
+    expect(await flagOf(deps.db, roomId)).toBe(2);
   });
 
   it('migrates a room with no files to an empty document', async () => {
@@ -132,10 +137,9 @@ describe('migrateRoom', () => {
 });
 
 describe('migrateAll', () => {
-  it('migrates what is left, skips pinned and migrated rooms, and reports failures without stopping', async () => {
+  it('migrates what is left, skips migrated rooms, and reports failures without stopping', async () => {
     const deps = await fresh();
     const [a, b, c] = [await legacyRoom(deps.db), await legacyRoom(deps.db), await legacyRoom(deps.db)];
-    const pinned = await legacyRoom(deps.db, { collabVersion: 1 });
     const done = await legacyRoom(deps.db, { collabVersion: 2 });
 
     // One room's save fails; the others must still be migrated.
@@ -147,7 +151,6 @@ describe('migrateAll', () => {
     expect(await flagOf(deps.db, a)).toBe(2);
     expect(await flagOf(deps.db, c)).toBe(2);
     expect(await flagOf(deps.db, b)).toBeNull(); // not marked, so a later run picks it up
-    expect(await flagOf(deps.db, pinned)).toBe(1);
     expect(await flagOf(deps.db, done)).toBe(2);
 
     const second = await migrateAll(deps);
@@ -162,76 +165,6 @@ describe('migrateAll', () => {
     expect(report.counts.migrated).toBe(1);
     expect(await flagOf(deps.db, roomId)).toBeNull();
     expect(await documentOf(deps.store, roomId)).toBeNull();
-  });
-});
-
-describe('rollbackRoom', () => {
-  it('puts the room’s current text back in Room.files, pins it, and deletes the document', async () => {
-    const deps = await fresh();
-    const roomId = await legacyRoom(deps.db);
-    await migrateRoom(deps, roomId);
-
-    // Work done in collab after the migration.
-    const doc = (await documentOf(deps.store, roomId))!;
-    getContentText(doc, 'welcome-py').insert(0, '# edited in collab\n');
-    await deps.store.store(roomId, doc);
-
-    const result = await rollbackRoom(deps, roomId, { force: true });
-    expect(result.exported).toBe(3);
-    expect(result.purged.updates).toBeGreaterThan(0);
-
-    const room = await deps.db.collection('rooms').findOne({ roomId });
-    expect(room?.collabVersion).toBe(1);
-    const byId = new Map((room?.files as Array<{ id: string; content: string; type: string; parentId: string | null }>).map((f) => [f.id, f]));
-    expect(byId.get('welcome-py')?.content).toBe('# edited in collab\n# Python 3\nprint("Hello, Synapse!")');
-    expect(byId.get('util')).toMatchObject({ content: 'def helper(): ...', parentId: 'lib', type: 'file' });
-    expect(byId.get('lib')).toMatchObject({ type: 'folder' });
-    expect(await deps.db.collection('ydoc_updates').countDocuments({ roomId })).toBe(0);
-    expect(await deps.db.collection('ydoc_snapshots').countDocuments({ roomId })).toBe(0);
-  });
-
-  it('can be migrated again from the exported text, once unpinned', async () => {
-    const deps = await fresh();
-    const roomId = await legacyRoom(deps.db);
-    await migrateRoom(deps, roomId);
-    const doc = (await documentOf(deps.store, roomId))!;
-    getContentText(doc, 'util').insert(0, '# round trip\n');
-    await deps.store.store(roomId, doc);
-    const before = shape(doc);
-
-    await rollbackRoom(deps, roomId, { force: true });
-    expect(await migrateRoom(deps, roomId)).toBe('pinned'); // a rolled-back room stays on the classic editor
-
-    expect(await unpinRoom(deps, roomId)).toBe(true);
-    expect(await unpinRoom(deps, roomId)).toBe(false);
-    expect(await migrateRoom(deps, roomId)).toBe('migrated');
-    expect(shape((await documentOf(deps.store, roomId))!)).toEqual(before);
-  });
-
-  it('also counts compaction as activity: a room whose updates were just folded into a snapshot is refused', async () => {
-    const deps = await fresh();
-    const roomId = await legacyRoom(deps.db);
-    await migrateRoom(deps, roomId);
-    // What the snapshot worker does a little after the edits.
-    await deps.store.writeSnapshot(roomId);
-    await deps.store.pruneCoveredUpdates(roomId);
-    expect(await deps.db.collection('ydoc_updates').countDocuments({ roomId })).toBe(0);
-
-    await expect(rollbackRoom(deps, roomId)).rejects.toThrow(/may be open/);
-    expect(await documentOf(deps.store, roomId)).not.toBeNull();
-  });
-
-  it('refuses a room that was edited moments ago unless forced', async () => {
-    const deps = await fresh();
-    const roomId = await legacyRoom(deps.db);
-    await migrateRoom(deps, roomId);
-
-    await expect(rollbackRoom(deps, roomId)).rejects.toThrow(/may be open/);
-    expect(await flagOf(deps.db, roomId)).toBe(2);
-    expect(await documentOf(deps.store, roomId)).not.toBeNull();
-
-    await expect(rollbackRoom(deps, roomId, { now: Date.now() + 10 * 60_000 })).resolves.toMatchObject({ exported: 3 });
-    await expect(rollbackRoom(deps, 'NOSUCHROOM', { force: true })).rejects.toThrow(/No such room/);
   });
 });
 
@@ -275,54 +208,18 @@ describe('collab and the flag', () => {
     await waitFor(async () => (await flagOf(deps.db, roomId)) === 2);
   });
 
-  it('refuses a member of a room pinned to the classic editor, and does not create a document', async () => {
+  it('opens a room that an old rollback pinned with collabVersion 1, from its Room.files, and marks it', async () => {
     const deps = await fresh();
     const roomId = await legacyRoom(deps.db, { collabVersion: 1 });
-    const server = await serverFor(deps);
 
-    const ada = connect(server, roomId, tokenFor('ada'));
-    expect(await ada.denied).toMatch(/classic editor/i);
-    expect(await deps.store.load(roomId)).toBeNull();
-    expect(await flagOf(deps.db, roomId)).toBe(1);
-
-    // A stranger is told nothing about how the room is set up.
-    const eve = connect(server, roomId, tokenFor('eve'));
-    expect(await eve.denied).toMatch(/not a member/i);
-  });
-
-  it('does not let a room that is open during a rollback write itself back, and sends its clients away', async () => {
-    const deps = await fresh();
-    const roomId = await legacyRoom(deps.db);
     const server = await serverFor(deps);
     const ada = connect(server, roomId, tokenFor('ada'));
     await ada.synced;
-    getContentText(ada.doc, 'welcome-py').insert(0, '# before\n');
-    // Wait until her edit itself (not just the seed) has been saved.
-    await waitFor(async () => (await documentOf(deps.store, roomId))?.getText('content:welcome-py').toString().startsWith('# before') === true);
+    expect(shape(ada.doc)).toHaveLength(2);
+    await waitFor(async () => (await flagOf(deps.db, roomId)) === 2);
 
-    // The rollback runs while she still has it open (forced: the activity check would refuse it).
-    await rollbackRoom(deps, roomId, { force: true });
-    expect(await deps.db.collection('ydoc_updates').countDocuments({ roomId })).toBe(0);
-
-    getContentText(ada.doc, 'welcome-py').insert(0, '# after the rollback\n');
-    await new Promise((resolve) => setTimeout(resolve, 600)); // longer than the store delay
-    expect(await deps.db.collection('ydoc_updates').countDocuments({ roomId })).toBe(0); // not written back
-    expect(await deps.db.collection('ydoc_snapshots').countDocuments({ roomId })).toBe(0);
-    const exported = (await deps.db.collection('rooms').findOne({ roomId }))?.files as Array<{ id: string; content: string }>;
-    expect(exported.find((f) => f.id === 'welcome-py')?.content).toBe('# before\n# Python 3\nprint("Hello, Synapse!")');
-
-    // She was disconnected, and coming back is refused with the reason.
-    const again = connect(server, roomId, tokenFor('ada'));
-    expect(await again.denied).toMatch(/classic editor/i);
-  });
-
-  it('does not let a classic-editor write overwrite a migrated room, and opening it there is refused', async () => {
-    const deps = await fresh();
-    const roomId = await legacyRoom(deps.db, { collabVersion: 2 });
-    // The conditions the api's sync-room-state and autosave use.
-    const sync = await deps.db.collection('rooms').updateOne({ roomId, collabVersion: { $ne: 2 } }, { $set: { files: [] } });
-    const autosave = await deps.db.collection('rooms').updateOne({ roomId, collabVersion: { $ne: 2 }, 'files.id': 'util' }, { $set: { 'files.$.content': 'x' } });
-    expect(sync.matchedCount + autosave.matchedCount).toBe(0);
-    expect((await deps.db.collection('rooms').findOne({ roomId }))?.files).toHaveLength(3);
+    // A stranger is still turned away.
+    const eve = connect(server, roomId, tokenFor('eve'));
+    expect(await eve.denied).toMatch(/not a member/i);
   });
 });

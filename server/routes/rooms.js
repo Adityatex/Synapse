@@ -5,24 +5,20 @@ const { captureException } = require('../lib/sentry');
 const { validateBody } = require('../middleware/validate');
 const Room = require('../models/Room');
 const User = require('../models/User');
-const { createRoom, getRoom, getRoomSnapshot } = require('../socket/roomStore');
+const { createRoom } = require('../lib/createRoom');
+const { liveParticipantsByRoom } = require('../lib/livePresence');
+const { requestRoomHistory } = require('../lib/roomHistory');
 const { recordRoomMembership, isRoomMember } = require('../lib/roomMembership');
 const { signRoomInvite, verifyRoomInvite } = require('../lib/roomInvites');
 
 const router = express.Router();
 
-// Who is in each room right now (in-memory presence), for the dashboard.
-function withLivePresence(rooms) {
+// Who is in each room right now (from the connected sockets), for the dashboard.
+async function withLivePresence(rooms) {
+  const live = await liveParticipantsByRoom();
   return rooms.map((doc) => {
     const room = typeof doc.toObject === 'function' ? doc.toObject() : doc;
-    const live = getRoom(room.roomId);
-    room.live = live
-      ? Array.from(live.participants.values()).map((p) => ({
-          userId: p.userId,
-          username: p.username,
-          color: p.cursorColor,
-        }))
-      : [];
+    room.live = live.get(room.roomId) || [];
     return room;
   });
 }
@@ -41,7 +37,7 @@ router.post('/', authMiddleware, validateBody('createRoomSchema'), async (req, r
         roomName: room.roomName,
         createdAt: room.createdAt,
         createdBy: room.createdBy,
-        participantCount: room.participants ? room.participants.length : 0,
+        participantCount: 0,
       },
     });
   } catch (error) {
@@ -60,7 +56,7 @@ router.get('/recent/:userId', authMiddleware, async (req, res) => {
     const rooms = await Room.find({ createdBy: req.params.userId })
       .sort({ lastUpdated: -1 })
       .limit(20);
-    res.json(withLivePresence(rooms));
+    res.json(await withLivePresence(rooms));
   } catch (error) {
     logger.error({ err: error.message || error, requestId: req.id }, 'Fetch recent rooms error');
     res.status(500).json({ error: 'Failed to fetch recent rooms.', requestId: req.id });
@@ -80,7 +76,7 @@ router.get('/shared/:userId', authMiddleware, async (req, res) => {
       },
     }).sort({ lastUpdated: -1 });
 
-    res.json(withLivePresence(rooms));
+    res.json(await withLivePresence(rooms));
   } catch (error) {
     logger.error({ err: error.message || error, requestId: req.id }, 'Fetch shared rooms error');
     res.status(500).json({ error: 'Failed to fetch shared rooms.', requestId: req.id });
@@ -177,60 +173,79 @@ router.post('/:roomId/join', authMiddleware, validateBody('joinRoomInviteSchema'
 router.get('/:roomId', authMiddleware, async (req, res) => {
   const roomId = String(req.params.roomId || '').trim().toUpperCase();
 
-  // Try to find active in-memory room first
-  const room = getRoomSnapshot(roomId);
-
-  if (!room) {
-    try {
-      const dbRoom = await Room.findOne({ roomId });
-      if (dbRoom) {
-        // P0-16: enforce invite-only access on DB rooms.
-        if (!isRoomMember(dbRoom, req.user.userId)) {
-          return res.status(403).json({ error: 'You are not a member of this room.', requestId: req.id });
-        }
-        return res.json({
-          room: {
-            roomId: dbRoom.roomId,
-            roomName: dbRoom.roomName,
-            createdAt: dbRoom.createdAt,
-            createdBy: dbRoom.createdBy,
-            locksEnabled: dbRoom.locksEnabled === true,
-            collabVersion: dbRoom.collabVersion ?? null,
-            participantCount: 0,
-          },
-        });
-      }
-    } catch (e) {
-      logger.error({ err: e.message || e, requestId: req.id }, 'DB fetch error');
-      return res.status(500).json({ error: 'Failed to fetch room.', requestId: req.id });
+  try {
+    const dbRoom = await Room.findOne({ roomId });
+    if (!dbRoom) {
+      return res.status(404).json({ error: 'Room not found.', requestId: req.id });
     }
-  } else {
-    let dbRoom = null;
-    try {
-      dbRoom = await Room.findOne({ roomId });
-      if (dbRoom && !isRoomMember(dbRoom, req.user.userId)) {
-        return res.status(403).json({ error: 'You are not a member of this room.', requestId: req.id });
-      }
-    } catch (e) {
-      logger.error({ err: e.message || e, requestId: req.id }, 'DB fetch error');
+    // P0-16: enforce invite-only access.
+    if (!isRoomMember(dbRoom, req.user.userId)) {
+      return res.status(403).json({ error: 'You are not a member of this room.', requestId: req.id });
     }
     return res.json({
       room: {
-        roomId: room.roomId,
-        roomName: room.roomName,
-        createdAt: room.createdAt,
-        createdBy: room.createdBy,
-        locksEnabled: dbRoom?.locksEnabled === true,
-        collabVersion: dbRoom?.collabVersion ?? null,
-        participantCount: room.participants ? room.participants.length : 0,
+        roomId: dbRoom.roomId,
+        roomName: dbRoom.roomName,
+        createdAt: dbRoom.createdAt,
+        createdBy: dbRoom.createdBy,
+        locksEnabled: dbRoom.locksEnabled === true,
+        participantCount: 0,
       },
     });
+  } catch (e) {
+    logger.error({ err: e.message || e, requestId: req.id }, 'DB fetch error');
+    return res.status(500).json({ error: 'Failed to fetch room.', requestId: req.id });
   }
+});
 
-  return res.status(404).json({
-    error: 'Room not found.',
-    requestId: req.id,
-  });
+// P2-15: a file's version history lives in the collab server; these pass the request on with the caller's token.
+//   GET  /:roomId/history?fileId=&limit=          the file's versions, newest first
+//   GET  /:roomId/history/:seq?fileId=            one version's text
+//   POST /:roomId/history/:seq/restore {fileId}   put that text back
+const sendHistory = (res, { status, body }) => res.status(status).json(body);
+const isVersionId = (value) => /^\d{1,12}$/.test(String(value));
+
+router.get('/:roomId/history', authMiddleware, async (req, res) => {
+  sendHistory(
+    res,
+    await requestRoomHistory({
+      method: 'GET',
+      roomId: req.params.roomId,
+      fileId: typeof req.query.fileId === 'string' ? req.query.fileId : '',
+      limit: typeof req.query.limit === 'string' ? req.query.limit : undefined,
+      authorization: req.get('authorization'),
+    })
+  );
+});
+
+router.get('/:roomId/history/:seq', authMiddleware, async (req, res) => {
+  if (!isVersionId(req.params.seq)) return res.status(404).json({ error: 'That version does not exist.' });
+  sendHistory(
+    res,
+    await requestRoomHistory({
+      method: 'GET',
+      roomId: req.params.roomId,
+      seq: req.params.seq,
+      fileId: typeof req.query.fileId === 'string' ? req.query.fileId : '',
+      authorization: req.get('authorization'),
+    })
+  );
+});
+
+router.post('/:roomId/history/:seq/restore', authMiddleware, async (req, res) => {
+  if (!isVersionId(req.params.seq)) return res.status(404).json({ error: 'That version does not exist.' });
+  const fileId = typeof req.body?.fileId === 'string' ? req.body.fileId : '';
+  sendHistory(
+    res,
+    await requestRoomHistory({
+      method: 'POST',
+      roomId: req.params.roomId,
+      seq: req.params.seq,
+      fileId,
+      restore: true,
+      authorization: req.get('authorization'),
+    })
+  );
 });
 
 // P2-08: the creator switches focus locks on or off for the room. The collab server reads the

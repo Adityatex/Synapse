@@ -179,6 +179,21 @@ export class LockService {
     return { broadcast: { type: 'locks.snapshot', ...(await this.snapshot(roomId, true)) } };
   }
 
+  /**
+   * Who holds a lock on `fileId` other than `userId`, or null. For server-side edits that are not a
+   * client's own (a history restore): they must respect the lock a client's edit would. If the lock state
+   * cannot be read it says null, as for edits, so an outage does not freeze the room.
+   */
+  async heldByOther(roomId: string, fileId: string, userId: string): Promise<{ userId: string; name: string } | null> {
+    try {
+      const lock = (await this.snapshot(roomId, true)).locks[fileId];
+      return lock && lock.userId !== userId ? { userId: lock.userId, name: lock.name } : null;
+    } catch (err) {
+      this.options.onProblem?.(err, 'locks.heldByOther');
+      return null;
+    }
+  }
+
   /** A connection closed: its locks go at once instead of lingering until they expire. */
   async releaseConnection(roomId: string, connectionId: string): Promise<LockOutcome> {
     try {

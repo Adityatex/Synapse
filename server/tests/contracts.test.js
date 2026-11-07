@@ -48,14 +48,9 @@ describe('shared HTTP contracts', () => {
 });
 
 describe('shared socket contracts', () => {
-  it('joinRoomSchema + codeChangeSchema shapes', () => {
+  it('joinRoomSchema shape', () => {
     assert.equal(shared.joinRoomSchema.safeParse({ roomId: 'ABC123' }).success, true);
     assert.equal(shared.joinRoomSchema.safeParse({}).success, false);
-    assert.equal(
-      shared.codeChangeSchema.safeParse({ fileId: 'f', changes: 'QUJD' }).success,
-      true
-    );
-    assert.equal(shared.codeChangeSchema.safeParse({ fileId: 'f' }).success, false);
   });
 
   it('chat + search bounds', () => {

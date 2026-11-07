@@ -161,54 +161,12 @@ describe('P0-03: socket handlers never trust payload identity', () => {
     assert.ok(!socketSrc.includes('username || socket.data.user.name'), 'must not fall back to payload username');
   });
 
-  it('code-change uses only the authenticated sender', () => {
-    assert.ok(
-      socketSrc.includes("socket.on('code-change'"),
-      'code-change handler must exist'
-    );
-    assert.ok(
-      !socketSrc.includes('userId,') || socketSrc.includes("validateSocketPayload('codeChangeSchema'"),
-      'code-change must validate payload and never accept userId from it'
-    );
-    assert.ok(socketSrc.includes('const senderId = socket.data.user.userId'), 'senderId must come from socket.data.user');
-  });
-
-  it('cursor-move and selection-change use only the authenticated user', () => {
-    assert.ok(
-      socketSrc.includes("validateSocketPayload('cursorMoveSchema'"),
-      'cursor-move must validate payload'
-    );
-    assert.ok(
-      socketSrc.includes("validateSocketPayload('selectionChangeSchema'"),
-      'selection-change must validate payload'
-    );
-  });
-
-  it('lock-bypass regression: spoofed userId cannot bypass a file lock', () => {
-    // Simulates the fixed check in the code-change handler:
-    //   const senderId = socket.data.user.userId; // authenticated only
-    //   if (activeLock && activeLock.userId !== senderId) deny
-    const victimUserId = 'victim-1';
-    const attackerUserId = 'attacker-9';
-    const activeLock = { userId: victimUserId, username: 'Victim' };
-
-    function isEditDenied(lock, authenticatedSenderId) {
-      return Boolean(lock && lock.userId !== authenticatedSenderId);
+  it('editing events are gone from Socket.IO (P2-14): the collab server owns them', () => {
+    for (const event of ['code-change', 'cursor-move', 'selection-change', 'sync-room-state', 'autosave', 'request-file-lock']) {
+      assert.ok(!socketSrc.includes(`socket.on('${event}'`), `${event} handler must not come back`);
     }
-
-    // Attacker is authenticated as attacker but spoofs victim's ID in payload.
-    // Fixed code ignores the payload, so sender = attacker → denied.
-    const spoofedPayloadUserId = victimUserId; // ignored by server
-    const fixedSenderId = attackerUserId; // socket.data.user.userId
-    assert.equal(isEditDenied(activeLock, fixedSenderId), true, 'attacker must be denied');
-
-    // Old (vulnerable) behaviour would have used the payload → bypassed.
-    const vulnerableSenderId = spoofedPayloadUserId;
-    assert.equal(isEditDenied(activeLock, vulnerableSenderId), false, 'old code would have allowed (bypass)');
-
-    // Legitimate owner is still allowed.
-    assert.equal(isEditDenied(activeLock, victimUserId), false, 'lock owner must be allowed');
   });
+
 });
 
 describe('P0-04: chat search regex is escaped', () => {

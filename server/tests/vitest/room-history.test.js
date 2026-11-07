@@ -10,7 +10,10 @@ describe('room history through the api', () => {
   let app;
   let seen; // what the fake collab server was asked
   let reply; // what it answers: { status, body }
-  const token = () => jwt.sign({ userId: 'ada', name: 'Ada', email: 'ada@x.com' }, process.env.JWT_SECRET);
+  // Signed once: jwt.sign stamps `iat` in whole seconds, so signing again for the assertion could differ from the
+  // header that was sent when a second ticks over between the two.
+  let signed;
+  const token = () => (signed ??= jwt.sign({ userId: 'ada', name: 'Ada', email: 'ada@x.com' }, process.env.JWT_SECRET));
 
   beforeAll(async () => {
     process.env.JWT_SECRET ??= 'test-secret-that-is-long-enough-for-p1-09-1234567890';

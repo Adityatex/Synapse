@@ -48,6 +48,7 @@ export async function startServer(opts: {
   store?: DocStore;
   legacy?: LegacyRooms;
   redisUrl?: string;
+  redisRepairIntervalMs?: number;
   storeDebounceMs?: number;
   projection?: CollabDeps['projection'];
   locks?: CollabDeps['locks'];

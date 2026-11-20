@@ -24,6 +24,8 @@ const schema = z
     SNAPSHOT_UPDATES_THRESHOLD: z.coerce.number().int().min(1).default(500),
     /** Otherwise compact this long after a room's first un-compacted update. */
     SNAPSHOT_DELAY_MS: z.coerce.number().int().min(100).default(300_000),
+    /** Across replicas: how often an open document asks the others for updates it may have missed. 0 = never. */
+    COLLAB_REDIS_REPAIR_MS: z.coerce.number().int().min(0).default(30_000),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.JWT_SECRET.length < 32) {

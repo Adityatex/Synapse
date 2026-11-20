@@ -52,12 +52,14 @@ async function main(): Promise<void> {
     legacy: createMongoLegacyRooms(mongo.db()),
     redisUrl: config.REDIS_URL || undefined,
     redisRepairIntervalMs: config.COLLAB_REDIS_REPAIR_MS,
+    redisSync: config.COLLAB_REDIS_SYNC,
+    redisRepairOnReconnect: config.COLLAB_REDIS_REPAIR_ON_RECONNECT,
     connectionsPerMin: config.COLLAB_CONNECTIONS_PER_MIN,
     release: config.APP_RELEASE,
   });
 
   await server.listen(config.PORT);
-  logger.info({ port: config.PORT, redis: Boolean(config.REDIS_URL) }, 'Synapse collab listening');
+  logger.info({ port: config.PORT, redis: Boolean(config.REDIS_URL), redisSync: config.REDIS_URL ? config.COLLAB_REDIS_SYNC : undefined }, 'Synapse collab listening');
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {

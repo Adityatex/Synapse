@@ -1,3 +1,4 @@
+import { Redis } from '@hocuspocus/extension-redis';
 import { IncomingMessage } from '@hocuspocus/server';
 import { createRedisClient } from '@synapse/redis';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -32,20 +33,27 @@ interface Seen {
   bytes: number;
 }
 
-/** Everything replicas publish on a room's channel, classified by its y-protocols message type. */
+/**
+ * Everything replicas publish about a room, classified by its y-protocols message type: on the room's channel, and
+ * on the replicas' reply channels (`<prefix>#reply:<identifier>`), where the answers to a state vector go.
+ */
 async function watchChannel(roomId: string): Promise<Seen[]> {
   const seen: Seen[] = [];
+  const documentName = documentNameFor(roomId);
   const client = createRedisClient(REDIS_URL, { redis: { enableOfflineQueue: true } });
   watchers.push(client);
-  client.on('messageBuffer', (_channel: Buffer, data: Buffer) => {
+  const classify = (data: Buffer) => {
     const message = new IncomingMessage(data.subarray(1 + data[0]!)); // the sender's identifier comes first
-    message.readVarString(); // document name
+    if (message.readVarString() !== documentName) return; // a reply channel carries every room's answers
     const type = message.readVarUint();
     let kind: Kind = 'other';
     if (type === 0 || type === 4) kind = (['step1', 'step2', 'update'] as const)[message.readVarUint()] ?? 'other'; // Sync, SyncReply
     seen.push({ kind, bytes: data.length });
-  });
-  await client.subscribe(`synapse:hocuspocus:${documentNameFor(roomId)}`);
+  };
+  client.on('messageBuffer', (_channel: Buffer, data: Buffer) => classify(data));
+  client.on('pmessageBuffer', (_pattern: Buffer, _channel: Buffer, data: Buffer) => classify(data));
+  await client.subscribe(`synapse:hocuspocus:${documentName}`);
+  await client.psubscribe('synapse:hocuspocus#reply:*');
   return seen;
 }
 
@@ -55,11 +63,12 @@ const redisOf = (server: Awaited<ReturnType<typeof startServer>>): UpdateRedis =
   return ext as UpdateRedis;
 };
 
-async function twoReplicas(options: { repairIntervalMs?: number } = {}) {
+async function twoReplicas(options: { repairIntervalMs?: number; redisSync?: 'updates' | 'state-vector'; repairOnReconnect?: boolean } = {}) {
   const roomId = randomRoomId();
   const access = fakeAccess({ [roomId]: { createdBy: 'ada', members: [{ userId: 'ada' }, { userId: 'bob' }] } });
-  const replicaOne = await startServer({ access, redisUrl: REDIS_URL, redisRepairIntervalMs: options.repairIntervalMs ?? 0 });
-  const replicaTwo = await startServer({ access, redisUrl: REDIS_URL, redisRepairIntervalMs: options.repairIntervalMs ?? 0 });
+  const replica = { access, redisUrl: REDIS_URL, redisRepairIntervalMs: options.repairIntervalMs ?? 0, redisSync: options.redisSync, redisRepairOnReconnect: options.repairOnReconnect };
+  const replicaOne = await startServer(replica);
+  const replicaTwo = await startServer(replica);
   const seen = await watchChannel(roomId);
   const a = connect(replicaOne, roomId, tokenFor('ada'));
   const b = connect(replicaTwo, roomId, tokenFor('bob'));
@@ -177,5 +186,53 @@ describe.skipIf(!redisAvailable)('replicas share changes as updates (P2-13)', ()
 
     sub.emit('ready'); // the subscriber coming back up
     await waitFor(() => textOf(b).toString() === 'before and after', 4000);
+  });
+
+  it('does not ask on reconnect when that is turned off, so only the periodic ask repairs', async () => {
+    const { roomId, replicaTwo, a, b, seen, textOf } = await twoReplicas({ repairOnReconnect: false });
+    textOf(a).insert(0, 'before');
+    await waitFor(() => textOf(b).toString() === 'before');
+
+    const sub = redisOf(replicaTwo).sub;
+    const channel = `synapse:hocuspocus:${documentNameFor(roomId)}`;
+    await sub.unsubscribe(channel);
+    const from = seen.length;
+    textOf(a).insert(6, ' and after');
+    await waitFor(() => seen.slice(from).some((s) => s.kind === 'update'));
+    await sub.subscribe(channel);
+    sub.emit('ready');
+    await tick(600);
+    expect(seen.slice(from).filter((s) => s.kind === 'step1')).toEqual([]);
+    expect(textOf(b).toString()).toBe('before');
+  });
+});
+
+describe.skipIf(!redisAvailable)('the stock state-vector sync, kept for comparison (COLLAB_REDIS_SYNC=state-vector)', () => {
+  it('runs the stock extension: an edit publishes a state vector and is answered', async () => {
+    const { replicaOne, a, b, seen, textOf } = await twoReplicas({ redisSync: 'state-vector' });
+    expect(replicaOne.hocuspocus.configuration.extensions.some((e) => e instanceof UpdateRedis)).toBe(false);
+    await tick(200);
+    const from = seen.length;
+    textOf(a).insert(0, 'hello');
+    await waitFor(() => textOf(b).toString() === 'hello');
+    await tick(200);
+    const kinds = seen.slice(from).map((s) => s.kind);
+    expect(kinds).toContain('step1');
+    expect(kinds).toContain('step2');
+  });
+
+  it('heals a lost message at the next edit, without any periodic ask', async () => {
+    const { roomId, replicaTwo, a, b, textOf } = await twoReplicas({ redisSync: 'state-vector' });
+    textOf(a).insert(0, 'before');
+    await waitFor(() => textOf(b).toString() === 'before');
+    const channel = `synapse:hocuspocus:${documentNameFor(roomId)}`;
+    const sub = (replicaTwo.hocuspocus.configuration.extensions.find((e) => e instanceof Redis) as Redis).sub;
+    await sub.unsubscribe(channel);
+    textOf(a).insert(6, ' and after');
+    await tick(300);
+    await sub.subscribe(channel);
+    expect(textOf(b).toString()).toBe('before');
+    textOf(a).insert(0, '>');
+    await waitFor(() => textOf(b).toString() === '>before and after', 4000);
   });
 });

@@ -1,0 +1,204 @@
+ Image synapse-worker Building 
+ Image synapse-collab-2 Building 
+ Image synapse-collab Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 1.48kB done
+#1 DONE 0.0s
+
+#2 [collab-2 internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.38kB done
+#2 DONE 0.0s
+
+#3 [worker internal] load build definition from Dockerfile
+#3 transferring dockerfile: 967B done
+#3 DONE 0.0s
+
+#4 [worker internal] load metadata for docker.io/library/node:22-slim
+#4 DONE 2.0s
+
+#5 [collab internal] load .dockerignore
+#5 transferring context: 297B done
+#5 DONE 0.0s
+
+#6 [collab build  1/14] FROM docker.io/library/node:22-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee
+#6 resolve docker.io/library/node:22-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee 0.0s done
+#6 DONE 0.0s
+
+#7 [worker internal] load build context
+#7 transferring context: 1.43kB 0.0s done
+#7 DONE 0.0s
+
+#8 [collab-2 internal] load build context
+#8 transferring context: 3.88kB 0.0s done
+#8 DONE 0.0s
+
+#9 [worker build  9/11] COPY packages/ydoc-store packages/ydoc-store
+#9 CACHED
+
+#10 [worker build  4/11] COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
+#10 CACHED
+
+#11 [worker build  7/11] COPY apps/worker/package.json apps/worker/
+#11 CACHED
+
+#12 [worker build  6/11] COPY packages/ydoc-store/package.json packages/ydoc-store/
+#12 CACHED
+
+#13 [worker build  8/11] RUN pnpm install --frozen-lockfile --filter "@synapse/worker..."
+#13 CACHED
+
+#14 [worker build 11/11] RUN pnpm --filter @synapse/ydoc-store --filter @synapse/worker build  && pnpm --filter @synapse/worker deploy --prod --legacy /out
+#14 CACHED
+
+#15 [worker build  5/11] COPY packages/redis/package.json packages/redis/
+#15 CACHED
+
+#16 [worker build 10/11] COPY apps/worker apps/worker
+#16 CACHED
+
+#17 [worker stage-1 3/3] COPY --from=build --chown=node:node /out ./
+#17 CACHED
+
+#18 [collab-2 build  2/14] RUN corepack enable
+#18 CACHED
+
+#19 [collab-2 build  4/14] COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
+#19 CACHED
+
+#20 [collab-2 build 12/14] COPY packages/ydoc-store packages/ydoc-store
+#20 CACHED
+
+#21 [collab-2 build  9/14] RUN pnpm install --frozen-lockfile --filter "@synapse/collab..."
+#21 CACHED
+
+#22 [collab-2 build 10/14] COPY packages/redis packages/redis
+#22 CACHED
+
+#23 [collab-2 build  6/14] COPY packages/room-doc/package.json packages/room-doc/
+#23 CACHED
+
+#24 [collab-2 build  7/14] COPY packages/ydoc-store/package.json packages/ydoc-store/
+#24 CACHED
+
+#25 [collab-2 stage-1 2/3] WORKDIR /app
+#25 CACHED
+
+#26 [collab-2 build 11/14] COPY packages/room-doc packages/room-doc
+#26 CACHED
+
+#27 [collab-2 build 14/14] RUN pnpm --filter @synapse/redis --filter @synapse/room-doc --filter @synapse/ydoc-store --filter @synapse/collab build  && pnpm --filter @synapse/collab deploy --prod --legacy /out
+#27 CACHED
+
+#28 [collab-2 build  8/14] COPY apps/collab/package.json apps/collab/
+#28 CACHED
+
+#29 [collab-2 build  3/14] WORKDIR /app
+#29 CACHED
+
+#30 [collab-2 build  5/14] COPY packages/redis/package.json packages/redis/
+#30 CACHED
+
+#31 [collab-2 build 13/14] COPY apps/collab apps/collab
+#31 CACHED
+
+#32 [collab-2 stage-1 3/3] COPY --from=build --chown=node:node /out ./
+#32 CACHED
+
+#33 [collab-2] exporting to image
+#33 exporting layers done
+#33 exporting manifest sha256:b307cfd552b620cbbcbb772a9ce7589ef20f127bf6dc7bc860537994231f6bdc done
+#33 exporting config sha256:06e9dbfec23ec091ca9a888a2606782ee29fa973610137144ab4232109b33e52 done
+#33 exporting attestation manifest sha256:85f43a76987d129a08e04f10bd4880849a087ce1d0ad97894fe467f2497a4695
+#33 exporting attestation manifest sha256:85f43a76987d129a08e04f10bd4880849a087ce1d0ad97894fe467f2497a4695 0.0s done
+#33 exporting manifest list sha256:e7dfb6fb8af425bbbef27d0c1eb1acedbc8de2dc2840e20c0a3e76c09c447962 0.0s done
+#33 naming to docker.io/library/synapse-collab-2:latest done
+#33 unpacking to docker.io/library/synapse-collab-2:latest done
+#33 DONE 0.1s
+
+#34 [worker] exporting to image
+#34 exporting layers done
+#34 exporting manifest sha256:4209b47bb8a180727fe52f988714c9c0759feeae9e8e3266ef3bb24e5b1a627c done
+#34 exporting config sha256:d893a52b5548ad7466201e8c340957d006bb8db9331cc21b0e91dced3b1f5a59 done
+#34 exporting attestation manifest sha256:92045c2cbf263c57458a32378e05235e2389be25f074e475d56bf32588da4cff 0.0s done
+#34 exporting manifest list sha256:003a9d7b7e8641c6f3e2b90c6dd633c8a8886847a23bffa2264bbbd213bc87e0 0.0s done
+#34 naming to docker.io/library/synapse-worker:latest done
+#34 unpacking to docker.io/library/synapse-worker:latest done
+#34 DONE 0.1s
+
+#35 [collab] exporting to image
+#35 exporting layers done
+#35 exporting manifest sha256:4e4afc03156b7d85036a03ed5f46c404c3da2faeed280a181450f29a0d5be6df done
+#35 exporting config sha256:7ab78514d7a7326b552824650be6daf61fb6294471d20e885974cc0984c27c6b done
+#35 exporting attestation manifest sha256:f3278dcfd37d7e7e4392bb57973da3ffb7e3b4047585ba486caf1fee40d545a8 0.0s done
+#35 exporting manifest list sha256:8b9ec7476ef38ebcf7498f92758ed514bf8094778cf88a975b7fd6011a876299 0.0s done
+#35 naming to docker.io/library/synapse-collab:latest done
+#35 unpacking to docker.io/library/synapse-collab:latest done
+#35 DONE 0.1s
+
+#36 [collab-2] resolving provenance for metadata file
+#36 DONE 0.0s
+
+#37 [worker] resolving provenance for metadata file
+#37 DONE 0.0s
+
+#38 [collab] resolving provenance for metadata file
+#38 DONE 0.0s
+ Image synapse-collab Built 
+ Image synapse-collab-2 Built 
+ Image synapse-worker Built 
+
+> @synapse/loadtest@1.0.0 build E:\Clg Classwork\XEBIA PROJECT\Synapse\apps\loadtest
+> tsc -p tsconfig.build.json
+
+time="2026-11-20T16:44:16+05:30" level=warning msg="Found orphan containers (synapse-tunnel-1, synapse-app-1) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container synapse-collab-1 Recreate 
+ Container synapse-collab-2-1 Recreate 
+ Container synapse-worker-1 Recreate 
+ Container synapse-collab-2-1 Recreated 
+ Container synapse-worker-1 Recreated 
+ Container synapse-collab-1 Recreated 
+ Container synapse-collab-1 Starting 
+ Container synapse-collab-2-1 Starting 
+ Container synapse-worker-1 Starting 
+ Container synapse-collab-1 Started 
+ Container synapse-collab-2-1 Started 
+ Container synapse-worker-1 Started 
+time="2026-11-20T16:55:25+05:30" level=warning msg="Found orphan containers (synapse-tunnel-1, synapse-app-1) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container synapse-collab-2-1 Recreate 
+ Container synapse-worker-1 Recreate 
+ Container synapse-collab-1 Recreate 
+ Container synapse-collab-1 Recreated 
+ Container synapse-worker-1 Recreated 
+ Container synapse-collab-2-1 Recreated 
+ Container synapse-collab-2-1 Starting 
+ Container synapse-collab-1 Starting 
+ Container synapse-worker-1 Starting 
+ Container synapse-collab-2-1 Started 
+ Container synapse-collab-1 Started 
+ Container synapse-worker-1 Started 
+time="2026-11-20T17:06:33+05:30" level=warning msg="Found orphan containers (synapse-tunnel-1, synapse-app-1) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container synapse-worker-1 Recreate 
+ Container synapse-collab-2-1 Recreate 
+ Container synapse-collab-1 Recreate 
+ Container synapse-collab-2-1 Recreated 
+ Container synapse-collab-1 Recreated 
+ Container synapse-worker-1 Recreated 
+ Container synapse-collab-2-1 Starting 
+ Container synapse-collab-1 Starting 
+ Container synapse-worker-1 Starting 
+ Container synapse-collab-2-1 Started 
+ Container synapse-collab-1 Started 
+ Container synapse-worker-1 Started 
+time="2026-11-20T17:17:39+05:30" level=warning msg="Found orphan containers (synapse-tunnel-1, synapse-app-1) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container synapse-collab-1 Recreate 
+ Container synapse-collab-2-1 Recreate 
+ Container synapse-worker-1 Recreate 
+ Container synapse-collab-1 Recreated 
+ Container synapse-collab-2-1 Recreated 
+ Container synapse-worker-1 Recreated 
+ Container synapse-worker-1 Starting 
+ Container synapse-collab-1 Starting 
+ Container synapse-collab-2-1 Starting 
+ Container synapse-worker-1 Started 
+ Container synapse-collab-1 Started 
+ Container synapse-collab-2-1 Started 

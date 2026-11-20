@@ -1,0 +1,36 @@
+# P2-13 paper runs, started 2026-11-20T14:48:53+05:30
+commit 68c0f4dc8ca9282a64ec9a0d21d1e2f83c401ad7 (feat/P2-13-chaos-ab), dirty tracked files: 0
+docker 29.9.2, node v22.20.0
+load: --urls ws://localhost:5001,ws://localhost:5002 --rooms 5 --workers 5 --editors 10 --rate 5 --duration 600 --warmup 15 --containers synapse-collab-1,synapse-collab-2-1
+=== ab-state-vector-1: sync=state-vector repair-on-reconnect=true  (start 2026-11-20T14:49:15+05:30)
+ab-state-vector-1: exit 0 (end 2026-11-20T15:00:25+05:30); PASS
+=== ab-updates-1: sync=updates repair-on-reconnect=true  (start 2026-11-20T15:00:27+05:30)
+ab-updates-1: exit 0 (end 2026-11-20T15:11:40+05:30); PASS
+=== ab-state-vector-2: sync=state-vector repair-on-reconnect=true  (start 2026-11-20T15:11:42+05:30)
+ab-state-vector-2: exit 0 (end 2026-11-20T15:22:47+05:30); PASS
+=== ab-updates-2: sync=updates repair-on-reconnect=true  (start 2026-11-20T15:22:48+05:30)
+ab-updates-2: exit 0 (end 2026-11-20T15:34:02+05:30); PASS
+=== ab-state-vector-3: sync=state-vector repair-on-reconnect=true  (start 2026-11-20T15:34:04+05:30)
+ab-state-vector-3: exit 0 (end 2026-11-20T15:45:29+05:30); PASS
+=== ab-updates-3: sync=updates repair-on-reconnect=true  (start 2026-11-20T15:45:31+05:30)
+ab-updates-3: exit 0 (end 2026-11-20T15:56:42+05:30); PASS
+=== fault-dropsub-updates: sync=updates repair-on-reconnect=true --chaos dropsub:synapse-collab-1:60:60:8 (start 2026-11-20T15:56:43+05:30)
+fault-dropsub-updates: exit 0 (end 2026-11-20T16:07:49+05:30); PASS
+=== fault-dropsub-updates-periodic: sync=updates repair-on-reconnect=false --chaos dropsub:synapse-collab-1:60:60:8 (start 2026-11-20T16:07:50+05:30)
+fault-dropsub-updates-periodic: exit 0 (end 2026-11-20T16:18:57+05:30); PASS
+=== fault-dropsub-state-vector: sync=state-vector repair-on-reconnect=true --chaos dropsub:synapse-collab-1:60:60:8 (start 2026-11-20T16:18:58+05:30)
+fault-dropsub-state-vector: exit 0 (end 2026-11-20T16:30:05+05:30); PASS
+=== fault-kill-updates: sync=updates repair-on-reconnect=true --chaos kill:synapse-collab-2-1:120:20 (start 2026-11-20T16:30:05+05:30)
+fault-kill-updates: exit 0 (end 2026-11-20T16:41:14+05:30); PASS
+# finished 2026-11-20T16:41:17+05:30
+# P2-13 rerun: subscriber drops every 47 s (not a multiple of the 30 s repair ask), started 2026-11-20T16:44:11+05:30
+commit 68c0f4dc8ca9282a64ec9a0d21d1e2f83c401ad7 (feat/P2-13-chaos-ab), dirty tracked files: 0
+docker 29.9.2, node v22.20.0
+load: --urls ws://localhost:5001,ws://localhost:5002 --rooms 5 --workers 5 --editors 10 --rate 5 --duration 600 --warmup 15 --containers synapse-collab-1,synapse-collab-2-1
+=== fault-dropsub47-updates: sync=updates repair-on-reconnect=true --chaos dropsub:synapse-collab-1:50:47:10 (start 2026-11-20T16:44:16+05:30)
+fault-dropsub47-updates: exit 0 (end 2026-11-20T16:55:22+05:30); PASS
+=== fault-dropsub47-updates-periodic: sync=updates repair-on-reconnect=false --chaos dropsub:synapse-collab-1:50:47:10 (start 2026-11-20T16:55:24+05:30)
+fault-dropsub47-updates-periodic: exit 0 (end 2026-11-20T17:06:32+05:30); PASS
+=== fault-dropsub47-state-vector: sync=state-vector repair-on-reconnect=true --chaos dropsub:synapse-collab-1:50:47:10 (start 2026-11-20T17:06:33+05:30)
+fault-dropsub47-state-vector: exit 0 (end 2026-11-20T17:17:38+05:30); PASS
+# finished 2026-11-20T17:17:41+05:30

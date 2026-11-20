@@ -74,8 +74,13 @@ Times are seconds after typing starts; each fault must end at least 20 s before 
 
 ```
 --chaos kill:synapse-collab-2-1:120:20
---chaos dropsub:synapse-collab-1:60:60:8
+--chaos dropsub:synapse-collab-1:50:47:10
 ```
+
+Keep `everySec` (and `atSec`) off multiples of the repair interval (`COLLAB_REDIS_REPAIR_MS`, 30 s by default).
+Each document's periodic ask runs on a fixed cycle from when it was loaded, which is about when typing starts, so
+drops every 60 s from 60 s all land just before an ask and every loss looks repaired in a few hundred ms, whichever
+repair did it (docs/load-tests/2026-11-20-p2-13-ab-and-faults.md).
 
 A run with faults must still converge with no lost edit. Disconnects are expected, and latency and memory are
 reported but not judged. For each fault it reports how long after the fault was lifted edits again arrived as fast

@@ -1,0 +1,135 @@
+Starting 5 workers with 1 + 1 + 1 + 1 + 1 rooms.
+[w1] 10 editors connected and synced.
+[w2] 10 editors connected and synced.
+[w5] 10 editors connected and synced.
+[w3] 10 editors connected and synced.
+[w4] 10 editors connected and synced.
+[w2] [30s] edits 1286, last 30 s: p50 3.1 ms, p95 5.7 ms, max 35.8 ms; replica rss MB 120 / 117; generator loop p99 19.3 ms; disconnects 0
+[w5] [30s] edits 1301, last 30 s: p50 3.1 ms, p95 5.5 ms, max 30.2 ms; replica rss MB 120 / 117; generator loop p99 20.8 ms; disconnects 0
+[w1] [30s] edits 1322, last 30 s: p50 3.1 ms, p95 5.7 ms, max 17.8 ms; replica rss MB 120 / 117; generator loop p99 20.4 ms; disconnects 0
+[w3] [30s] edits 1297, last 30 s: p50 3.1 ms, p95 5.7 ms, max 16.0 ms; replica rss MB 120 / 117; generator loop p99 19.5 ms; disconnects 0
+[w4] [30s] edits 1306, last 30 s: p50 3.1 ms, p95 5.6 ms, max 12.7 ms; replica rss MB 120 / 117; generator loop p99 19.2 ms; disconnects 0
+[chaos] dropped 1 subscriber connection(s) of synapse-collab-1
+[w5] [60s] edits 2608, last 30 s: p50 2.7 ms, p95 4.4 ms, max 20.0 ms; replica rss MB 127 / 124; generator loop p99 17.5 ms; disconnects 0
+[w2] [60s] edits 2602, last 30 s: p50 2.7 ms, p95 4.3 ms, max 45.7 ms; replica rss MB 127 / 124; generator loop p99 18.5 ms; disconnects 0
+[w1] [60s] edits 2629, last 30 s: p50 2.8 ms, p95 4395.7 ms, max 9623.7 ms; replica rss MB 127 / 124; generator loop p99 17.9 ms; disconnects 0
+[w3] [60s] edits 2600, last 30 s: p50 2.7 ms, p95 4.5 ms, max 21.3 ms; replica rss MB 127 / 124; generator loop p99 18.5 ms; disconnects 0
+[w4] [60s] edits 2614, last 30 s: p50 2.7 ms, p95 4.3 ms, max 34.4 ms; replica rss MB 127 / 124; generator loop p99 17.6 ms; disconnects 0
+[w2] [90s] edits 3923, last 30 s: p50 2.6 ms, p95 3941.8 ms, max 9820.3 ms; replica rss MB 130 / 126; generator loop p99 17.6 ms; disconnects 0
+[w5] [90s] edits 3928, last 30 s: p50 2.6 ms, p95 2723.6 ms, max 9799.8 ms; replica rss MB 130 / 126; generator loop p99 17.9 ms; disconnects 0
+[w1] [90s] edits 3940, last 30 s: p50 2.6 ms, p95 4.6 ms, max 12.8 ms; replica rss MB 130 / 126; generator loop p99 17.4 ms; disconnects 0
+[w3] [90s] edits 3918, last 30 s: p50 2.6 ms, p95 4062.9 ms, max 9834.1 ms; replica rss MB 130 / 126; generator loop p99 18.5 ms; disconnects 0
+[w4] [90s] edits 3914, last 30 s: p50 2.7 ms, p95 3586.4 ms, max 9853.2 ms; replica rss MB 130 / 126; generator loop p99 17.7 ms; disconnects 0
+[chaos] dropped 1 subscriber connection(s) of synapse-collab-1
+[w5] [120s] edits 5233, last 30 s: p50 2.2 ms, p95 3.8 ms, max 9.8 ms; replica rss MB 146 / 140; generator loop p99 18.3 ms; disconnects 0
+[w2] [120s] edits 5248, last 30 s: p50 2.3 ms, p95 3.9 ms, max 10.0 ms; replica rss MB 146 / 140; generator loop p99 18.2 ms; disconnects 0
+[w1] [120s] edits 5259, last 30 s: p50 2.5 ms, p95 15790.8 ms, max 22633.8 ms; replica rss MB 146 / 140; generator loop p99 18.1 ms; disconnects 0
+[w3] [120s] edits 5218, last 30 s: p50 2.3 ms, p95 3.9 ms, max 23.3 ms; replica rss MB 146 / 140; generator loop p99 18.2 ms; disconnects 0
+[w4] [120s] edits 5220, last 30 s: p50 2.3 ms, p95 3.8 ms, max 45.5 ms; replica rss MB 146 / 140; generator loop p99 18.4 ms; disconnects 0
+[chaos] dropped 1 subscriber connection(s) of synapse-collab-1
+[w5] [150s] edits 6540, last 30 s: p50 2.5 ms, p95 16414.9 ms, max 22868.0 ms; replica rss MB 150 / 143; generator loop p99 18.8 ms; disconnects 0
+[w2] [150s] edits 6552, last 30 s: p50 2.5 ms, p95 15038.8 ms, max 22819.2 ms; replica rss MB 150 / 143; generator loop p99 18.5 ms; disconnects 0
+[w1] [150s] edits 6604, last 30 s: p50 2.4 ms, p95 175.4 ms, max 5574.4 ms; replica rss MB 150 / 143; generator loop p99 18.8 ms; disconnects 0
+[w3] [150s] edits 6525, last 30 s: p50 2.5 ms, p95 9862.5 ms, max 22884.7 ms; replica rss MB 150 / 143; generator loop p99 18.7 ms; disconnects 0
+[w4] [150s] edits 6534, last 30 s: p50 2.5 ms, p95 16473.3 ms, max 22876.5 ms; replica rss MB 150 / 143; generator loop p99 18.8 ms; disconnects 0
+[w2] [180s] edits 7854, last 30 s: p50 2.4 ms, p95 5.3 ms, max 5883.7 ms; replica rss MB 152 / 146; generator loop p99 19.5 ms; disconnects 0
+[w5] [180s] edits 7836, last 30 s: p50 2.4 ms, p95 314.5 ms, max 5871.3 ms; replica rss MB 152 / 146; generator loop p99 19.0 ms; disconnects 0
+[w1] [180s] edits 7920, last 30 s: p50 2.3 ms, p95 3.9 ms, max 28.2 ms; replica rss MB 152 / 146; generator loop p99 19.0 ms; disconnects 0
+[w3] [180s] edits 7846, last 30 s: p50 2.4 ms, p95 4.6 ms, max 5790.1 ms; replica rss MB 152 / 146; generator loop p99 19.1 ms; disconnects 0
+[w4] [180s] edits 7876, last 30 s: p50 2.4 ms, p95 6.2 ms, max 5838.1 ms; replica rss MB 152 / 146; generator loop p99 19.7 ms; disconnects 0
+[chaos] dropped 1 subscriber connection(s) of synapse-collab-1
+[w2] [210s] edits 9164, last 30 s: p50 2.2 ms, p95 4.1 ms, max 44.5 ms; replica rss MB 151 / 146; generator loop p99 19.6 ms; disconnects 0
+[w5] [210s] edits 9114, last 30 s: p50 2.2 ms, p95 3.9 ms, max 19.6 ms; replica rss MB 151 / 146; generator loop p99 19.4 ms; disconnects 0
+[w1] [210s] edits 9235, last 30 s: p50 2.4 ms, p95 13456.5 ms, max 18659.3 ms; replica rss MB 151 / 146; generator loop p99 19.9 ms; disconnects 0
+[w3] [210s] edits 9150, last 30 s: p50 2.2 ms, p95 4.0 ms, max 44.6 ms; replica rss MB 151 / 146; generator loop p99 19.8 ms; disconnects 0
+[w4] [210s] edits 9203, last 30 s: p50 2.2 ms, p95 3.9 ms, max 9.9 ms; replica rss MB 151 / 146; generator loop p99 19.8 ms; disconnects 0
+[chaos] dropped 1 subscriber connection(s) of synapse-collab-1
+[w2] [240s] edits 10461, last 30 s: p50 2.4 ms, p95 11534.8 ms, max 18852.8 ms; replica rss MB 154 / 148; generator loop p99 20.0 ms; disconnects 0
+[w5] [240s] edits 10443, last 30 s: p50 2.5 ms, p95 12516.9 ms, max 18870.9 ms; replica rss MB 154 / 148; generator loop p99 20.6 ms; disconnects 0
+[w1] [240s] edits 10542, last 30 s: p50 2.3 ms, p95 4.3 ms, max 1572.0 ms; replica rss MB 154 / 148; generator loop p99 20.3 ms; disconnects 0
+[w3] [240s] edits 10467, last 30 s: p50 2.4 ms, p95 8836.3 ms, max 18746.9 ms; replica rss MB 154 / 148; generator loop p99 20.8 ms; disconnects 0
+[w4] [240s] edits 10521, last 30 s: p50 2.4 ms, p95 11405.5 ms, max 18873.4 ms; replica rss MB 154 / 148; generator loop p99 20.4 ms; disconnects 0
+[w2] [270s] edits 11755, last 30 s: p50 2.3 ms, p95 4.4 ms, max 1774.3 ms; replica rss MB 154 / 148; generator loop p99 20.6 ms; disconnects 0
+[w5] [270s] edits 11762, last 30 s: p50 2.3 ms, p95 4.7 ms, max 1821.6 ms; replica rss MB 154 / 148; generator loop p99 20.5 ms; disconnects 0
+[w1] [270s] edits 11859, last 30 s: p50 2.2 ms, p95 4.0 ms, max 8.3 ms; replica rss MB 154 / 148; generator loop p99 20.3 ms; disconnects 0
+[w3] [270s] edits 11762, last 30 s: p50 2.3 ms, p95 4.8 ms, max 1817.6 ms; replica rss MB 154 / 148; generator loop p99 20.8 ms; disconnects 0
+[w4] [270s] edits 11815, last 30 s: p50 2.3 ms, p95 4.6 ms, max 1879.3 ms; replica rss MB 154 / 148; generator loop p99 20.7 ms; disconnects 0
+[chaos] dropped 1 subscriber connection(s) of synapse-collab-1
+[w2] [300s] edits 13065, last 30 s: p50 2.2 ms, p95 4.3 ms, max 11.7 ms; replica rss MB 154 / 149; generator loop p99 20.7 ms; disconnects 0
+[w5] [300s] edits 13081, last 30 s: p50 2.2 ms, p95 4.3 ms, max 17.7 ms; replica rss MB 154 / 149; generator loop p99 21.8 ms; disconnects 0
+[w1] [300s] edits 13177, last 30 s: p50 2.4 ms, p95 9161.2 ms, max 14669.9 ms; replica rss MB 154 / 149; generator loop p99 21.4 ms; disconnects 0
+[w3] [300s] edits 13072, last 30 s: p50 2.2 ms, p95 4.2 ms, max 17.2 ms; replica rss MB 154 / 149; generator loop p99 21.3 ms; disconnects 0
+[w4] [300s] edits 13113, last 30 s: p50 2.2 ms, p95 4.3 ms, max 41.9 ms; replica rss MB 154 / 149; generator loop p99 21.2 ms; disconnects 0
+[w2] [330s] edits 14384, last 30 s: p50 2.4 ms, p95 5576.9 ms, max 14777.1 ms; replica rss MB 157 / 151; generator loop p99 22.7 ms; disconnects 0
+[w5] [330s] edits 14381, last 30 s: p50 2.4 ms, p95 8011.7 ms, max 14885.5 ms; replica rss MB 157 / 151; generator loop p99 24.2 ms; disconnects 0
+[w1] [330s] edits 14465, last 30 s: p50 2.3 ms, p95 4.5 ms, max 25.2 ms; replica rss MB 157 / 151; generator loop p99 22.4 ms; disconnects 0
+[w3] [330s] edits 14380, last 30 s: p50 2.4 ms, p95 8580.7 ms, max 14891.0 ms; replica rss MB 157 / 151; generator loop p99 21.6 ms; disconnects 0
+[w4] [330s] edits 14411, last 30 s: p50 2.4 ms, p95 3127.1 ms, max 14892.0 ms; replica rss MB 157 / 151; generator loop p99 21.2 ms; disconnects 0
+[chaos] dropped 1 subscriber connection(s) of synapse-collab-1
+[w2] [360s] edits 15684, last 30 s: p50 2.3 ms, p95 5.0 ms, max 14.5 ms; replica rss MB 158 / 151; generator loop p99 23.2 ms; disconnects 0
+[w1] [360s] edits 15760, last 30 s: p50 2.5 ms, p95 18559.9 ms, max 27635.9 ms; replica rss MB 158 / 151; generator loop p99 22.2 ms; disconnects 0
+[w5] [360s] edits 15666, last 30 s: p50 2.3 ms, p95 5.0 ms, max 46.5 ms; replica rss MB 158 / 151; generator loop p99 23.2 ms; disconnects 0
+[w3] [360s] edits 15693, last 30 s: p50 2.3 ms, p95 5.0 ms, max 10.0 ms; replica rss MB 158 / 151; generator loop p99 23.0 ms; disconnects 0
+[w4] [360s] edits 15694, last 30 s: p50 2.4 ms, p95 4.9 ms, max 40.0 ms; replica rss MB 158 / 151; generator loop p99 23.5 ms; disconnects 0
+[chaos] dropped 1 subscriber connection(s) of synapse-collab-1
+[w2] [390s] edits 16993, last 30 s: p50 2.6 ms, p95 21129.0 ms, max 27884.7 ms; replica rss MB 160 / 155; generator loop p99 22.5 ms; disconnects 0
+[w1] [390s] edits 17043, last 30 s: p50 2.3 ms, p95 5197.2 ms, max 10721.1 ms; replica rss MB 160 / 155; generator loop p99 24.5 ms; disconnects 0
+[w5] [390s] edits 16990, last 30 s: p50 2.5 ms, p95 21604.9 ms, max 27853.3 ms; replica rss MB 160 / 155; generator loop p99 23.4 ms; disconnects 0
+[w3] [390s] edits 16976, last 30 s: p50 2.6 ms, p95 21777.8 ms, max 27886.5 ms; replica rss MB 160 / 155; generator loop p99 24.6 ms; disconnects 0
+[w4] [390s] edits 17006, last 30 s: p50 2.4 ms, p95 12417.2 ms, max 27761.8 ms; replica rss MB 160 / 155; generator loop p99 23.9 ms; disconnects 0
+[w2] [420s] edits 18271, last 30 s: p50 2.5 ms, p95 5338.9 ms, max 10912.9 ms; replica rss MB 162 / 154; generator loop p99 24.4 ms; disconnects 0
+[w1] [420s] edits 18361, last 30 s: p50 2.3 ms, p95 5.4 ms, max 40.4 ms; replica rss MB 162 / 154; generator loop p99 24.4 ms; disconnects 0
+[w5] [420s] edits 18300, last 30 s: p50 2.4 ms, p95 5049.9 ms, max 10897.7 ms; replica rss MB 162 / 154; generator loop p99 24.2 ms; disconnects 0
+[w3] [420s] edits 18260, last 30 s: p50 2.5 ms, p95 5323.8 ms, max 10898.2 ms; replica rss MB 162 / 154; generator loop p99 24.4 ms; disconnects 0
+[w4] [420s] edits 18295, last 30 s: p50 2.4 ms, p95 4988.4 ms, max 10934.9 ms; replica rss MB 162 / 154; generator loop p99 24.4 ms; disconnects 0
+[chaos] dropped 1 subscriber connection(s) of synapse-collab-1
+[w2] [450s] edits 19584, last 30 s: p50 2.1 ms, p95 5.0 ms, max 45.0 ms; replica rss MB 163 / 155; generator loop p99 24.8 ms; disconnects 0
+[w5] [450s] edits 19600, last 30 s: p50 2.1 ms, p95 5.0 ms, max 35.2 ms; replica rss MB 163 / 155; generator loop p99 24.7 ms; disconnects 0
+[w1] [450s] edits 19652, last 30 s: p50 2.4 ms, p95 17495.6 ms, max 23705.0 ms; replica rss MB 163 / 155; generator loop p99 24.4 ms; disconnects 0
+[w3] [450s] edits 19547, last 30 s: p50 2.1 ms, p95 5.1 ms, max 32.2 ms; replica rss MB 163 / 155; generator loop p99 24.6 ms; disconnects 0
+[w4] [450s] edits 19623, last 30 s: p50 2.1 ms, p95 4.9 ms, max 25.4 ms; replica rss MB 163 / 155; generator loop p99 25.1 ms; disconnects 0
+[chaos] dropped 1 subscriber connection(s) of synapse-collab-1
+[w2] [480s] edits 20879, last 30 s: p50 2.4 ms, p95 17724.7 ms, max 23912.7 ms; replica rss MB 163 / 157; generator loop p99 24.5 ms; disconnects 0
+[w5] [480s] edits 20907, last 30 s: p50 2.4 ms, p95 16006.3 ms, max 23938.2 ms; replica rss MB 163 / 157; generator loop p99 24.8 ms; disconnects 0
+[w1] [480s] edits 20945, last 30 s: p50 2.2 ms, p95 8.1 ms, max 6676.6 ms; replica rss MB 163 / 157; generator loop p99 24.7 ms; disconnects 0
+[w3] [480s] edits 20848, last 30 s: p50 2.4 ms, p95 15974.7 ms, max 23813.3 ms; replica rss MB 163 / 157; generator loop p99 24.5 ms; disconnects 0
+[w4] [480s] edits 20906, last 30 s: p50 2.4 ms, p95 16526.0 ms, max 23940.4 ms; replica rss MB 163 / 157; generator loop p99 24.9 ms; disconnects 0
+[w2] [510s] edits 22171, last 30 s: p50 2.3 ms, p95 1383.8 ms, max 6901.4 ms; replica rss MB 165 / 159; generator loop p99 24.8 ms; disconnects 0
+[w5] [510s] edits 22210, last 30 s: p50 2.3 ms, p95 42.7 ms, max 6935.2 ms; replica rss MB 165 / 159; generator loop p99 24.8 ms; disconnects 0
+[w1] [510s] edits 22244, last 30 s: p50 2.2 ms, p95 5.3 ms, max 15.1 ms; replica rss MB 165 / 159; generator loop p99 25.1 ms; disconnects 0
+[w3] [510s] edits 22127, last 30 s: p50 2.3 ms, p95 1248.9 ms, max 6904.5 ms; replica rss MB 165 / 159; generator loop p99 25.0 ms; disconnects 0
+[w4] [510s] edits 22181, last 30 s: p50 2.3 ms, p95 173.7 ms, max 6934.7 ms; replica rss MB 165 / 159; generator loop p99 25.1 ms; disconnects 0
+[w2] [540s] edits 23485, last 30 s: p50 2.2 ms, p95 5.5 ms, max 25.7 ms; replica rss MB 165 / 160; generator loop p99 24.7 ms; disconnects 0
+[w1] [540s] edits 23553, last 30 s: p50 2.2 ms, p95 5.5 ms, max 24.4 ms; replica rss MB 165 / 160; generator loop p99 25.1 ms; disconnects 0
+[w5] [540s] edits 23507, last 30 s: p50 2.2 ms, p95 5.5 ms, max 28.0 ms; replica rss MB 165 / 160; generator loop p99 25.1 ms; disconnects 0
+[w3] [540s] edits 23423, last 30 s: p50 2.2 ms, p95 5.5 ms, max 17.0 ms; replica rss MB 165 / 160; generator loop p99 25.1 ms; disconnects 0
+[w4] [540s] edits 23476, last 30 s: p50 2.2 ms, p95 5.5 ms, max 28.3 ms; replica rss MB 165 / 160; generator loop p99 25.2 ms; disconnects 0
+[w2] [570s] edits 24779, last 30 s: p50 2.2 ms, p95 6.0 ms, max 42.7 ms; replica rss MB 167 / 161; generator loop p99 25.3 ms; disconnects 0
+[w5] [570s] edits 24822, last 30 s: p50 2.2 ms, p95 5.6 ms, max 14.4 ms; replica rss MB 167 / 161; generator loop p99 25.2 ms; disconnects 0
+[w1] [570s] edits 24838, last 30 s: p50 2.2 ms, p95 5.6 ms, max 17.1 ms; replica rss MB 167 / 161; generator loop p99 25.0 ms; disconnects 0
+[w3] [570s] edits 24713, last 30 s: p50 2.2 ms, p95 5.6 ms, max 12.8 ms; replica rss MB 167 / 161; generator loop p99 24.9 ms; disconnects 0
+[w4] [570s] edits 24766, last 30 s: p50 2.2 ms, p95 6.4 ms, max 19.4 ms; replica rss MB 167 / 161; generator loop p99 25.2 ms; disconnects 0
+[w2] Typing stopped; waiting for the editors to converge...
+[w1] Typing stopped; waiting for the editors to converge...
+[w5] Typing stopped; waiting for the editors to converge...
+[w3] Typing stopped; waiting for the editors to converge...
+[w4] Typing stopped; waiting for the editors to converge...
+
+=== Combined result ===
+replica sync: updates
+5 workers, 130408 edits (217/s), 1144243 timed arrivals
+chaos: a send-time group of 100 ms counts as normal at <= 50.0 ms; recovered = 5 s of normal groups
+chaos: 11:26:32 dropsub synapse-collab-1: 1 connection(s), recovered 9987.0 ms after it was lifted; 19494 arrivals affected, worst 9853.2 ms
+chaos: 11:27:19 dropsub synapse-collab-1: 1 connection(s), recovered 23010.0 ms after it was lifted; 45261 arrivals affected, worst 22884.7 ms
+chaos: 11:28:06 dropsub synapse-collab-1: 1 connection(s), recovered 6006.0 ms after it was lifted; 12015 arrivals affected, worst 5883.7 ms
+chaos: 11:28:53 dropsub synapse-collab-1: 1 connection(s), recovered 18990.0 ms after it was lifted; 37188 arrivals affected, worst 18873.4 ms
+chaos: 11:29:40 dropsub synapse-collab-1: 1 connection(s), recovered 1992.0 ms after it was lifted; 3888 arrivals affected, worst 1879.3 ms
+chaos: 11:30:27 dropsub synapse-collab-1: 1 connection(s), recovered 15001.0 ms after it was lifted; 29736 arrivals affected, worst 14892.0 ms
+chaos: 11:31:14 dropsub synapse-collab-1: 1 connection(s), recovered 27977.0 ms after it was lifted; 54450 arrivals affected, worst 27886.5 ms
+chaos: 11:32:01 dropsub synapse-collab-1: 1 connection(s), recovered 11002.0 ms after it was lifted; 21618 arrivals affected, worst 10934.9 ms
+chaos: 11:32:48 dropsub synapse-collab-1: 1 connection(s), recovered 24009.0 ms after it was lifted; 46953 arrivals affected, worst 23940.4 ms
+chaos: 11:33:35 dropsub synapse-collab-1: 1 connection(s), recovered 7004.0 ms after it was lifted; 13635 arrivals affected, worst 6935.2 ms
+propagation, worst worker: p50 2.4 ms, p95 3347.3 ms (an upper bound for the whole), p99 17793.1 ms, max 27886.5 ms
+generator event loop lag p99, worst worker: 25.3 ms; memory growth, worst replica seen by any worker: x1.21
+
+PASS

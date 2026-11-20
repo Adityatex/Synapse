@@ -43,8 +43,46 @@ their stored documents, when it ends (`--keep` leaves them).
 | `--memory-growth-limit` | 1.25 | last quarter of the memory samples over the first quarter |
 | `--containers` | none | Docker container names whose CPU is sampled |
 | `--out` | none | write the full result as JSON |
+| `--chaos` | none | faults to inject, comma-separated (below) |
+| `--redis-container` | `synapse-redis-1` | the Redis container, for `dropsub` faults |
 
 Exit code 0 = every check passed, 1 = a check failed (the output says which), 2 = the test could not run.
+
+## Comparing the two replica syncs
+
+The collab server can run either replica sync, chosen per container by `COLLAB_REDIS_SYNC`: `updates` (the
+default, `apps/collab/src/redisSync.ts`) or `state-vector` (the stock Hocuspocus extension). Same build, one
+variable, so a before/after comparison measures only the protocol:
+
+```
+COLLAB_REDIS_SYNC=state-vector docker compose -f docker-compose.yml -f docker-compose.loadtest.yml up -d --force-recreate collab collab-2
+```
+
+Each replica reports its mode on `/health`, the result records it (`redisSync`), and a run whose replicas
+disagree fails. `COLLAB_REDIS_REPAIR_MS` (default 30000) and `COLLAB_REDIS_REPAIR_ON_RECONNECT` (default
+`true`) pass through the same way.
+
+## Faults (`--chaos`)
+
+Times are seconds after typing starts; each fault must end at least 20 s before the run does.
+
+- `kill:<container>:<atSec>:<downSec>`: `docker kill` a replica (SIGKILL, nothing flushed) and `docker start` it
+  `downSec` later. Its editors keep typing offline and reconnect with the real client's back-off (1 s to 10 s).
+- `dropsub:<container>:<atSec>[:<everySec>:<times>]`: kill that replica's Redis subscriber connection
+  (`CLIENT KILL`). The replica and its editors stay up; what the others publish until the subscriber is back is
+  lost to it, which is the loss the repair exists for.
+
+```
+--chaos kill:synapse-collab-2-1:120:20
+--chaos dropsub:synapse-collab-1:60:60:8
+```
+
+A run with faults must still converge with no lost edit. Disconnects are expected, and latency and memory are
+reported but not judged. For each fault it reports how long after the fault was lifted edits again arrived as fast
+as before any fault (edits grouped by 100 ms of send time; a group is normal when its slowest arrival is at most 3x
+the p99 of the groups before the first fault, and recovery needs 5 s of normal groups), the slowest edit it delayed,
+and, for a kill, when the last editor reconnected. The JSON has the whole send-time series (`latencyBySend`) for
+plotting.
 
 ## What an edit is
 

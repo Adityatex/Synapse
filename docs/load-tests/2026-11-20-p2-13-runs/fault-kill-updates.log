@@ -1,0 +1,118 @@
+Starting 5 workers with 1 + 1 + 1 + 1 + 1 rooms.
+[w2] 10 editors connected and synced.
+[w3] 10 editors connected and synced.
+[w1] 10 editors connected and synced.
+[w4] 10 editors connected and synced.
+[w5] 10 editors connected and synced.
+[w2] [30s] edits 1298, last 30 s: p50 3.1 ms, p95 5.5 ms, max 49.0 ms; replica rss MB 127 / 125; generator loop p99 19.7 ms; disconnects 0
+[w3] [30s] edits 1303, last 30 s: p50 3.1 ms, p95 5.5 ms, max 30.1 ms; replica rss MB 127 / 125; generator loop p99 19.2 ms; disconnects 0
+[w1] [30s] edits 1311, last 30 s: p50 3.1 ms, p95 5.7 ms, max 37.0 ms; replica rss MB 127 / 125; generator loop p99 19.7 ms; disconnects 0
+[w5] [30s] edits 1311, last 30 s: p50 3.1 ms, p95 5.6 ms, max 21.3 ms; replica rss MB 127 / 125; generator loop p99 18.0 ms; disconnects 0
+[w4] [30s] edits 1298, last 30 s: p50 3.1 ms, p95 5.8 ms, max 17.2 ms; replica rss MB 127 / 125; generator loop p99 20.2 ms; disconnects 0
+[w2] [60s] edits 2575, last 30 s: p50 2.7 ms, p95 4.4 ms, max 10.6 ms; replica rss MB 129 / 141; generator loop p99 17.7 ms; disconnects 0
+[w3] [60s] edits 2622, last 30 s: p50 2.7 ms, p95 4.6 ms, max 10.4 ms; replica rss MB 129 / 141; generator loop p99 17.3 ms; disconnects 0
+[w1] [60s] edits 2609, last 30 s: p50 2.8 ms, p95 4.7 ms, max 13.9 ms; replica rss MB 129 / 141; generator loop p99 17.7 ms; disconnects 0
+[w4] [60s] edits 2625, last 30 s: p50 2.8 ms, p95 4.5 ms, max 45.8 ms; replica rss MB 129 / 141; generator loop p99 18.4 ms; disconnects 0
+[w5] [60s] edits 2639, last 30 s: p50 2.8 ms, p95 4.6 ms, max 11.9 ms; replica rss MB 129 / 141; generator loop p99 17.9 ms; disconnects 0
+[w2] [90s] edits 3900, last 30 s: p50 2.7 ms, p95 4.3 ms, max 12.9 ms; replica rss MB 142 / 142; generator loop p99 18.0 ms; disconnects 0
+[w3] [90s] edits 3926, last 30 s: p50 2.7 ms, p95 4.3 ms, max 7.1 ms; replica rss MB 142 / 142; generator loop p99 18.8 ms; disconnects 0
+[w1] [90s] edits 3917, last 30 s: p50 2.7 ms, p95 4.2 ms, max 40.8 ms; replica rss MB 142 / 142; generator loop p99 17.8 ms; disconnects 0
+[w4] [90s] edits 3943, last 30 s: p50 2.6 ms, p95 4.2 ms, max 17.4 ms; replica rss MB 142 / 142; generator loop p99 18.0 ms; disconnects 0
+[w5] [90s] edits 3959, last 30 s: p50 2.7 ms, p95 4.3 ms, max 20.2 ms; replica rss MB 142 / 142; generator loop p99 18.8 ms; disconnects 0
+[w2] [120s] edits 5208, last 30 s: p50 2.6 ms, p95 4.3 ms, max 18.6 ms; replica rss MB 144 / 144; generator loop p99 19.9 ms; disconnects 0
+[w3] [120s] edits 5239, last 30 s: p50 2.6 ms, p95 4.3 ms, max 44.5 ms; replica rss MB 144 / 144; generator loop p99 19.1 ms; disconnects 0
+[w1] [120s] edits 5213, last 30 s: p50 2.6 ms, p95 4.3 ms, max 12.2 ms; replica rss MB 144 / 144; generator loop p99 19.3 ms; disconnects 0
+[w5] [120s] edits 5273, last 30 s: p50 2.6 ms, p95 4.3 ms, max 17.8 ms; replica rss MB 144 / 144; generator loop p99 19.6 ms; disconnects 0
+[w4] [120s] edits 5255, last 30 s: p50 2.6 ms, p95 4.4 ms, max 21.7 ms; replica rss MB 144 / 144; generator loop p99 18.9 ms; disconnects 0
+[chaos] killed synapse-collab-2-1; starting it again in 20s
+[chaos] started synapse-collab-2-1 again
+[w2] [150s] edits 6517, last 30 s: p50 3308.2 ms, p95 20744.5 ms, max 24655.2 ms; replica rss MB 146 / 145; generator loop p99 19.0 ms; disconnects 5
+[w3] [150s] edits 6510, last 30 s: p50 5917.0 ms, p95 23896.0 ms, max 27970.7 ms; replica rss MB 146 / 145; generator loop p99 18.5 ms; disconnects 5
+[w1] [150s] edits 6514, last 30 s: p50 6618.4 ms, p95 24395.8 ms, max 29095.3 ms; replica rss MB 146 / 144; generator loop p99 19.0 ms; disconnects 5
+[w4] [150s] edits 6562, last 30 s: p50 6494.6 ms, p95 24214.2 ms, max 28163.1 ms; replica rss MB 146 / 144; generator loop p99 19.3 ms; disconnects 5
+[w5] [150s] edits 6573, last 30 s: p50 5221.0 ms, p95 23473.9 ms, max 28172.6 ms; replica rss MB 146 / 144; generator loop p99 18.9 ms; disconnects 5
+[w2] [180s] edits 7825, last 30 s: p50 2.6 ms, p95 4.8 ms, max 37.8 ms; replica rss MB 148 / 153; generator loop p99 19.7 ms; disconnects 5
+[w3] [180s] edits 7813, last 30 s: p50 2.6 ms, p95 4.8 ms, max 28.3 ms; replica rss MB 148 / 153; generator loop p99 20.3 ms; disconnects 5
+[w1] [180s] edits 7819, last 30 s: p50 2.6 ms, p95 4.6 ms, max 17.9 ms; replica rss MB 148 / 153; generator loop p99 19.7 ms; disconnects 5
+[w5] [180s] edits 7877, last 30 s: p50 2.6 ms, p95 4.6 ms, max 11.6 ms; replica rss MB 148 / 153; generator loop p99 20.3 ms; disconnects 5
+[w4] [180s] edits 7898, last 30 s: p50 2.6 ms, p95 4.7 ms, max 18.4 ms; replica rss MB 148 / 153; generator loop p99 20.3 ms; disconnects 5
+[w2] [210s] edits 9139, last 30 s: p50 2.5 ms, p95 4.5 ms, max 45.2 ms; replica rss MB 148 / 156; generator loop p99 20.8 ms; disconnects 5
+[w3] [210s] edits 9136, last 30 s: p50 2.6 ms, p95 4.6 ms, max 15.4 ms; replica rss MB 148 / 156; generator loop p99 20.7 ms; disconnects 5
+[w1] [210s] edits 9153, last 30 s: p50 2.6 ms, p95 4.5 ms, max 10.1 ms; replica rss MB 148 / 156; generator loop p99 20.7 ms; disconnects 5
+[w5] [210s] edits 9184, last 30 s: p50 2.5 ms, p95 4.6 ms, max 25.0 ms; replica rss MB 148 / 156; generator loop p99 21.0 ms; disconnects 5
+[w4] [210s] edits 9212, last 30 s: p50 2.6 ms, p95 4.6 ms, max 14.5 ms; replica rss MB 148 / 156; generator loop p99 20.5 ms; disconnects 5
+[w2] [240s] edits 10464, last 30 s: p50 2.5 ms, p95 4.6 ms, max 41.2 ms; replica rss MB 151 / 158; generator loop p99 21.3 ms; disconnects 5
+[w3] [240s] edits 10445, last 30 s: p50 2.5 ms, p95 4.7 ms, max 14.8 ms; replica rss MB 151 / 158; generator loop p99 22.0 ms; disconnects 5
+[w1] [240s] edits 10475, last 30 s: p50 2.5 ms, p95 4.6 ms, max 15.0 ms; replica rss MB 151 / 158; generator loop p99 21.4 ms; disconnects 5
+[w4] [240s] edits 10508, last 30 s: p50 2.6 ms, p95 4.7 ms, max 42.8 ms; replica rss MB 151 / 158; generator loop p99 21.5 ms; disconnects 5
+[w5] [240s] edits 10479, last 30 s: p50 2.5 ms, p95 4.7 ms, max 19.2 ms; replica rss MB 151 / 158; generator loop p99 20.8 ms; disconnects 5
+[w2] [270s] edits 11781, last 30 s: p50 2.5 ms, p95 4.9 ms, max 28.1 ms; replica rss MB 152 / 132; generator loop p99 21.4 ms; disconnects 5
+[w3] [270s] edits 11749, last 30 s: p50 2.6 ms, p95 5.0 ms, max 43.6 ms; replica rss MB 152 / 132; generator loop p99 21.6 ms; disconnects 5
+[w1] [270s] edits 11784, last 30 s: p50 2.6 ms, p95 4.7 ms, max 9.1 ms; replica rss MB 152 / 132; generator loop p99 20.8 ms; disconnects 5
+[w4] [270s] edits 11834, last 30 s: p50 2.6 ms, p95 5.0 ms, max 16.2 ms; replica rss MB 152 / 132; generator loop p99 22.6 ms; disconnects 5
+[w5] [270s] edits 11782, last 30 s: p50 2.6 ms, p95 4.9 ms, max 17.4 ms; replica rss MB 152 / 132; generator loop p99 22.5 ms; disconnects 5
+[w2] [300s] edits 13094, last 30 s: p50 2.6 ms, p95 5.0 ms, max 13.7 ms; replica rss MB 154 / 139; generator loop p99 22.2 ms; disconnects 5
+[w3] [300s] edits 13078, last 30 s: p50 2.6 ms, p95 4.9 ms, max 9.9 ms; replica rss MB 154 / 139; generator loop p99 21.8 ms; disconnects 5
+[w1] [300s] edits 13046, last 30 s: p50 2.5 ms, p95 4.8 ms, max 36.5 ms; replica rss MB 154 / 139; generator loop p99 21.4 ms; disconnects 5
+[w4] [300s] edits 13154, last 30 s: p50 2.5 ms, p95 5.1 ms, max 30.0 ms; replica rss MB 154 / 139; generator loop p99 22.2 ms; disconnects 5
+[w5] [300s] edits 13096, last 30 s: p50 2.6 ms, p95 4.8 ms, max 11.6 ms; replica rss MB 154 / 139; generator loop p99 22.0 ms; disconnects 5
+[w2] [330s] edits 14411, last 30 s: p50 2.6 ms, p95 5.0 ms, max 16.6 ms; replica rss MB 156 / 141; generator loop p99 23.8 ms; disconnects 5
+[w3] [330s] edits 14391, last 30 s: p50 2.6 ms, p95 5.3 ms, max 11.2 ms; replica rss MB 156 / 141; generator loop p99 23.7 ms; disconnects 5
+[w1] [330s] edits 14351, last 30 s: p50 2.5 ms, p95 5.1 ms, max 13.9 ms; replica rss MB 156 / 141; generator loop p99 22.9 ms; disconnects 5
+[w4] [330s] edits 14441, last 30 s: p50 2.6 ms, p95 5.3 ms, max 23.3 ms; replica rss MB 156 / 141; generator loop p99 23.5 ms; disconnects 5
+[w5] [330s] edits 14414, last 30 s: p50 2.5 ms, p95 5.2 ms, max 9.9 ms; replica rss MB 156 / 141; generator loop p99 23.9 ms; disconnects 5
+[w2] [360s] edits 15730, last 30 s: p50 2.5 ms, p95 5.0 ms, max 19.4 ms; replica rss MB 155 / 154; generator loop p99 23.7 ms; disconnects 5
+[w3] [360s] edits 15706, last 30 s: p50 2.5 ms, p95 5.1 ms, max 13.2 ms; replica rss MB 155 / 154; generator loop p99 24.4 ms; disconnects 5
+[w1] [360s] edits 15667, last 30 s: p50 2.4 ms, p95 4.9 ms, max 33.0 ms; replica rss MB 155 / 154; generator loop p99 23.5 ms; disconnects 5
+[w4] [360s] edits 15749, last 30 s: p50 2.5 ms, p95 5.1 ms, max 13.6 ms; replica rss MB 155 / 154; generator loop p99 23.4 ms; disconnects 5
+[w5] [360s] edits 15709, last 30 s: p50 2.5 ms, p95 5.0 ms, max 13.6 ms; replica rss MB 155 / 154; generator loop p99 24.4 ms; disconnects 5
+[w2] [390s] edits 17034, last 30 s: p50 2.4 ms, p95 5.0 ms, max 13.6 ms; replica rss MB 157 / 156; generator loop p99 24.6 ms; disconnects 5
+[w3] [390s] edits 16997, last 30 s: p50 2.5 ms, p95 5.5 ms, max 20.7 ms; replica rss MB 157 / 156; generator loop p99 24.4 ms; disconnects 5
+[w1] [390s] edits 16991, last 30 s: p50 2.4 ms, p95 5.2 ms, max 10.6 ms; replica rss MB 157 / 156; generator loop p99 24.7 ms; disconnects 5
+[w4] [390s] edits 17064, last 30 s: p50 2.4 ms, p95 5.1 ms, max 47.5 ms; replica rss MB 157 / 156; generator loop p99 24.6 ms; disconnects 5
+[w5] [390s] edits 17007, last 30 s: p50 2.4 ms, p95 5.1 ms, max 10.0 ms; replica rss MB 157 / 156; generator loop p99 24.3 ms; disconnects 5
+[w2] [420s] edits 18324, last 30 s: p50 2.5 ms, p95 5.5 ms, max 24.5 ms; replica rss MB 159 / 158; generator loop p99 24.9 ms; disconnects 5
+[w3] [420s] edits 18307, last 30 s: p50 2.4 ms, p95 5.4 ms, max 15.6 ms; replica rss MB 159 / 158; generator loop p99 24.5 ms; disconnects 5
+[w1] [420s] edits 18279, last 30 s: p50 2.5 ms, p95 5.4 ms, max 23.2 ms; replica rss MB 159 / 158; generator loop p99 24.5 ms; disconnects 5
+[w4] [420s] edits 18338, last 30 s: p50 2.5 ms, p95 6.0 ms, max 16.6 ms; replica rss MB 159 / 158; generator loop p99 24.8 ms; disconnects 5
+[w5] [420s] edits 18303, last 30 s: p50 2.5 ms, p95 5.7 ms, max 45.7 ms; replica rss MB 159 / 158; generator loop p99 24.4 ms; disconnects 5
+[w2] [450s] edits 19627, last 30 s: p50 2.4 ms, p95 5.7 ms, max 21.6 ms; replica rss MB 159 / 159; generator loop p99 25.1 ms; disconnects 5
+[w3] [450s] edits 19606, last 30 s: p50 2.4 ms, p95 5.6 ms, max 16.4 ms; replica rss MB 159 / 159; generator loop p99 24.7 ms; disconnects 5
+[w1] [450s] edits 19585, last 30 s: p50 2.4 ms, p95 5.4 ms, max 11.5 ms; replica rss MB 159 / 159; generator loop p99 24.9 ms; disconnects 5
+[w4] [450s] edits 19635, last 30 s: p50 2.5 ms, p95 5.7 ms, max 12.3 ms; replica rss MB 159 / 159; generator loop p99 24.9 ms; disconnects 5
+[w5] [450s] edits 19594, last 30 s: p50 2.4 ms, p95 5.7 ms, max 22.0 ms; replica rss MB 159 / 159; generator loop p99 24.7 ms; disconnects 5
+[w2] [480s] edits 20930, last 30 s: p50 2.5 ms, p95 5.8 ms, max 14.4 ms; replica rss MB 161 / 161; generator loop p99 25.3 ms; disconnects 5
+[w3] [480s] edits 20893, last 30 s: p50 2.5 ms, p95 5.8 ms, max 21.8 ms; replica rss MB 161 / 161; generator loop p99 24.7 ms; disconnects 5
+[w1] [480s] edits 20866, last 30 s: p50 2.4 ms, p95 5.5 ms, max 13.6 ms; replica rss MB 161 / 161; generator loop p99 24.6 ms; disconnects 5
+[w4] [480s] edits 20936, last 30 s: p50 2.5 ms, p95 5.8 ms, max 13.7 ms; replica rss MB 161 / 161; generator loop p99 25.1 ms; disconnects 5
+[w5] [480s] edits 20888, last 30 s: p50 2.5 ms, p95 5.9 ms, max 19.7 ms; replica rss MB 161 / 161; generator loop p99 24.9 ms; disconnects 5
+[w2] [510s] edits 22227, last 30 s: p50 2.5 ms, p95 6.1 ms, max 18.5 ms; replica rss MB 162 / 162; generator loop p99 25.7 ms; disconnects 5
+[w3] [510s] edits 22182, last 30 s: p50 2.5 ms, p95 6.3 ms, max 15.3 ms; replica rss MB 162 / 162; generator loop p99 25.5 ms; disconnects 5
+[w1] [510s] edits 22163, last 30 s: p50 2.5 ms, p95 5.9 ms, max 13.4 ms; replica rss MB 162 / 162; generator loop p99 24.8 ms; disconnects 5
+[w4] [510s] edits 22252, last 30 s: p50 2.5 ms, p95 5.9 ms, max 23.3 ms; replica rss MB 162 / 162; generator loop p99 25.2 ms; disconnects 5
+[w5] [510s] edits 22190, last 30 s: p50 2.6 ms, p95 6.5 ms, max 33.0 ms; replica rss MB 162 / 162; generator loop p99 25.3 ms; disconnects 5
+[w2] [540s] edits 23540, last 30 s: p50 2.5 ms, p95 6.4 ms, max 17.3 ms; replica rss MB 165 / 162; generator loop p99 25.2 ms; disconnects 5
+[w3] [540s] edits 23493, last 30 s: p50 2.5 ms, p95 6.6 ms, max 19.9 ms; replica rss MB 165 / 162; generator loop p99 25.4 ms; disconnects 5
+[w1] [540s] edits 23452, last 30 s: p50 2.5 ms, p95 6.4 ms, max 37.0 ms; replica rss MB 165 / 162; generator loop p99 25.5 ms; disconnects 5
+[w4] [540s] edits 23577, last 30 s: p50 2.6 ms, p95 6.5 ms, max 18.0 ms; replica rss MB 165 / 162; generator loop p99 25.5 ms; disconnects 5
+[w5] [540s] edits 23505, last 30 s: p50 2.5 ms, p95 6.6 ms, max 16.1 ms; replica rss MB 165 / 162; generator loop p99 25.8 ms; disconnects 5
+[w2] [570s] edits 24835, last 30 s: p50 2.5 ms, p95 6.3 ms, max 16.6 ms; replica rss MB 166 / 162; generator loop p99 26.0 ms; disconnects 5
+[w3] [570s] edits 24777, last 30 s: p50 2.5 ms, p95 6.5 ms, max 16.1 ms; replica rss MB 166 / 162; generator loop p99 25.5 ms; disconnects 5
+[w1] [570s] edits 24740, last 30 s: p50 2.4 ms, p95 5.9 ms, max 12.3 ms; replica rss MB 166 / 162; generator loop p99 25.6 ms; disconnects 5
+[w4] [570s] edits 24893, last 30 s: p50 2.4 ms, p95 6.4 ms, max 32.4 ms; replica rss MB 166 / 162; generator loop p99 25.5 ms; disconnects 5
+[w5] [570s] edits 24809, last 30 s: p50 2.4 ms, p95 6.3 ms, max 13.8 ms; replica rss MB 166 / 162; generator loop p99 25.5 ms; disconnects 5
+[w2] Typing stopped; waiting for the editors to converge...
+[w3] Typing stopped; waiting for the editors to converge...
+[w1] Typing stopped; waiting for the editors to converge...
+[w4] Typing stopped; waiting for the editors to converge...
+[w5] Typing stopped; waiting for the editors to converge...
+
+=== Combined result ===
+replica sync: updates
+5 workers, 130550 edits (218/s), 1145421 timed arrivals
+chaos: a send-time group of 100 ms counts as normal at <= 50.0 ms; recovered = 5 s of normal groups
+chaos: 11:02:23 kill synapse-collab-2-1: down 20.3 s, recovered 8829.0 ms after it was lifted, last editor back 8.9 s after; 56745 arrivals affected, worst 29095.3 ms
+propagation, worst worker: p50 2.6 ms, p95 6.9 ms (an upper bound for the whole), p99 18262.7 ms, max 29095.3 ms
+generator event loop lag p99, worst worker: 26.0 ms; memory growth, worst replica seen by any worker: x1.19
+
+PASS

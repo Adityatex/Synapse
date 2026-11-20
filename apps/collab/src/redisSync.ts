@@ -27,9 +27,14 @@ import * as Y from 'yjs';
 
 export const DEFAULT_REPAIR_INTERVAL_MS = 30_000;
 
+/** `updates`: this class. `state-vector`: the stock extension, kept so the two can be compared under one build. */
+export type RedisSyncMode = 'updates' | 'state-vector';
+
 export interface UpdateRedisConfiguration extends Partial<Configuration> {
   /** How often an open document asks the other replicas for what it may have missed. 0 turns the periodic ask off. */
   repairIntervalMs?: number;
+  /** Ask for everything when the subscriber reconnects (default true). Off only to test the periodic ask on its own. */
+  repairOnReconnect?: boolean;
   /** Told about a publish that failed, which would otherwise only be a console line. */
   onError?: (error: unknown, context: string) => void;
 }
@@ -47,7 +52,7 @@ export class UpdateRedis extends Redis {
   private readonly repairIntervalMs: number;
   private readonly reportError: (error: unknown, context: string) => void;
 
-  constructor({ repairIntervalMs = DEFAULT_REPAIR_INTERVAL_MS, onError, ...configuration }: UpdateRedisConfiguration) {
+  constructor({ repairIntervalMs = DEFAULT_REPAIR_INTERVAL_MS, repairOnReconnect = true, onError, ...configuration }: UpdateRedisConfiguration) {
     super(configuration);
     this.repairIntervalMs = repairIntervalMs;
     this.reportError = onError ?? ((error, context) => console.error(`Redis: ${context}`, error));
@@ -55,7 +60,7 @@ export class UpdateRedis extends Redis {
     // ioredis resubscribes by itself after a reconnect; what was published while it was gone is lost.
     let connectedBefore = false;
     this.sub.on('ready', () => {
-      if (connectedBefore) this.repairAll();
+      if (connectedBefore && repairOnReconnect) this.repairAll();
       connectedBefore = true;
     });
   }

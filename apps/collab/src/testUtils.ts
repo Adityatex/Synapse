@@ -49,6 +49,8 @@ export async function startServer(opts: {
   legacy?: LegacyRooms;
   redisUrl?: string;
   redisRepairIntervalMs?: number;
+  redisSync?: CollabDeps['redisSync'];
+  redisRepairOnReconnect?: boolean;
   storeDebounceMs?: number;
   projection?: CollabDeps['projection'];
   locks?: CollabDeps['locks'];

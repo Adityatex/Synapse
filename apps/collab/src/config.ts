@@ -26,6 +26,14 @@ const schema = z
     SNAPSHOT_DELAY_MS: z.coerce.number().int().min(100).default(300_000),
     /** Across replicas: how often an open document asks the others for updates it may have missed. 0 = never. */
     COLLAB_REDIS_REPAIR_MS: z.coerce.number().int().min(0).default(30_000),
+    /**
+     * What a replica publishes when a document changes: the change itself (`updates`, src/redisSync.ts) or, as the
+     * stock Hocuspocus Redis extension does, its state vector for the others to answer (`state-vector`). The second
+     * is kept only so the two can be compared under the same build (the load test, docs/load-tests/).
+     */
+    COLLAB_REDIS_SYNC: z.enum(['updates', 'state-vector']).default('updates'),
+    /** `updates` only: ask the others for everything when the subscriber reconnects. Off only to test the periodic ask alone. */
+    COLLAB_REDIS_REPAIR_ON_RECONNECT: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.JWT_SECRET.length < 32) {

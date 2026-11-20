@@ -74,6 +74,10 @@ services:
       COLLAB_CONNECTIONS_PER_MIN: 5000
       # Compact quickly in dev so the worker is easy to watch (production default: 5 minutes).
       SNAPSHOT_DELAY_MS: 10000
+      # Replica sync, for the load test's comparisons (docs/load-tests/); the defaults are production's.
+      COLLAB_REDIS_SYNC: ${COLLAB_REDIS_SYNC:-updates}
+      COLLAB_REDIS_REPAIR_MS: ${COLLAB_REDIS_REPAIR_MS:-30000}
+      COLLAB_REDIS_REPAIR_ON_RECONNECT: ${COLLAB_REDIS_REPAIR_ON_RECONNECT:-true}
     depends_on:
       mongo:
         condition: service_healthy

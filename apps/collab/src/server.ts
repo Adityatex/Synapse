@@ -1,4 +1,5 @@
 import { IncomingMessage, MessageType, Server, type Connection, type Extension, type Hocuspocus } from '@hocuspocus/server';
+import { Redis } from '@hocuspocus/extension-redis';
 import { Throttle } from '@hocuspocus/extension-throttle';
 import { checkRedisHealth, createRedisClient } from '@synapse/redis';
 import { buildSeedUpdate } from '@synapse/room-doc';
@@ -10,7 +11,7 @@ import type { LegacyRooms } from './legacyRooms.js';
 import { LockService, lockRequestSchema, snapshotSignature, type LockMessage, type LockOutcome } from './lockService.js';
 import { MemoryLockStore, RedisLockStore, type LockStore } from './locks.js';
 import { guardAwareness } from './presence.js';
-import { UpdateRedis } from './redisSync.js';
+import { UpdateRedis, type RedisSyncMode } from './redisSync.js';
 import type { Logger } from './logger.js';
 import type { RoomAccess } from './roomAccess.js';
 import { createProjectionService, type ProjectionOptions } from './projectionService.js';
@@ -33,6 +34,10 @@ export interface CollabDeps {
   redisUrl?: string;
   /** How often an open document asks the other replicas for updates it may have missed (default 30 s; 0 = never). */
   redisRepairIntervalMs?: number;
+  /** What replicas publish on a change (default `updates`); `state-vector` is the stock extension, kept for comparison. */
+  redisSync?: RedisSyncMode;
+  /** `updates` only: ask the other replicas for everything when the subscriber reconnects (default true). */
+  redisRepairOnReconnect?: boolean;
   connectionsPerMin?: number;
   release?: string;
   /** Quiet period before a changed document is persisted. Tests shorten it. */
@@ -84,21 +89,28 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
   const startedAt = Date.now();
   const storeDebounceMs = deps.storeDebounceMs ?? DEFAULT_STORE_DEBOUNCE_MS;
 
-  const redis = redisUrl
-    ? new UpdateRedis({
-        prefix: 'synapse:hocuspocus',
-        repairIntervalMs: deps.redisRepairIntervalMs,
-        onError: (err, context) => logger.warn({ err: err instanceof Error ? err.message : String(err) }, `Redis sync: ${context} failed`),
-        // Pub/sub clients must queue commands across reconnects, unlike the
-        // fail-fast default used for request-path calls.
-        createClient: () =>
-          createRedisClient(redisUrl, {
-            name: 'synapse-collab',
-            onError: (err) => logger.warn({ err: err.message }, 'Redis connection error (retrying)'),
-            redis: { enableOfflineQueue: true, maxRetriesPerRequest: null },
-          }),
-      })
-    : null;
+  const redisSync: RedisSyncMode = deps.redisSync ?? 'updates';
+  const redisClients = {
+    prefix: 'synapse:hocuspocus',
+    // Pub/sub clients must queue commands across reconnects, unlike the
+    // fail-fast default used for request-path calls.
+    createClient: () =>
+      createRedisClient(redisUrl!, {
+        name: 'synapse-collab',
+        onError: (err) => logger.warn({ err: err.message }, 'Redis connection error (retrying)'),
+        redis: { enableOfflineQueue: true, maxRetriesPerRequest: null },
+      }),
+  };
+  const redis = !redisUrl
+    ? null
+    : redisSync === 'state-vector'
+      ? new Redis(redisClients)
+      : new UpdateRedis({
+          ...redisClients,
+          repairIntervalMs: deps.redisRepairIntervalMs,
+          repairOnReconnect: deps.redisRepairOnReconnect,
+          onError: (err, context) => logger.warn({ err: err instanceof Error ? err.message : String(err) }, `Redis sync: ${context} failed`),
+        });
 
   // Locks use the request path (fail fast when Redis is down), unlike the pub/sub clients above.
   const lockRedis = redisUrl && !deps.locks?.store
@@ -454,6 +466,8 @@ export function createCollabServer(deps: CollabDeps): Server<CollabContext> {
           // For the load test (P2-13) and anyone watching a replica: is memory steady under load?
           memory: processMemory(),
           redis: await checkRedisHealth(redis?.pub),
+          // Which replica sync is running, so a load-test result records what it measured.
+          redisSync: redis ? redisSync : null,
         };
         response.writeHead(200, { 'Content-Type': 'application/json' });
         response.end(JSON.stringify(body));

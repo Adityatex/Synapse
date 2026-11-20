@@ -6,12 +6,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { promisify } from 'node:util';
-import { HocuspocusProvider } from '@hocuspocus/provider';
+import { HocuspocusProvider, HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 import { MongoDocStore } from '@synapse/ydoc-store';
 import jwt from 'jsonwebtoken';
 import { MongoClient } from 'mongodb';
 import * as Y from 'yjs';
 import { PropagationTracker, summarize, trend, type LatencySummary, type Trend } from './stats.js';
+import { SendBuckets, chaosReport, parseChaos, runChaos, type ChaosEvent, type ChaosReport, type ChaosSpec, type SendBucket } from './chaos.js';
 
 /**
  * Load test for the collab server (P2-13).
@@ -30,6 +31,10 @@ import { PropagationTracker, summarize, trend, type LatencySummary, type Trend }
  *
  * `--containers a,b` also samples those Docker containers' CPU (a local run's servers). The tool also watches
  * its own event loop: if the generator is saturated, its latencies are not the server's, and the run fails.
+ *
+ * `--chaos kill:<container>:<atSec>:<downSec>,dropsub:<container>:<atSec>[:<everySec>:<times>]` injects faults
+ * (src/chaos.ts) and reports how long each one disturbed the edits. A run with faults still has to converge with
+ * no lost edit; its latency and memory are reported, not held to the limits.
  *
  * The rooms are created in Mongo (members are synthetic users) and removed afterwards.
  */
@@ -51,6 +56,12 @@ interface Config {
   /** Docker container names whose CPU is sampled (local runs only). */
   containers: string[];
   keep: boolean;
+  /** Faults to inject (by the parent, or the single process). */
+  chaos: ChaosSpec[];
+  /** The Redis container, for `dropsub` faults. */
+  redisContainer: string;
+  /** Faults are being injected: disconnects are expected, latency and memory are reported but not judged. */
+  expectFaults: boolean;
   jwtSecret: string;
   mongoUri: string;
 }
@@ -70,6 +81,7 @@ function parseArgs(argv: string[]): Config {
   const mongoUri = process.env.MONGODB_URI;
   if (!jwtSecret || !mongoUri) throw new Error('JWT_SECRET and MONGODB_URI must be set (the test signs its own tokens and creates its own rooms).');
   const urls = (get('urls') ?? 'ws://localhost:5001').split(',').map((u) => u.trim()).filter(Boolean);
+  const chaos = parseChaos(get('chaos'), num('duration', 600));
   return {
     urls,
     rooms: num('rooms', 5),
@@ -84,6 +96,9 @@ function parseArgs(argv: string[]): Config {
     child: argv.includes('--child'),
     containers: (get('containers') ?? '').split(',').map((c) => c.trim()).filter(Boolean),
     keep: argv.includes('--keep'),
+    chaos,
+    redisContainer: get('redis-container') ?? 'synapse-redis-1',
+    expectFaults: chaos.length > 0 || argv.includes('--expect-faults'),
     jwtSecret,
     mongoUri,
   };
@@ -150,6 +165,31 @@ interface WorkerResult {
   memory: Array<{ replica: string; trend: Trend | null }>;
   problems: string[];
   passed: boolean;
+  typingStartedAtMs: number;
+  latencyBySend: SendBucket[];
+  reconnectsAt: number[];
+  replicaSync: Record<string, string | null>;
+}
+
+/** Every fault's outcome as problems, and one line each for the summary. */
+function judgeChaos(report: ChaosReport): { problems: string[]; lines: string[] } {
+  const problems: string[] = [];
+  const lines = [`a send-time group of ${100} ms counts as normal at <= ${fmt(report.normalBucketMaxMs)} ms; recovered = ${report.settleMs / 1000} s of normal groups`];
+  for (const f of report.faults) {
+    const at = new Date(f.startMs).toISOString().slice(11, 19);
+    if (f.error) problems.push(`chaos ${f.kind} ${f.container} at ${at}: ${f.error}`);
+    if (f.recoveryMs === null) problems.push(`chaos ${f.kind} ${f.container} at ${at}: edits had not recovered by the end of the run`);
+    const down = f.kind === 'kill' ? `down ${((f.endMs - f.startMs) / 1000).toFixed(1)} s, ` : `${f.killedConnections} connection(s), `;
+    const reconnect = f.lastReconnectMs !== undefined ? `, last editor back ${(f.lastReconnectMs / 1000).toFixed(1)} s after` : '';
+    lines.push(`${at} ${f.kind} ${f.container}: ${down}recovered ${f.recoveryMs === null ? 'NEVER' : `${fmt(f.recoveryMs)} ms`} after it was lifted${reconnect}; ${f.affectedArrivals} arrivals affected, worst ${fmt(f.worstLatencyMs)} ms`);
+  }
+  return { problems, lines };
+}
+
+/** The replicas must all run the same sync, or the run compares nothing. */
+function judgeSync(seen: Record<string, string | null>): { mode: string; problems: string[] } {
+  const modes = [...new Set(Object.values(seen).map((m) => m ?? 'unknown'))];
+  return { mode: modes.join(' + ') || 'unknown', problems: modes.length > 1 ? [`the replicas run different sync modes: ${JSON.stringify(seen)}`] : [] };
 }
 
 /** Runs this same test in several processes and combines what they report. */
@@ -158,11 +198,22 @@ async function runWorkers(config: Config, argv: string[]): Promise<number> {
   const dir = mkdtempSync(join(tmpdir(), 'loadtest-'));
   const script = fileURLToPath(import.meta.url);
   console.log(`Starting ${rooms.length} workers with ${rooms.join(' + ')} rooms.`);
+  // Faults are timed from when every worker has synced, which is when they all start typing.
+  let syncedWorkers = 0;
+  let chaos: Promise<ChaosEvent[]> = Promise.resolve([]);
+  const onSynced = () => {
+    if (++syncedWorkers === rooms.length && config.chaos.length) chaos = runChaos(config.chaos, Date.now(), config.redisContainer, console.log);
+  };
   const exits = await Promise.all(
     rooms.map(
       (count, i) =>
         new Promise<number>((resolve) => {
-          const args = [script, ...without(argv, ['--workers', '--rooms', '--out']), '--rooms', String(count), '--out', join(dir, `w${i}.json`), '--child'];
+          const args = [
+            script,
+            ...without(argv, ['--workers', '--rooms', '--out', '--chaos', '--redis-container']),
+            '--rooms', String(count), '--out', join(dir, `w${i}.json`), '--child',
+            ...(config.chaos.length ? ['--expect-faults'] : []),
+          ];
           const child = spawn(process.execPath, args, { env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
           const relay = (stream: NodeJS.ReadableStream) => {
             let pending = '';
@@ -170,7 +221,10 @@ async function runWorkers(config: Config, argv: string[]): Promise<number> {
               const lines = (pending + chunk.toString()).split('\n');
               pending = lines.pop() ?? '';
               // Only the progress lines: each worker's own summary is folded into the combined one.
-              for (const line of lines) if (/^\[\d+s\]|connected and synced|Typing stopped/.test(line)) console.log(`[w${i + 1}] ${line}`);
+              for (const line of lines) {
+                if (/^\[\d+s\]|connected and synced|Typing stopped/.test(line)) console.log(`[w${i + 1}] ${line}`);
+                if (/connected and synced/.test(line)) onSynced();
+              }
             });
           };
           relay(child.stdout);
@@ -189,6 +243,19 @@ async function runWorkers(config: Config, argv: string[]): Promise<number> {
   });
   const problems = results.flatMap((r, i) => (r ? r.problems.map((p) => `worker ${i + 1}: ${p}`) : [`worker ${i + 1}: no result (exit code ${exits[i]})`]));
   const done = results.filter((r): r is WorkerResult => r !== null);
+  const sync = judgeSync(Object.assign({}, ...done.map((r) => r.replicaSync)));
+  problems.push(...sync.problems);
+  const events = await chaos;
+  const chaosResult = events.length
+    ? chaosReport(
+        SendBuckets.merge(done.map((r) => r.latencyBySend)),
+        events,
+        Math.max(...done.map((r) => r.typingStartedAtMs)) + config.warmupSec * 1000,
+        done.flatMap((r) => r.reconnectsAt),
+      )
+    : null;
+  const chaosVerdict = chaosResult ? judgeChaos(chaosResult) : null;
+  if (chaosVerdict) problems.push(...chaosVerdict.problems);
   const worst = (pick: (r: WorkerResult) => number) => Math.max(...done.map(pick));
   const combined = {
     workers: rooms.length,
@@ -201,14 +268,23 @@ async function runWorkers(config: Config, argv: string[]): Promise<number> {
     maxMs: worst((r) => r.latencyMs.max),
     generatorLoopP99WorstMs: worst((r) => r.generatorLoopP99Ms),
     memoryGrowthWorst: Math.max(...done.flatMap((r) => r.memory.map((m) => m.trend?.ratio ?? 1))),
+    redisSync: sync.mode,
+    chaos: chaosResult,
   };
   console.log('\n=== Combined result ===');
+  console.log(`replica sync: ${sync.mode}`);
   console.log(`${combined.workers} workers, ${combined.edits} edits (${(combined.edits / config.durationSec).toFixed(0)}/s), ${combined.arrivals} timed arrivals`);
+  if (chaosVerdict) for (const line of chaosVerdict.lines) console.log(`chaos: ${line}`);
   console.log(`propagation, worst worker: p50 ${fmt(combined.p50WorstWorkerMs)} ms, p95 ${fmt(combined.p95WorstWorkerMs)} ms (an upper bound for the whole), p99 ${fmt(combined.p99WorstWorkerMs)} ms, max ${fmt(combined.maxMs)} ms`);
   console.log(`generator event loop lag p99, worst worker: ${fmt(combined.generatorLoopP99WorstMs)} ms; memory growth, worst replica seen by any worker: x${combined.memoryGrowthWorst.toFixed(2)}`);
   const passed = problems.length === 0 && exits.every((c) => c === 0);
   console.log(passed ? '\nPASS' : `\nFAIL\n- ${problems.join('\n- ')}`);
-  if (config.out) writeFileSync(config.out, JSON.stringify({ combined, workers: results, passed, problems }, null, 2));
+  if (config.out) {
+    // One merged send-time series (for plotting a fault's timeline) instead of one per worker.
+    const workers = results.map((r) => (r ? { ...r, latencyBySend: undefined } : r));
+    const latencyBySend = SendBuckets.merge(done.map((r) => r.latencyBySend));
+    writeFileSync(config.out, JSON.stringify({ combined, workers, passed, problems, latencyBySend }, null, 2));
+  }
   return passed ? 0 : 1;
 }
 
@@ -226,6 +302,7 @@ async function main(): Promise<number> {
   const mongo = await new MongoClient(config.mongoUri, { serverSelectionTimeoutMS: 10_000 }).connect();
   const db = mongo.db();
   const providers: HocuspocusProvider[] = [];
+  const sockets: HocuspocusProviderWebsocket[] = [];
 
   try {
     const now = new Date();
@@ -249,6 +326,9 @@ async function main(): Promise<number> {
     let measuring = false;
     let disconnects = 0;
     let authFailures = 0;
+    // Edits by when they were sent (epoch ms), so a fault's effect can be placed in time; and when editors came back.
+    const bySend = new SendBuckets();
+    const reconnectsAt: number[] = [];
 
     const synced: Array<Promise<boolean>> = [];
     for (let r = 0; r < roomCount; r++) {
@@ -256,16 +336,21 @@ async function main(): Promise<number> {
         const userId = userIds[e];
         const doc = new Y.Doc();
         const receiver = `${roomIds[r]}/${userId}`;
+        // The real client's reconnect back-off (client/src/hooks/useRoomCollab.ts), so a fault's recovery is what a user would see.
+        const socket = new HocuspocusProviderWebsocket({ url: urls[e % urls.length], delay: 1000, factor: 2, minDelay: 1000, maxDelay: 10_000, jitter: true, maxAttempts: 0 });
+        sockets.push(socket);
         const provider = new HocuspocusProvider({
-          url: urls[e % urls.length],
+          websocketProvider: socket,
           name: `room:${roomIds[r]}`,
           document: doc,
           token: tokenFor(userId),
           onAuthenticationFailed: () => void authFailures++,
           onStatus: ({ status }) => {
             if (status === 'disconnected' && measuring) disconnects++;
+            if (status === 'connected' && measuring) reconnectsAt.push(Date.now());
           },
         });
+        provider.attach(); // a socket we supply is not attached for us
         providers.push(provider);
         const editor: Editor = { room: r, userId, doc, provider, text: doc.getText('content:main'), inserts: 0 };
         editors.push(editor);
@@ -278,6 +363,7 @@ async function main(): Promise<number> {
           for (const ms of tracker.observe(receiver, ranges, at)) {
             sampleAt.push(at);
             sampleMs.push(ms);
+            bySend.add(performance.timeOrigin + at - ms, ms);
           }
         });
         synced.push(new Promise<boolean>((resolve) => {
@@ -292,12 +378,15 @@ async function main(): Promise<number> {
 
     // --- memory of each replica, every 10 s ---
     const memory: MemorySample[] = [];
+    const replicaSync: Record<string, string | null> = {};
     const sampleMemory = async () => {
       await Promise.all(
         urls.map(async (url) => {
           try {
-            const body = (await (await fetch(healthUrl(url))).json()) as { memory?: { rssMb: number; heapUsedMb: number } };
+            const body = (await (await fetch(healthUrl(url))).json()) as { memory?: { rssMb: number; heapUsedMb: number }; redisSync?: string | null };
             if (body.memory) memory.push({ at: performance.now(), replica: url, ...body.memory });
+            // Older builds do not report it; absent is recorded as such, not guessed.
+            replicaSync[url] = body.redisSync ?? replicaSync[url] ?? null;
           } catch {
             // a missed sample is only a gap in the series
           }
@@ -353,6 +442,8 @@ async function main(): Promise<number> {
     }
     measuring = true;
     const typingStartedAt = performance.now();
+    // In a single process the faults run here; with workers the parent runs them (and children never get --chaos).
+    const chaos = config.chaos.length ? runChaos(config.chaos, Date.now(), config.redisContainer, console.log) : Promise.resolve([]);
 
     let reportedUpTo = 0;
     const reportEvery = 30_000;
@@ -436,7 +527,7 @@ async function main(): Promise<number> {
       if (!report.verifierAgrees) problems.push(`${report.room}: a fresh client got different text`);
       if (!report.storedAgrees) problems.push(`${report.room}: the stored document differs from what the editors have`);
     }
-    if (disconnects > 0) problems.push(`${disconnects} disconnects while typing`);
+    if (disconnects > 0 && !config.expectFaults) problems.push(`${disconnects} disconnects while typing`);
     if (authFailures > 0) problems.push(`${authFailures} authentication failures`);
 
     // Latency after the warm-up, over the whole typing window.
@@ -450,7 +541,7 @@ async function main(): Promise<number> {
       perMinute.set(minute, [...(perMinute.get(minute) ?? []), sampleMs[i]]);
     });
     const latency: LatencySummary = summarize(steady);
-    if (!(latency.p95 < config.p95LimitMs)) problems.push(`p95 propagation ${fmt(latency.p95)} ms is not under ${config.p95LimitMs} ms`);
+    if (!(latency.p95 < config.p95LimitMs) && !config.expectFaults) problems.push(`p95 propagation ${fmt(latency.p95)} ms is not under ${config.p95LimitMs} ms`);
     const expectedSamples = editors.reduce((n, e) => n + e.inserts, 0) * (editorCount - 1);
     if (sampleMs.length < expectedSamples * 0.99) problems.push(`only ${sampleMs.length} of ${expectedSamples} expected edit arrivals were timed`);
 
@@ -463,12 +554,26 @@ async function main(): Promise<number> {
     const memoryReports = urls.map((url) => {
       const series = memory.filter((m) => m.replica === url && m.at >= warmupEnd).map((m) => m.rssMb);
       const t: Trend | null = trend(series);
-      if (t && t.ratio > config.memoryGrowthLimit) problems.push(`${url}: memory grew ${((t.ratio - 1) * 100).toFixed(0)}% (${fmt(t.first)} to ${fmt(t.last)} MB rss)`);
+      // A replica that was killed restarts small, so with faults the ratio is reported only.
+      if (t && t.ratio > config.memoryGrowthLimit && !config.expectFaults) problems.push(`${url}: memory grew ${((t.ratio - 1) * 100).toFixed(0)}% (${fmt(t.first)} to ${fmt(t.last)} MB rss)`);
       return { replica: url, minMb: Math.min(...series), maxMb: Math.max(...series), trend: t, samples: series.length };
     });
 
+    const sync = judgeSync(replicaSync);
+    problems.push(...sync.problems);
+    const events = await chaos;
+    const chaosResult = events.length ? chaosReport(bySend.toJSON(), events, warmupEnd + performance.timeOrigin, reconnectsAt) : null;
+    const chaosVerdict = chaosResult ? judgeChaos(chaosResult) : null;
+    if (chaosVerdict) problems.push(...chaosVerdict.problems);
+
     const result = {
       config: { ...config, jwtSecret: undefined, mongoUri: undefined },
+      redisSync: sync.mode,
+      replicaSync,
+      typingStartedAtMs: performance.timeOrigin + typingStartedAt,
+      latencyBySend: bySend.toJSON(),
+      reconnectsAt,
+      chaos: chaosResult,
       finishedAt: new Date().toISOString(),
       edits: editors.reduce((n, e) => n + e.inserts, 0),
       editsPerSecond: editors.reduce((n, e) => n + e.inserts, 0) / config.durationSec,
@@ -486,6 +591,8 @@ async function main(): Promise<number> {
     if (config.out) writeFileSync(config.out, JSON.stringify(result, null, 2));
 
     console.log('\n=== Result ===');
+    console.log(`replica sync: ${sync.mode}${config.expectFaults ? ' (faults injected: latency and memory are reported, not judged)' : ''}`);
+    if (chaosVerdict) for (const line of chaosVerdict.lines) console.log(`chaos: ${line}`);
     console.log(`edits: ${result.edits} (${result.editsPerSecond.toFixed(0)}/s), timed arrivals: ${latency.count}`);
     console.log(`propagation (after ${config.warmupSec}s warm-up): p50 ${fmt(latency.p50)} ms, p95 ${fmt(latency.p95)} ms, p99 ${fmt(latency.p99)} ms, max ${fmt(latency.max)} ms`);
     for (const m of result.latencyByMinute) console.log(`  minute ${m.minute}: p50 ${fmt(m.p50)}, p95 ${fmt(m.p95)}, max ${fmt(m.max)} ms (${m.count} arrivals)`);
@@ -497,6 +604,7 @@ async function main(): Promise<number> {
     return problems.length === 0 ? 0 : 1;
   } finally {
     for (const p of providers) p.destroy();
+    for (const s of sockets) s.destroy();
     if (!config.keep) {
       await db.collection('rooms').deleteMany({ roomId: { $in: roomIds } });
       await db.collection('ydoc_updates').deleteMany({ roomId: { $in: roomIds } });
